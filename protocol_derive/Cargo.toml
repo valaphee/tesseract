@@ -1,0 +1,16 @@
+[package]
+name = "tesseract_protocol_derive"
+version = "0.0.0"
+edition = "2021"
+authors = ["Valaphee <iam@valaphee.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/tesseract.git"
+description = "Minecraft's Protocol"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.51"
+quote = "1.0.23"
+syn = "1.0.109"
