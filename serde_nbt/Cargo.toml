@@ -10,5 +10,6 @@ description = "Minecraft's NBT-file format support for serde"
 [dependencies]
 anyhow = "1.0.69"
 byteorder = "1.4.3"
+num_enum = "0.5.11"
 serde = { version = "1.0.152", features = ["derive"] }
 thiserror = "1.0.38"
