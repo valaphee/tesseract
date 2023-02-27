@@ -1,3 +1,4 @@
+use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
 use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields};
 
@@ -6,20 +7,23 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let input = parse_macro_input!(input as DeriveInput);
     let input_name = input.ident;
     let body = match &input.data {
-        Data::Struct(data) => {
-            let mut field_encodes = match &data.fields {
-                Fields::Named(fields) => fields.named.iter().map(|field| {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => {
+                let mut field_encodes = fields.named.iter().map(|field| {
                     let field_name = &field.ident;
                     quote_spanned! {
-                        field.span() => self.#field_name.encode(output)?
+                        field.span() => self.#field_name.encode(output)
                     }
-                }),
-                _ => unreachable!(),
-            };
-            let first_field_encode = field_encodes.next().unwrap();
-            quote! {
-                #first_field_encode #(?;#field_encodes)*
-            }
+                });
+                let first_field_encode = field_encodes.next().unwrap();
+                quote! {
+                    #first_field_encode #(?;#field_encodes)*
+                }
+            },
+            Fields::Unit => quote! {
+                Ok(())
+            },
+            _ => unreachable!(),
         }
         Data::Enum(data) => {
             let index_only = data
@@ -44,7 +48,23 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                         let first_field_encode = field_encodes.next().unwrap();
                         quote! {
                             Self::#variant_name { #(#field_names,)* } => {
-                                VarInt(#variant_index).encode(output)?;
+                                crate::VarInt(#variant_index).encode(output)?;
+                                #first_field_encode #(?;#field_encodes)*
+                            }
+                        }
+                    }
+                    Fields::Unnamed(fields) => {
+                        let field_names = (0..fields.unnamed.len()).map(|i| Ident::new(&format!("_{}", i), Span::call_site()));
+                        let mut field_encodes = fields.unnamed.iter().enumerate().map(|(i, field)| {
+                            let field_name = Ident::new(&format!("_{}", i), Span::call_site());
+                            quote_spanned! {
+                                field.span() => #field_name.encode(output)
+                            }
+                        });
+                        let first_field_encode = field_encodes.next().unwrap();
+                        quote! {
+                            Self::#variant_name(#(#field_names,)*) => {
+                                crate::VarInt(#variant_index).encode(output)?;
                                 #first_field_encode #(?;#field_encodes)*
                             }
                         }
@@ -56,16 +76,15 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                             }
                         } else {
                             quote! {
-                                Self::#variant_name => VarInt(#variant_index).encode(output),
+                                Self::#variant_name => crate::VarInt(#variant_index).encode(output),
                             }
                         }
                     }
-                    _ => unreachable!(),
                 }
             });
             if index_only {
                 quote! {
-                    VarInt(match self {
+                    crate::VarInt(match self {
                         #(#match_arms)*
                     }).encode(output)
                 }
@@ -93,21 +112,24 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let input = parse_macro_input!(input as DeriveInput);
     let input_name = input.ident;
     let body = match &input.data {
-        Data::Struct(data) => {
-            let field_decodes = match &data.fields {
-                Fields::Named(fields) => fields.named.iter().map(|field| {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => {
+                let field_decodes = fields.named.iter().map(|field| {
                     let field_name = &field.ident;
-                    quote_spanned! {
+                        quote_spanned! {
                         field.span() => #field_name: Decode::decode(input)?
                     }
-                }),
-                _ => unreachable!(),
-            };
-            quote! {
-                Self {
-                    #(#field_decodes,)*
+                });
+                quote! {
+                    Self {
+                        #(#field_decodes,)*
+                    }
                 }
-            }
+            },
+            Fields::Unit => quote! {
+                Self
+            },
+            _ => unreachable!(),
         }
         Data::Enum(data) => {
             let match_arms = data.variants.iter().enumerate().map(|(i, variant)| {
@@ -127,14 +149,23 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                             }
                         }
                     }
+                    Fields::Unnamed(fields) => {
+                        let field_decodes = fields.unnamed.iter().map(|field| {
+                            quote_spanned! {
+                                field.span() => Decode::decode(input)?
+                            }
+                        });
+                        quote! {
+                            #variant_index => Self::#variant_name(#(#field_decodes,)*)
+                        }
+                    }
                     Fields::Unit => quote! {
                         #variant_index => Self::#variant_name
                     },
-                    _ => unreachable!(),
                 }
             });
             quote! {
-                match VarInt::decode(input)?.0 {
+                match crate::VarInt::decode(input)?.0 {
                     #(#match_arms,)*
                      _ => unreachable!()
                 }
@@ -142,7 +173,6 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         }
         _ => unreachable!(),
     };
-
     proc_macro::TokenStream::from(quote! {
         impl Decode for #input_name {
             fn decode<R: std::io::Read>(input: &mut R) -> anyhow::Result<Self> {

@@ -1,4 +1,2 @@
-pub mod game;
-pub mod handshake;
-pub mod login;
-pub mod status;
+pub mod c2s;
+pub mod s2c;

@@ -5,6 +5,7 @@ pub use tesseract_protocol_derive::{Decode, Encode};
 use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::{arch, io};
+use uuid::Uuid;
 
 trait Encode {
     fn encode<W: io::Write>(&self, output: &mut W) -> Result<()>;
@@ -162,5 +163,18 @@ impl Encode for String {
 impl Decode for String {
     fn decode<R: io::Read>(input: &mut R) -> Result<Self> {
         Ok(String::from_utf8(Vec::<u8>::decode(input)?)?)
+    }
+}
+
+impl Encode for Uuid {
+    fn encode<W: io::Write>(&self, output: &mut W) -> Result<()> {
+        output.write_u128::<BigEndian>(self.as_u128())?;
+        Ok(())
+    }
+}
+
+impl Decode for Uuid {
+    fn decode<R: io::Read>(input: &mut R) -> Result<Self> {
+        Ok(Uuid::from_u128(input.read_u128::<BigEndian>()?))
     }
 }

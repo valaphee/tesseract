@@ -4,9 +4,10 @@ pub mod de;
 pub mod error;
 pub mod ser;
 
-#[derive(Copy, Clone, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Default, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(i8)]
 enum TagType {
+    #[default]
     End,
     Byte,
     Short,
@@ -18,4 +19,6 @@ enum TagType {
     String,
     List,
     Compound,
+    IntArray,
+    LongArray,
 }
