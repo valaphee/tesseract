@@ -174,8 +174,8 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         _ => unreachable!(),
     };
     proc_macro::TokenStream::from(quote! {
-        impl Decode for #input_name {
-            fn decode<R: std::io::Read>(input: &mut R) -> anyhow::Result<Self> {
+        impl<'a> Decode<'a> for #input_name {
+            fn decode(input: &mut &'a [u8]) -> anyhow::Result<Self> {
                 Ok(#body)
             }
         }

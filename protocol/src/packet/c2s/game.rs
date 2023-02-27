@@ -2,10 +2,12 @@ use glam::IVec3;
 use uuid::Uuid;
 
 use crate::{
-    types::{ChatVisibility, ClickType, Difficulty, Hand, MainHand, RecipeBookType, VarInt},
+    types::{
+        ChatSession, ChatVisibility, ClickType, Difficulty, Hand, ItemStack, LastSeenMessages,
+        MainHand, RecipeBookType, TrailingBytes, VarInt,
+    },
     Decode, Encode,
 };
-use crate::types::{ChatSession, ItemStack, LastSeenMessages};
 
 #[derive(Encode, Decode)]
 pub enum GamePacket {
@@ -20,7 +22,7 @@ pub enum GamePacket {
         difficulty: Difficulty,
     },
     ChatAck {
-        offset: VarInt
+        offset: VarInt,
     },
     ChatCommand {
         command: String,
@@ -37,7 +39,7 @@ pub enum GamePacket {
         last_seen_messages: LastSeenMessages,
     },
     ChatSessionUpdate {
-        chat_session: ChatSession
+        chat_session: ChatSession,
     },
     ClientCommand {
         action: ClientCommandPacketAction,
@@ -74,7 +76,7 @@ pub enum GamePacket {
     },
     CustomPayload {
         identifier: String,
-        data: (/*TODO*/),
+        data: TrailingBytes,
     },
     EditBook {
         slot: VarInt,

@@ -1,6 +1,8 @@
+use byteorder::{BigEndian, ReadBytesExt};
+use serde::forward_to_deserialize_any;
+
 use crate::error::{Error, Result};
 use crate::TagType;
-use byteorder::{BigEndian, ReadBytesExt};
 
 pub fn from_slice<'a, T>(v: &'a [u8]) -> Result<T>
 where
@@ -13,7 +15,7 @@ struct Deserializer<'de> {
     data: &'de [u8],
 
     key: bool,
-    type_: TagType,
+    current_type: TagType,
 }
 
 impl<'de> Deserializer<'de> {
@@ -22,19 +24,24 @@ impl<'de> Deserializer<'de> {
             data,
 
             key: false,
-            type_: TagType::default(),
+            current_type: TagType::default(),
         };
         let type_ = TagType::try_from(self_.data.read_i8()?).unwrap();
         let key_length = self_.data.read_i16::<BigEndian>()?;
         let (_, data) = self_.data.split_at(key_length as usize);
         self_.data = data;
-        self_.type_ = type_;
+        self_.current_type = type_;
         Ok(self_)
     }
 }
 
 impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
+
+    forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf unit unit_struct
+        newtype_struct seq tuple tuple_struct map struct enum identifier ignored_any
+    }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
     where
@@ -48,7 +55,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
             self.data = data;
             visitor.visit_str(std::str::from_utf8(bytes).unwrap())
         } else {
-            match self.type_ {
+            match self.current_type {
                 TagType::End => unreachable!(),
                 TagType::Byte => visitor.visit_i8(self.data.read_i8()?),
                 TagType::Short => visitor.visit_i16(self.data.read_i16::<BigEndian>()?),
@@ -93,216 +100,12 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
     where
         V: serde::de::Visitor<'de>,
     {
         // this is only needed for support reading optional fields
         visitor.visit_some(self)
-    }
-
-    fn deserialize_unit<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_unit_struct<V>(self, _name: &'static str, _visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, _visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_tuple<V>(self, _len: usize, _visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_tuple_struct<V>(
-        self,
-        _name: &'static str,
-        _len: usize,
-        _visitor: V,
-    ) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_struct<V>(
-        self,
-        _name: &'static str,
-        _fields: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        visitor.visit_map(MapAccess { de: self })
-    }
-
-    fn deserialize_enum<V>(
-        self,
-        _name: &'static str,
-        _variants: &'static [&'static str],
-        _visitor: V,
-    ) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        unimplemented!()
-    }
-
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        self.deserialize_any(visitor)
     }
 }
 
@@ -324,7 +127,8 @@ impl<'a, 'de> serde::de::SeqAccess<'de> for SeqAccess<'a, 'de> {
             return Ok(None);
         }
         self.count -= 1;
-        self.de.type_ = self.type_;
+
+        self.de.current_type = self.type_;
         seed.deserialize(&mut *self.de).map(Some)
     }
 
@@ -344,8 +148,8 @@ impl<'a, 'de> serde::de::MapAccess<'de> for MapAccess<'a, 'de> {
     where
         K: serde::de::DeserializeSeed<'de>,
     {
-        self.de.type_ = TagType::try_from(self.de.data.read_i8()?).unwrap();
-        if !matches!(self.de.type_, TagType::End) {
+        self.de.current_type = TagType::try_from(self.de.data.read_i8()?).unwrap();
+        if !matches!(self.de.current_type, TagType::End) {
             self.de.key = true;
             seed.deserialize(&mut *self.de).map(Some)
         } else {

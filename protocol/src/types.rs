@@ -1,13 +1,14 @@
-use std::io::{Read, Write};
+use std::io::Write;
 
 use anyhow::{bail, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use glam::IVec3;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{Decode, Encode};
 
-//================================================================================== PRIMITIVES ====
+//=================================================================================== PRIMITIVE ====
 
 impl Encode for bool {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
@@ -15,8 +16,8 @@ impl Encode for bool {
     }
 }
 
-impl Decode for bool {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for bool {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match u8::decode(input)? {
             0 => false,
             1 => true,
@@ -32,8 +33,8 @@ impl Encode for u8 {
     }
 }
 
-impl Decode for u8 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for u8 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_u8()?)
     }
 }
@@ -45,8 +46,8 @@ impl Encode for i8 {
     }
 }
 
-impl Decode for i8 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for i8 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i8()?)
     }
 }
@@ -58,8 +59,8 @@ impl Encode for u16 {
     }
 }
 
-impl Decode for u16 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for u16 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_u16::<BigEndian>()?)
     }
 }
@@ -71,8 +72,8 @@ impl Encode for i16 {
     }
 }
 
-impl Decode for i16 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for i16 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i16::<BigEndian>()?)
     }
 }
@@ -84,8 +85,8 @@ impl Encode for i32 {
     }
 }
 
-impl Decode for i32 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for i32 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i32::<BigEndian>()?)
     }
 }
@@ -94,17 +95,22 @@ pub struct VarInt(pub i32);
 
 impl Encode for VarInt {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        let data = unsafe { std::arch::x86_64::_pdep_u64(self.0 as u64, 0x0000000000037F7F) };
-        let length = 8 - ((data.leading_zeros() - 1) >> 3);
-        let encoded =
-            data | (0x8080808080808080 & (0xFFFFFFFFFFFFFFFF >> (((8 - length + 1) << 3) - 1)));
-        output.write_all(unsafe { encoded.to_le_bytes().get_unchecked(..length as usize) })?;
+        let encoded_without_trailing_bits =
+            unsafe { std::arch::x86_64::_pdep_u64(self.0 as u64, 0x0000000000037F7F) };
+        let encoded_length = 8 - ((encoded_without_trailing_bits.leading_zeros() - 1) >> 3);
+        let encoded = encoded_without_trailing_bits
+            | (0x8080808080808080 & (0xFFFFFFFFFFFFFFFF >> (((8 - encoded_length + 1) << 3) - 1)));
+        output.write_all(unsafe {
+            encoded
+                .to_le_bytes()
+                .get_unchecked(..encoded_length as usize)
+        })?;
         Ok(())
     }
 }
 
-impl Decode for VarInt {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for VarInt {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
         while shift <= 35 {
@@ -126,8 +132,8 @@ impl Encode for u64 {
     }
 }
 
-impl Decode for u64 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for u64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_u64::<BigEndian>()?)
     }
 }
@@ -139,8 +145,8 @@ impl Encode for i64 {
     }
 }
 
-impl Decode for i64 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for i64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i64::<BigEndian>()?)
     }
 }
@@ -152,8 +158,8 @@ impl Encode for f32 {
     }
 }
 
-impl Decode for f32 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for f32 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_f32::<BigEndian>()?)
     }
 }
@@ -165,8 +171,8 @@ impl Encode for f64 {
     }
 }
 
-impl Decode for f64 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for f64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_f64::<BigEndian>()?)
     }
 }
@@ -186,8 +192,8 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($ty: Decode,)*> Decode for ($($ty,)*) {
-            fn decode<R: Read>(_input: &mut R) -> Result<Self> {
+        impl<'a, $($ty: Decode<'a>,)*> Decode<'a> for ($($ty,)*) {
+            fn decode(_input: &mut &'a [u8]) -> Result<Self> {
                 Ok(($($ty::decode(_input)?,)*))
             }
         }
@@ -208,7 +214,7 @@ tuple!(A B C D E F G H I J);
 tuple!(A B C D E F G H I J K);
 tuple!(A B C D E F G H I J K L);
 
-//====================================================================================== ARRAYS ====
+//======================================================================================= ARRAY ====
 
 impl<T, const N: usize> Encode for [T; N]
 where
@@ -222,12 +228,27 @@ where
     }
 }
 
-impl<T, const N: usize> Decode for [T; N]
+impl<'a, T, const N: usize> Decode<'a> for [T; N]
 where
-    T: Decode,
+    T: Decode<'a>,
 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(std::array::try_from_fn(|_| T::decode(input))?)
+    }
+}
+
+pub struct TrailingBytes(pub Vec<u8>);
+
+impl Encode for TrailingBytes {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        output.write_all(&self.0)?;
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for TrailingBytes {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(TrailingBytes(input.to_vec()))
     }
 }
 
@@ -248,11 +269,11 @@ where
     }
 }
 
-impl<T> Decode for Option<T>
+impl<'a, T> Decode<'a> for Option<T>
 where
-    T: Decode,
+    T: Decode<'a>,
 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match bool::decode(input)? {
             true => Some(T::decode(input)?),
             false => None,
@@ -273,17 +294,34 @@ where
     }
 }
 
-impl<T> Decode for Vec<T>
+impl<'a, T> Decode<'a> for Vec<T>
 where
-    T: Decode,
+    T: Decode<'a>,
 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let length = VarInt::decode(input)?.0 as usize;
         let mut value = Vec::with_capacity(length);
         for _ in 0..length {
             value.push(T::decode(input)?);
         }
         Ok(value)
+    }
+}
+
+impl Encode for str {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        VarInt(self.len() as i32).encode(output)?;
+        output.write_all(self.as_bytes())?;
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for &'a str {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        let length = VarInt::decode(input)?.0 as usize;
+        let (bytes, input_) = input.split_at(length);
+        *input = input_;
+        Ok(std::str::from_utf8(bytes)?)
     }
 }
 
@@ -294,8 +332,8 @@ impl Encode for String {
     }
 }
 
-impl Decode for String {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for String {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(String::from_utf8(Vec::<u8>::decode(input)?)?)
     }
 }
@@ -307,8 +345,8 @@ impl Encode for Uuid {
     }
 }
 
-impl Decode for Uuid {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for Uuid {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Uuid::from_u128(input.read_u128::<BigEndian>()?))
     }
 }
@@ -325,8 +363,8 @@ impl Encode for IVec3 {
     }
 }
 
-impl Decode for IVec3 {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for IVec3 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let value = i64::decode(input)?;
         Ok(Self {
             x: (value >> 38) as i32,
@@ -336,7 +374,7 @@ impl Decode for IVec3 {
     }
 }
 
-//======================================================================================= CUSTOM ====
+//======================================================================================== GAME ====
 
 #[derive(Encode, Decode)]
 pub enum Anchor {
@@ -416,8 +454,8 @@ impl Encode for Difficulty {
     }
 }
 
-impl Decode for Difficulty {
-    fn decode<R: Read>(input: &mut R) -> Result<Self> {
+impl<'a> Decode<'a> for Difficulty {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match input.read_i8()? {
             0 => Difficulty::Peaceful,
             1 => Difficulty::Easy,
@@ -460,7 +498,27 @@ pub enum Hand {
 pub struct ItemStack {
     item: VarInt,
     count: i8,
-    tag: (/*TODO*/),
+    tag: (),
+}
+
+pub struct Json<T>(pub T);
+
+impl<T> Encode for Json<T>
+where
+    T: Serialize,
+{
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        serde_json::to_string(&self.0)?.encode(output)
+    }
+}
+
+impl<'a, T> Decode<'a> for Json<T>
+where
+    T: Deserialize<'a>,
+{
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(Json(serde_json::from_str(Decode::decode(input)?)?))
+    }
 }
 
 #[derive(Encode, Decode)]
@@ -515,6 +573,46 @@ pub enum MapDecorationType {
     RedX,
 }
 
+pub struct MapPatch {
+    width: u8,
+    height: u8,
+    start_x: u8,
+    start_y: u8,
+    map_colors: Vec<u8>,
+}
+
+impl Encode for Option<MapPatch> {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        match self {
+            None => 0u8.encode(output),
+            Some(value) => {
+                value.width.encode(output)?;
+                value.height.encode(output)?;
+                value.start_x.encode(output)?;
+                value.start_y.encode(output)?;
+                value.map_colors.encode(output)
+            }
+        }
+    }
+}
+
+impl<'a> Decode<'a> for Option<MapPatch> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        let width = Decode::decode(input)?;
+        Ok(if width != 0 {
+            Some(MapPatch {
+                width,
+                height: Decode::decode(input)?,
+                start_x: Decode::decode(input)?,
+                start_y: Decode::decode(input)?,
+                map_colors: Decode::decode(input)?,
+            })
+        } else {
+            None
+        })
+    }
+}
+
 #[derive(Encode, Decode)]
 pub struct MerchantOffer {
     base_cost_a: Option<ItemStack>,
@@ -527,6 +625,27 @@ pub struct MerchantOffer {
     special_price_diff: i32,
     price_multiplier: f32,
     demand: i32,
+}
+
+pub struct Nbt<T>(pub T);
+
+impl<T> Encode for Nbt<T>
+where
+    T: Serialize,
+{
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        output.write_all(&tesseract_serde_nbt::ser::to_vec(&self.0)?)?;
+        Ok(())
+    }
+}
+
+impl<'a, T> Decode<'a> for Nbt<T>
+where
+    T: Deserialize<'a>,
+{
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(Nbt(tesseract_serde_nbt::de::from_slice(input)?))
+    }
 }
 
 #[derive(Encode, Decode)]

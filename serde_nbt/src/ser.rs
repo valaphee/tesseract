@@ -1,7 +1,9 @@
+use std::io::Write;
+
+use byteorder::{BigEndian, WriteBytesExt};
+
 use crate::error::{Error, Result};
 use crate::TagType;
-use byteorder::{BigEndian, WriteBytesExt};
-use std::io::Write;
 
 pub fn to_vec<T>(value: &T) -> Result<Vec<u8>>
 where
@@ -10,7 +12,7 @@ where
     let mut ser = Serializer {
         data: vec![0x0A, 0x00, 0x00],
 
-        type_: TagType::Compound,
+        last_type: TagType::default(),
     };
     value.serialize(&mut ser)?;
     Ok(ser.data)
@@ -19,7 +21,7 @@ where
 struct Serializer {
     data: Vec<u8>,
 
-    type_: TagType,
+    last_type: TagType,
 }
 
 impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
@@ -38,67 +40,67 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
             true => 1,
             false => 0,
         })?;
-        self.type_ = TagType::Byte;
+        self.last_type = TagType::Byte;
         Ok(())
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok> {
         self.data.write_i8(v)?;
-        self.type_ = TagType::Byte;
+        self.last_type = TagType::Byte;
         Ok(())
     }
 
     fn serialize_i16(self, v: i16) -> Result<Self::Ok> {
         self.data.write_i16::<BigEndian>(v)?;
-        self.type_ = TagType::Short;
+        self.last_type = TagType::Short;
         Ok(())
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok> {
         self.data.write_i32::<BigEndian>(v)?;
-        self.type_ = TagType::Int;
+        self.last_type = TagType::Int;
         Ok(())
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok> {
         self.data.write_i64::<BigEndian>(v)?;
-        self.type_ = TagType::Long;
+        self.last_type = TagType::Long;
         Ok(())
     }
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok> {
         self.data.write_i8(v as i8)?;
-        self.type_ = TagType::Byte;
+        self.last_type = TagType::Byte;
         Ok(())
     }
 
     fn serialize_u16(self, v: u16) -> Result<Self::Ok> {
         self.data.write_i16::<BigEndian>(v as i16)?;
-        self.type_ = TagType::Short;
+        self.last_type = TagType::Short;
         Ok(())
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok> {
         self.data.write_i32::<BigEndian>(v as i32)?;
-        self.type_ = TagType::Int;
+        self.last_type = TagType::Int;
         Ok(())
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok> {
         self.data.write_i64::<BigEndian>(v as i64)?;
-        self.type_ = TagType::Long;
+        self.last_type = TagType::Long;
         Ok(())
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok> {
         self.data.write_f32::<BigEndian>(v)?;
-        self.type_ = TagType::Float;
+        self.last_type = TagType::Float;
         Ok(())
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok> {
         self.data.write_f64::<BigEndian>(v)?;
-        self.type_ = TagType::Double;
+        self.last_type = TagType::Double;
         Ok(())
     }
 
@@ -110,7 +112,7 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
         let bytes = v.as_bytes();
         self.data.write_i16::<BigEndian>(bytes.len() as i16)?;
         self.data.write(bytes)?;
-        self.type_ = TagType::String;
+        self.last_type = TagType::String;
         Ok(())
     }
 
@@ -121,7 +123,7 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     fn serialize_none(self) -> Result<Self::Ok> {
         // this is only needed for support writing optional fields
         // type TagType::End is reserved, and is used here for marking none
-        self.type_ = TagType::End;
+        self.last_type = TagType::End;
         Ok(())
     }
 
@@ -175,9 +177,13 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
+        // Write empty header, as type and length is not known yet
         let header_offset = self.data.len();
         self.data.write_i8(0)?;
         self.data.write_i32::<BigEndian>(0)?;
+
+        // Reset type_, so that an empty list is of type TagType::End
+        self.last_type = TagType::End;
         Ok(SerializeSeq {
             header_offset,
             count: 0,
@@ -246,10 +252,13 @@ impl<'ser> serde::ser::SerializeSeq for SerializeSeq<'ser> {
     }
 
     fn end(self) -> Result<Self::Ok> {
+        // Override empty header
         let mut header = &mut self.de.data[self.header_offset..self.header_offset + 5];
-        header.write_i8(self.de.type_.into())?;
+        header.write_i8(self.de.last_type.into())?;
         header.write_i32::<BigEndian>(self.count)?;
-        self.de.type_ = TagType::List;
+
+        // Set last type to TagType::List
+        self.de.last_type = TagType::List;
         Ok(())
     }
 }
@@ -333,22 +342,24 @@ impl<'ser> serde::ser::SerializeStruct for &'ser mut Serializer {
     where
         T: serde::Serialize,
     {
-        let field_offset = self.data.len();
+        let header_offset = self.data.len();
         value.serialize(&mut **self)?;
-        if self.type_ != TagType::End {
+
+        // Write field, or omit if the field is not existent, see serialize_none
+        if self.last_type != TagType::End {
             let mut header = Vec::new();
-            header.write_i8(self.type_.into())?;
+            header.write_i8(self.last_type.into())?;
             let key_bytes = key.as_bytes();
             header.write_i16::<BigEndian>(key_bytes.len() as i16)?;
             header.write(key_bytes)?;
-            self.data.splice(field_offset..field_offset, header);
+            self.data.splice(header_offset..header_offset, header);
         }
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok> {
         self.data.write_i8(TagType::End.into())?;
-        self.type_ = TagType::Compound;
+        self.last_type = TagType::Compound;
         Ok(())
     }
 }

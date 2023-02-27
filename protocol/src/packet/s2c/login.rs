@@ -1,4 +1,4 @@
-use crate::types::GameProfile;
+use crate::types::{GameProfile, TrailingBytes};
 use crate::{types::VarInt, Decode, Encode};
 
 #[derive(Encode, Decode)]
@@ -36,5 +36,5 @@ pub struct LoginCompressionPacket {
 pub struct CustomQueryPacket {
     pub transaction_id: VarInt,
     pub identifier: String,
-    pub data: (/*TODO*/),
+    pub data: TrailingBytes,
 }

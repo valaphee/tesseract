@@ -3,12 +3,11 @@ use uuid::Uuid;
 
 use crate::{
     types::{
-        Anchor, BossEventColor, BossEventOverlay, GameType, Hand, MapDecoration, MerchantOffer,
-        SoundSource, VarInt,
+        Anchor, BossEventColor, BossEventOverlay, ChatType, GameType, Hand, ItemStack,
+        MapDecoration, MapPatch, MerchantOffer, SoundSource, TrailingBytes, VarInt,
     },
     Decode, Encode,
 };
-use crate::types::{ChatType, ItemStack};
 
 #[derive(Encode, Decode)]
 pub enum GamePacket {
@@ -59,7 +58,7 @@ pub enum GamePacket {
     BlockEntityData {
         pos: IVec3,
         type_: VarInt,
-        tag: (/*TODO*/),
+        tag: (),
     },
     BlockEvent {
         pos: IVec3,
@@ -119,7 +118,7 @@ pub enum GamePacket {
     },
     CustomPayload {
         identifier: String,
-        data: (/*TODO*/),
+        data: TrailingBytes,
     },
     DeleteChat {
         message_signature: Vec<u8>,
@@ -194,7 +193,7 @@ pub enum GamePacket {
         z_dist: f32,
         max_speed: f32,
         count: i32,
-        particle: (/*TODO*/),
+        particle: (),
     },
     LightUpdate {
         x: VarInt,
@@ -207,7 +206,7 @@ pub enum GamePacket {
         game_type: GameType,
         previous_game_type: i8,
         levels: Vec<String>,
-        registry_holder: (/*TODO*/),
+        registry_holder: (),
         dimension_type: String,
         dimension: String,
         seed: i64,
@@ -225,7 +224,7 @@ pub enum GamePacket {
         scale: i8,
         locked: bool,
         decorations: Option<Vec<MapDecoration>>,
-        color_patch: (/*TODO*/)
+        color_patch: Option<MapPatch>,
     },
     MerchantOffers {
         container_id: VarInt,
@@ -497,7 +496,7 @@ pub enum GamePacket {
     },
     TagQuery {
         transaction_id: VarInt,
-        tag: (/*TODO*/),
+        tag: (),
     },
     TakeItemEntity {
         item_id: VarInt,
@@ -515,13 +514,13 @@ pub enum GamePacket {
     },
     UpdateAdvancements {
         reset: bool,
-        added: Vec<(/*TODO*/)>,
+        added: Vec<()>,
         removed: Vec<String>,
-        progress: Vec<(/*TODO*/)>,
+        progress: Vec<()>,
     },
     UpdateAttributes {
         entity_id: VarInt,
-        attributes: (/*TODO*/),
+        attributes: (),
     },
     UpdateEnabledFeatures {
         features: Vec<String>,
@@ -532,13 +531,13 @@ pub enum GamePacket {
         effect_amplifier: i8,
         effect_duration_ticks: VarInt,
         flags: u8,
-        factor_data: (/*TODO*/),
+        factor_data: (),
     },
     UpdateRecipes {
-        recipes: Vec<(/*TODO*/)>
+        recipes: Vec<()>,
     },
     UpdateTags {
-        tags: Vec<(/*TODO*/)>
+        tags: Vec<()>,
     },
 }
 
@@ -569,14 +568,16 @@ pub enum BossEventPacketOperation {
 
 #[derive(Encode, Decode)]
 pub enum CustomChatCompletionsPacketAction {
-    Add, Remove, Set
+    Add,
+    Remove,
+    Set,
 }
 
 #[derive(Encode, Decode)]
 pub struct LevelChunkPacketData {
-    heightmaps: (/*TODO*/),
+    heightmaps: (),
     buffer: Vec<u8>,
-    block_entities_data: Vec<(/*TODO*/)>
+    block_entities_data: Vec<()>,
 }
 
 #[derive(Encode, Decode)]
@@ -606,7 +607,7 @@ pub enum SetObjectivePacketMethod {
     Change {
         display_name: String,
         render_type: VarInt,
-    }
+    },
 }
 
 #[derive(Encode, Decode)]
@@ -619,7 +620,7 @@ pub enum SetPlayerTeamPacketMethod {
         color: VarInt,
         prefix: String,
         suffix: String,
-        players: Vec<String>
+        players: Vec<String>,
     },
     Remove,
     Change {
@@ -630,14 +631,14 @@ pub enum SetPlayerTeamPacketMethod {
         color: VarInt,
         prefix: String,
         suffix: String,
-        players: Vec<String>
+        players: Vec<String>,
     },
     Join {
-        players: Vec<String>
+        players: Vec<String>,
     },
     Leave {
-        players: Vec<String>
-    }
+        players: Vec<String>,
+    },
 }
 
 #[derive(Encode, Decode)]
@@ -648,5 +649,5 @@ pub enum SetScorePacketMethod {
     },
     Remove {
         objective_name: String,
-    }
+    },
 }
