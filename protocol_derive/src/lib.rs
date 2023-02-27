@@ -19,12 +19,12 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 quote! {
                     #first_field_encode #(?;#field_encodes)*
                 }
-            },
+            }
             Fields::Unit => quote! {
                 Ok(())
             },
             _ => unreachable!(),
-        }
+        },
         Data::Enum(data) => {
             let index_only = data
                 .variants
@@ -48,7 +48,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                         let first_field_encode = field_encodes.next().unwrap();
                         quote! {
                             Self::#variant_name { #(#field_names,)* } => {
-                                crate::VarInt(#variant_index).encode(output)?;
+                                crate::types::VarInt(#variant_index).encode(output)?;
                                 #first_field_encode #(?;#field_encodes)*
                             }
                         }
@@ -64,7 +64,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                         let first_field_encode = field_encodes.next().unwrap();
                         quote! {
                             Self::#variant_name(#(#field_names,)*) => {
-                                crate::VarInt(#variant_index).encode(output)?;
+                                crate::types::VarInt(#variant_index).encode(output)?;
                                 #first_field_encode #(?;#field_encodes)*
                             }
                         }
@@ -76,7 +76,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                             }
                         } else {
                             quote! {
-                                Self::#variant_name => crate::VarInt(#variant_index).encode(output),
+                                Self::#variant_name => crate::types::VarInt(#variant_index).encode(output),
                             }
                         }
                     }
@@ -84,7 +84,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             });
             if index_only {
                 quote! {
-                    crate::VarInt(match self {
+                    crate::types::VarInt(match self {
                         #(#match_arms)*
                     }).encode(output)
                 }
@@ -116,7 +116,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             Fields::Named(fields) => {
                 let field_decodes = fields.named.iter().map(|field| {
                     let field_name = &field.ident;
-                        quote_spanned! {
+                    quote_spanned! {
                         field.span() => #field_name: Decode::decode(input)?
                     }
                 });
@@ -125,12 +125,12 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                         #(#field_decodes,)*
                     }
                 }
-            },
+            }
             Fields::Unit => quote! {
                 Self
             },
             _ => unreachable!(),
-        }
+        },
         Data::Enum(data) => {
             let match_arms = data.variants.iter().enumerate().map(|(i, variant)| {
                 let variant_index = i as i32;
@@ -165,7 +165,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 }
             });
             quote! {
-                match crate::VarInt::decode(input)?.0 {
+                match crate::types::VarInt::decode(input)?.0 {
                     #(#match_arms,)*
                      _ => unreachable!()
                 }

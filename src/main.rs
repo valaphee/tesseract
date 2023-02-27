@@ -1,7 +1,7 @@
-use std::time::Duration;
 use bevy::app::ScheduleRunnerSettings;
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
+use std::time::Duration;
 
 fn main() {
     App::new()

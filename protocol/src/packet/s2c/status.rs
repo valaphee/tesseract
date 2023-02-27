@@ -2,16 +2,16 @@ use crate::{Decode, Encode};
 
 #[derive(Encode, Decode)]
 pub enum StatusPacket {
-    StatusResponse(StatusResponse),
-    PongResponse(PongResponse),
+    StatusResponse(StatusResponsePacket),
+    PongResponse(PongResponsePacket),
 }
 
 #[derive(Encode, Decode)]
-pub struct StatusResponse {
+pub struct StatusResponsePacket {
     pub status: String,
 }
 
 #[derive(Encode, Decode)]
-pub struct PongResponse {
-    pub time: u64,
+pub struct PongResponsePacket {
+    pub time: i64,
 }
