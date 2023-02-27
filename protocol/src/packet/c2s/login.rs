@@ -1,4 +1,5 @@
 use crate::{types::VarInt, Decode, Encode};
+use uuid::Uuid;
 
 #[derive(Encode, Decode)]
 pub enum LoginPacket {
@@ -9,16 +10,18 @@ pub enum LoginPacket {
 
 #[derive(Encode, Decode)]
 pub struct HelloPacket {
-    name: String,
+    pub name: String,
+    pub uuid: Option<Uuid>,
 }
 
 #[derive(Encode, Decode)]
 pub struct KeyPacket {
-    key: Vec<u8>,
-    nonce: Vec<u8>,
+    pub key: Vec<u8>,
+    pub nonce: Vec<u8>,
 }
 
 #[derive(Encode, Decode)]
 pub struct CustomQueryPacket {
-    transaction_id: VarInt,
+    pub transaction_id: VarInt,
+    pub data: (/*TODO*/),
 }

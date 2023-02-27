@@ -10,6 +10,7 @@ description = "Minecraft's Protocol"
 [dependencies]
 anyhow = "1.0.69"
 byteorder = "1.4.3"
+glam = "0.23.0"
 tesseract_protocol_derive = { path = "../protocol_derive" }
 tesseract_serde_nbt = { path = "../serde_nbt" }
 thiserror = "1.0.38"

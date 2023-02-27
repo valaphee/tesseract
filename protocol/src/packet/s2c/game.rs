@@ -1,3 +1,4 @@
+use glam::IVec3;
 use uuid::Uuid;
 
 use crate::{
@@ -7,6 +8,7 @@ use crate::{
     },
     Decode, Encode,
 };
+use crate::types::{ChatType, ItemStack};
 
 #[derive(Encode, Decode)]
 pub enum GamePacket {
@@ -51,21 +53,22 @@ pub enum GamePacket {
     },
     BlockDestruction {
         id: VarInt,
-        pos: i64,
+        pos: IVec3,
         progress: u8,
     },
     BlockEntityData {
-        pos: i64,
+        pos: IVec3,
         type_: VarInt,
+        tag: (/*TODO*/),
     },
     BlockEvent {
-        pos: i64,
+        pos: IVec3,
         b0: u8,
         b1: u8,
         block: VarInt,
     },
     BlockUpdate {
-        pos: i64,
+        pos: IVec3,
         block_state: VarInt,
     },
     BossEvent {
@@ -76,15 +79,14 @@ pub enum GamePacket {
         difficulty: u8,
         locked: bool,
     },
-    ChatPreview {
-        query_id: i32,
-        preview: Option<String>,
-    },
     ClearTitles {
         reset_times: bool,
     },
     CommandSuggestions {
         id: VarInt,
+        suggestions_start: VarInt,
+        suggestions_length: VarInt,
+        suggestions: Vec<(String, Option<String>)>,
     },
     Commands,
     ContainerClose {
@@ -93,6 +95,8 @@ pub enum GamePacket {
     ContainerSetContent {
         container_id: u8,
         state_id: VarInt,
+        items: Vec<Option<ItemStack>>,
+        carried_item: Option<ItemStack>,
     },
     ContainerSetData {
         container_id: u8,
@@ -103,37 +107,40 @@ pub enum GamePacket {
         container_id: i8,
         state_id: VarInt,
         slot: i16,
+        item_stack: Option<ItemStack>,
     },
     Cooldown {
         item: VarInt,
         duration: VarInt,
     },
+    CustomChatCompletions {
+        action: CustomChatCompletionsPacketAction,
+        entries: Vec<String>,
+    },
     CustomPayload {
         identifier: String,
+        data: (/*TODO*/),
     },
-    CustomSound {
-        name: String,
-        source: SoundSource,
-        x: i32,
-        y: i32,
-        z: i32,
-        volume: f32,
-        pitch: f32,
-        seed: i64,
+    DeleteChat {
+        message_signature: Vec<u8>,
     },
     Disconnect {
         reason: String,
+    },
+    DisguisedChatPacket {
+        message: String,
+        chat_type: ChatType,
     },
     EntityEvent {
         entity_id: i32,
         event_id: i8,
     },
     Explode {
-        x: f32,
-        y: f32,
-        z: f32,
+        x: f64,
+        y: f64,
+        z: f64,
         power: f32,
-        // to_blow
+        to_blow: Vec<i8>,
         knockback_x: f32,
         knockback_y: f32,
         knockback_z: f32,
@@ -167,10 +174,12 @@ pub enum GamePacket {
     LevelChunkWithLight {
         x: i32,
         y: i32,
+        chunk_data: LevelChunkPacketData,
+        light_data: LightUpdatePacketData,
     },
     LevelEvent {
         type_: i32,
-        pos: i64,
+        pos: IVec3,
         data: i32,
         global_event: bool,
     },
@@ -185,17 +194,20 @@ pub enum GamePacket {
         z_dist: f32,
         max_speed: f32,
         count: i32,
+        particle: (/*TODO*/),
     },
     LightUpdate {
         x: VarInt,
         z: VarInt,
+        light_data: LightUpdatePacketData,
     },
     Login {
         player_id: i32,
         hardcore: bool,
         game_type: GameType,
-        previous_game_type: Option<GameType>,
+        previous_game_type: i8,
         levels: Vec<String>,
+        registry_holder: (/*TODO*/),
         dimension_type: String,
         dimension: String,
         seed: i64,
@@ -206,12 +218,14 @@ pub enum GamePacket {
         show_death_screen: bool,
         is_debug: bool,
         is_flat: bool,
+        last_death_location: Option<(String, IVec3)>,
     },
     MapItemData {
         map_id: VarInt,
         scale: i8,
         locked: bool,
         decorations: Option<Vec<MapDecoration>>,
+        color_patch: (/*TODO*/)
     },
     MerchantOffers {
         container_id: VarInt,
@@ -259,7 +273,7 @@ pub enum GamePacket {
         title: String,
     },
     OpenSignEditor {
-        pos: i64,
+        pos: IVec3,
     },
     Ping {
         id: i32,
@@ -274,9 +288,15 @@ pub enum GamePacket {
         walking_speed: f32,
     },
     PlayerChat {
-        signed_content: String,
+        sender: Uuid,
+        index: VarInt,
+        signature: Option<[u8; 256]>,
+        message: String,
+        timestamp: i64,
+        salt: i64,
         unsigned_content: Option<String>,
-        type_id: VarInt,
+        // filter mask
+        chat_type: ChatType,
     },
     PlayerCombatEnd {
         duration: VarInt,
@@ -288,7 +308,10 @@ pub enum GamePacket {
         killer_id: i32,
         message: String,
     },
-    PlayerInfo,
+    PlayerInfoRemove {
+        profile_ids: Vec<Uuid>,
+    },
+    PlayerInfoUpdate,
     PlayerLookAt {
         from_anchor: Anchor,
         x: f64,
@@ -325,11 +348,11 @@ pub enum GamePacket {
         dimension: String,
         seed: i64,
         player_game_type: GameType,
-        previous_player_game_type: Option<GameType>,
+        previous_player_game_type: i8,
         is_debug: bool,
         is_flat: bool,
         keep_all_player_data: bool,
-        /*last_death_location: Option<>*/
+        last_death_location: Option<(String, IVec3)>,
     },
     RotateHead {
         entity_id: VarInt,
@@ -379,11 +402,8 @@ pub enum GamePacket {
         radius: VarInt,
     },
     SetDefaultSpawnPosition {
-        pos: i64,
+        pos: IVec3,
         angle: f32,
-    },
-    SetDisplayChatPreview {
-        enabled: bool,
     },
     SetDisplayObjective {
         slot: i8,
@@ -391,6 +411,7 @@ pub enum GamePacket {
     },
     SetEntityData {
         id: VarInt,
+        //
     },
     SetEntityLink {
         source_id: i32,
@@ -415,20 +436,19 @@ pub enum GamePacket {
     },
     SetObjective {
         objective_name: String,
-        method: i8,
-        display_name: String,
-        render_type: VarInt,
+        method: SetObjectivePacketMethod,
     },
     SetPassengers {
         vehicle: VarInt,
         passengers: Vec<VarInt>,
     },
-    SetPlayerTeam,
+    SetPlayerTeam {
+        name: String,
+        method: SetPlayerTeamPacketMethod,
+    },
     SetScore {
         owner: String,
-        method: VarInt,
-        objective_name: String,
-        score: VarInt,
+        method: SetScorePacketMethod,
     },
     SetSimulationDistance {
         simulation_distance: VarInt,
@@ -469,7 +489,7 @@ pub enum GamePacket {
     StopSound,
     SystemChat {
         content: String,
-        type_id: VarInt,
+        overlay: bool,
     },
     TabList {
         header: String,
@@ -477,7 +497,7 @@ pub enum GamePacket {
     },
     TagQuery {
         transaction_id: VarInt,
-        // tag
+        tag: (/*TODO*/),
     },
     TakeItemEntity {
         item_id: VarInt,
@@ -493,18 +513,33 @@ pub enum GamePacket {
         x_rot: i8,
         on_ground: bool,
     },
-    UpdateAdvancements,
-    UpdateAttributes,
+    UpdateAdvancements {
+        reset: bool,
+        added: Vec<(/*TODO*/)>,
+        removed: Vec<String>,
+        progress: Vec<(/*TODO*/)>,
+    },
+    UpdateAttributes {
+        entity_id: VarInt,
+        attributes: (/*TODO*/),
+    },
+    UpdateEnabledFeatures {
+        features: Vec<String>,
+    },
     UpdateMobEffect {
         entity_id: VarInt,
         id: VarInt,
         effect_amplifier: i8,
         effect_duration_ticks: VarInt,
         flags: u8,
-        // factor_data
+        factor_data: (/*TODO*/),
     },
-    UpdateRecipes,
-    UpdateTags,
+    UpdateRecipes {
+        recipes: Vec<(/*TODO*/)>
+    },
+    UpdateTags {
+        tags: Vec<(/*TODO*/)>
+    },
 }
 
 #[derive(Encode, Decode)]
@@ -533,7 +568,85 @@ pub enum BossEventPacketOperation {
 }
 
 #[derive(Encode, Decode)]
+pub enum CustomChatCompletionsPacketAction {
+    Add, Remove, Set
+}
+
+#[derive(Encode, Decode)]
+pub struct LevelChunkPacketData {
+    heightmaps: (/*TODO*/),
+    buffer: Vec<u8>,
+    block_entities_data: Vec<(/*TODO*/)>
+}
+
+#[derive(Encode, Decode)]
+pub struct LightUpdatePacketData {
+    trust_edges: bool,
+    sky_y_mask: Vec<i64>,
+    block_y_mask: Vec<i64>,
+    empty_sky_y_mask: Vec<i64>,
+    empty_block_y_mask: Vec<i64>,
+    sky_updates: Vec<Vec<u8>>,
+    block_updates: Vec<Vec<u8>>,
+}
+
+#[derive(Encode, Decode)]
 pub struct PlayerLookAtPacketAtEntity {
     entity: VarInt,
     to_anchor: Anchor,
+}
+
+#[derive(Encode, Decode)]
+pub enum SetObjectivePacketMethod {
+    Add {
+        display_name: String,
+        render_type: VarInt,
+    },
+    Remove,
+    Change {
+        display_name: String,
+        render_type: VarInt,
+    }
+}
+
+#[derive(Encode, Decode)]
+pub enum SetPlayerTeamPacketMethod {
+    Add {
+        display_name: String,
+        options: i8,
+        nametag_visibility: String,
+        collision_rule: String,
+        color: VarInt,
+        prefix: String,
+        suffix: String,
+        players: Vec<String>
+    },
+    Remove,
+    Change {
+        display_name: String,
+        options: i8,
+        nametag_visibility: String,
+        collision_rule: String,
+        color: VarInt,
+        prefix: String,
+        suffix: String,
+        players: Vec<String>
+    },
+    Join {
+        players: Vec<String>
+    },
+    Leave {
+        players: Vec<String>
+    }
+}
+
+#[derive(Encode, Decode)]
+pub enum SetScorePacketMethod {
+    Change {
+        objective_name: String,
+        score: VarInt,
+    },
+    Remove {
+        objective_name: String,
+    }
 }

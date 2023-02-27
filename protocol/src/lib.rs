@@ -1,3 +1,5 @@
+#![feature(array_try_from_fn)]
+
 pub use tesseract_protocol_derive::{Decode, Encode};
 
 pub mod packet;

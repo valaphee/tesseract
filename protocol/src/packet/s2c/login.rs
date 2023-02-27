@@ -1,3 +1,4 @@
+use crate::types::GameProfile;
 use crate::{types::VarInt, Decode, Encode};
 
 #[derive(Encode, Decode)]
@@ -22,7 +23,9 @@ pub struct HelloPacket {
 }
 
 #[derive(Encode, Decode)]
-pub struct GameProfilePacket;
+pub struct GameProfilePacket {
+    pub game_profile: GameProfile,
+}
 
 #[derive(Encode, Decode)]
 pub struct LoginCompressionPacket {
@@ -33,4 +36,5 @@ pub struct LoginCompressionPacket {
 pub struct CustomQueryPacket {
     pub transaction_id: VarInt,
     pub identifier: String,
+    pub data: (/*TODO*/),
 }

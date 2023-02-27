@@ -1,9 +1,11 @@
+use glam::IVec3;
 use uuid::Uuid;
 
 use crate::{
     types::{ChatVisibility, ClickType, Difficulty, Hand, MainHand, RecipeBookType, VarInt},
     Decode, Encode,
 };
+use crate::types::{ChatSession, ItemStack, LastSeenMessages};
 
 #[derive(Encode, Decode)]
 pub enum GamePacket {
@@ -12,28 +14,30 @@ pub enum GamePacket {
     },
     BlockEntityTagQuery {
         transaction_id: VarInt,
-        pos: i64,
+        pos: IVec3,
     },
     ChangeDifficulty {
         difficulty: Difficulty,
+    },
+    ChatAck {
+        offset: VarInt
     },
     ChatCommand {
         command: String,
         timestamp: i64,
         salt: i64,
-        /*signatures: HashMap<String, Vec<u8>>,*/
-        signed_preview: bool,
+        argument_signatures: Vec<(String, [u8; 256])>,
+        last_seen_messages: LastSeenMessages,
     },
     Chat {
         message: String,
         timestamp: i64,
         salt: i64,
-        signatures: Vec<u8>,
-        signed_preview: bool,
+        signature: Option<[u8; 256]>,
+        last_seen_messages: LastSeenMessages,
     },
-    ChatPreview {
-        query_id: i32,
-        query: String,
+    ChatSessionUpdate {
+        chat_session: ChatSession
     },
     ClientCommand {
         action: ClientCommandPacketAction,
@@ -62,14 +66,15 @@ pub enum GamePacket {
         slot_num: i16,
         button_num: i8,
         click_type: ClickType,
-        // changed_slots, carried_item
+        changed_slots: Vec<(i16, Option<ItemStack>)>,
+        carried_item: Option<ItemStack>,
     },
     ContainerClose {
         container_id: i8,
     },
     CustomPayload {
         identifier: String,
-        // data
+        data: (/*TODO*/),
     },
     EditBook {
         slot: VarInt,
@@ -86,7 +91,7 @@ pub enum GamePacket {
         using_secondary_action: bool,
     },
     JigsawGenerate {
-        pos: i64,
+        pos: IVec3,
         levels: VarInt,
         keep_jigsaws: bool,
     },
@@ -140,7 +145,7 @@ pub enum GamePacket {
     PlayerAbilities,
     PlayerAction {
         action: PlayerActionPacketAction,
-        pos: i64,
+        pos: IVec3,
         direction: u8,
         sequence: VarInt,
     },
@@ -183,7 +188,7 @@ pub enum GamePacket {
         slot: i16,
     },
     SetCommandBlock {
-        pos: i64,
+        pos: IVec3,
         command: String,
         mode: VarInt,
         flags: i8,
@@ -195,10 +200,10 @@ pub enum GamePacket {
     },
     SetCreativeModeSlot {
         slot_num: i16,
-        // item_stack
+        item_stack: Option<ItemStack>,
     },
     SetJigsawBlock {
-        pos: i64,
+        pos: IVec3,
         name: String,
         target: String,
         pool: String,
@@ -206,7 +211,7 @@ pub enum GamePacket {
         joint: String,
     },
     SetStructureBlock {
-        pos: i64,
+        pos: IVec3,
         update_type: VarInt,
         mode: VarInt,
         offset_x: i8,
@@ -223,8 +228,8 @@ pub enum GamePacket {
         flags: i8,
     },
     SignUpdate {
-        pos: i64,
-        /*lines: [String; 4],*/
+        pos: IVec3,
+        lines: [String; 4],
     },
     SwingPacket {
         hand: Hand,
@@ -234,7 +239,7 @@ pub enum GamePacket {
     },
     UseItemOn {
         hand: Hand,
-        block_pos: i64,
+        block_pos: IVec3,
         direction: VarInt,
         pos_x: f32,
         pos_y: f32,
