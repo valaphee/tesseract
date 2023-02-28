@@ -1,4 +1,7 @@
-use crate::{types::{Intention, VarInt}, Decode, Encode};
+use crate::{
+    types::{Intention, VarInt},
+    Decode, Encode,
+};
 
 #[derive(Debug, Encode, Decode)]
 pub enum HandshakePacket {

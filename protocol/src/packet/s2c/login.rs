@@ -12,10 +12,10 @@ pub enum LoginPacket {
         nonce: Vec<u8>,
     },
     GameProfile {
-        game_profile: GameProfile
+        game_profile: GameProfile,
     },
     LoginCompression {
-        compression_threshold: VarInt
+        compression_threshold: VarInt,
     },
     CustomQuery {
         transaction_id: VarInt,
