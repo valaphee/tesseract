@@ -1,12 +1,11 @@
 use std::io::Write;
 
-use anyhow::{bail, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use glam::IVec3;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Decode, Encode};
+use crate::{Decode, Encode, Error, Result};
 
 //=================================================================================== PRIMITIVE ====
 
@@ -91,6 +90,7 @@ impl<'a> Decode<'a> for i32 {
     }
 }
 
+#[derive(Debug)]
 pub struct VarInt(pub i32);
 
 impl Encode for VarInt {
@@ -121,7 +121,7 @@ impl<'a> Decode<'a> for VarInt {
             }
             shift += 7;
         }
-        todo!()
+        Err(Error::VarIntTooWide(35))
     }
 }
 
@@ -358,7 +358,7 @@ impl Encode for IVec3 {
                 ((self.x as u64) << 38 | (self.z as u64) << 38 >> 26 | (self.y as u64) & 0xFFF)
                     .encode(output)
             }
-            _ => bail!(""),
+            _ => unimplemented!(),
         }
     }
 }
@@ -404,17 +404,17 @@ pub enum BossEventOverlay {
 
 #[derive(Encode, Decode)]
 pub struct ChatSession {
-    session_id: Uuid,
-    expires_at: i64,
-    public_key: Vec<u8>,
-    key_signature: Vec<u8>,
+    pub session_id: Uuid,
+    pub expires_at: i64,
+    pub public_key: Vec<u8>,
+    pub key_signature: Vec<u8>,
 }
 
 #[derive(Encode, Decode)]
 pub struct ChatType {
-    chat_type: VarInt,
-    name: String,
-    target_name: String,
+    pub chat_type: VarInt,
+    pub name: String,
+    pub target_name: String,
 }
 
 #[derive(Encode, Decode)]
@@ -468,16 +468,16 @@ impl<'a> Decode<'a> for Difficulty {
 
 #[derive(Encode, Decode)]
 pub struct GameProfile {
-    id: Uuid,
-    name: String,
-    properties: Vec<GameProfileProperty>,
+    pub id: Uuid,
+    pub name: String,
+    pub properties: Vec<GameProfileProperty>,
 }
 
 #[derive(Encode, Decode)]
 pub struct GameProfileProperty {
-    name: String,
-    value: String,
-    signature: Option<String>,
+    pub name: String,
+    pub value: String,
+    pub signature: Option<String>,
 }
 
 #[derive(Encode, Decode)]
@@ -496,9 +496,9 @@ pub enum Hand {
 
 #[derive(Encode, Decode)]
 pub struct ItemStack {
-    item: VarInt,
-    count: i8,
-    tag: (),
+    pub item: VarInt,
+    pub count: i8,
+    pub tag: (),
 }
 
 pub struct Json<T>(pub T);
@@ -523,8 +523,8 @@ where
 
 #[derive(Encode, Decode)]
 pub struct LastSeenMessages {
-    offset: VarInt,
-    acknowledged: [u8; 3],
+    pub offset: VarInt,
+    pub acknowledged: [u8; 3],
 }
 
 #[derive(Encode, Decode)]
@@ -535,11 +535,11 @@ pub enum MainHand {
 
 #[derive(Encode, Decode)]
 pub struct MapDecoration {
-    type_: MapDecorationType,
-    x: i8,
-    y: i8,
-    rot: i8,
-    name: Option<String>,
+    pub type_: MapDecorationType,
+    pub x: i8,
+    pub y: i8,
+    pub rot: i8,
+    pub name: Option<String>,
 }
 
 #[derive(Encode, Decode)]
@@ -574,11 +574,11 @@ pub enum MapDecorationType {
 }
 
 pub struct MapPatch {
-    width: u8,
-    height: u8,
-    start_x: u8,
-    start_y: u8,
-    map_colors: Vec<u8>,
+    pub width: u8,
+    pub height: u8,
+    pub start_x: u8,
+    pub start_y: u8,
+    pub map_colors: Vec<u8>,
 }
 
 impl Encode for Option<MapPatch> {
@@ -615,16 +615,16 @@ impl<'a> Decode<'a> for Option<MapPatch> {
 
 #[derive(Encode, Decode)]
 pub struct MerchantOffer {
-    base_cost_a: Option<ItemStack>,
-    result: Option<ItemStack>,
-    cost_b: Option<ItemStack>,
-    out_of_stock: bool,
-    uses: i32,
-    max_uses: i32,
-    xp: i32,
-    special_price_diff: i32,
-    price_multiplier: f32,
-    demand: i32,
+    pub base_cost_a: Option<ItemStack>,
+    pub result: Option<ItemStack>,
+    pub cost_b: Option<ItemStack>,
+    pub out_of_stock: bool,
+    pub uses: i32,
+    pub max_uses: i32,
+    pub xp: i32,
+    pub special_price_diff: i32,
+    pub price_multiplier: f32,
+    pub demand: i32,
 }
 
 pub struct Nbt<T>(pub T);

@@ -1,20 +1,20 @@
 use crate::{types::VarInt, Decode, Encode};
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum HandshakePacket {
     Intention(IntentionPacket),
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct IntentionPacket {
     pub protocol_version: VarInt,
     pub host_name: String,
     pub port: u16,
-    pub intention: Intention,
+    pub intention: IntentionPacketIntention,
 }
 
-#[derive(Encode, Decode)]
-pub enum Intention {
+#[derive(Debug, Encode, Decode)]
+pub enum IntentionPacketIntention {
     Game,
     Status,
     Login,
