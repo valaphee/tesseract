@@ -1,34 +1,23 @@
-use std::fmt::{Debug, Formatter};
-use anyhow::{bail, Result};
-use std::io;
-use std::io::{Error, IoSlice};
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::Duration;
+
 use bevy::prelude::*;
 use futures::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::time::timeout;
-use tokio_util::codec::{Decoder, Encoder, Framed};
-use tesseract_protocol::packet::{c2s, s2c};
-use tesseract_protocol::types::{GameProfile, Json, VarInt};
+use tokio_util::codec::Framed;
 use uuid::Uuid;
+
+use tesseract_protocol::packet::{c2s, s2c};
+use tesseract_protocol::types::{GameProfile, Intention, Json, Status, StatusPlayers, StatusVersion};
 use tesseract_protocol::{Codec, Decode, Encode};
-use tesseract_protocol::packet::c2s::handshake::IntentionPacketIntention;
 
 #[derive(Default)]
 pub struct ConnectionPlugin;
 
 impl Plugin for ConnectionPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_startup_system(listen)
+        app.add_startup_system(listen)
             .add_system(initialize_connection)
             .add_system(update_connection);
     }
@@ -37,7 +26,7 @@ impl Plugin for ConnectionPlugin {
 #[derive(Resource)]
 struct NewConnectionReceiver(UnboundedReceiver<Connection>);
 
-#[derive(Component)]
+#[derive(Debug, Component)]
 pub struct Connection {
     receiver: UnboundedReceiver<c2s::GamePacket>,
     received: Vec<c2s::GamePacket>,
@@ -45,15 +34,7 @@ pub struct Connection {
     pub sender: UnboundedSender<s2c::GamePacket>,
 }
 
-impl Debug for Connection {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
-    }
-}
-
-fn listen(
-    mut commands: Commands
-) {
+fn listen(mut commands: Commands) {
     let (new_connection_tx, new_connection_rx) = mpsc::unbounded_channel();
 
     commands.insert_resource(NewConnectionReceiver(new_connection_rx));
@@ -64,35 +45,101 @@ fn listen(
             .build()
             .unwrap()
             .block_on(async move {
-                let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 25565)).await.unwrap();
+                let listener =
+                    TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 25565))
+                        .await
+                        .unwrap();
 
                 loop {
                     let (socket, _) = listener.accept().await.unwrap();
-                    let (input, output) = socket.into_split();
 
                     let new_connection_tx = new_connection_tx.clone();
                     tokio::spawn(async move {
-                        let mut framed_input = Framed::new(DummyOutput {
-                            input,
-                        }, Codec::<c2s::HandshakePacket>::new());
-
-                        match framed_input.next().await.unwrap().unwrap() {
-                            c2s::HandshakePacket::Intention(packet) => {
-                                match packet.intention {
-                                    IntentionPacketIntention::Status => {
-                                        let mut framed_input = framed_input.map_codec(|_| {
-                                            Codec::<c2s::StatusPacket>::new()
-                                        });
-
-                                        let mut framed_output = Framed::new(DummyInput {
-                                            output,
-                                        }, Codec::<s2c::StatusPacket>::new());
+                        let mut framed_socket = Framed::new(socket, Codec);
+                        match c2s::HandshakePacket::decode(&mut framed_socket.next().await.unwrap().unwrap().as_slice()).unwrap() {
+                            c2s::HandshakePacket::Intention { intention, .. } => match intention {
+                                Intention::Status => {
+                                    c2s::StatusPacket::decode(&mut framed_socket.next().await.unwrap().unwrap().as_slice()).unwrap();
+                                    framed_socket.send({
+                                        let mut data = Vec::<u8>::new();
+                                        s2c::StatusPacket::StatusResponse {
+                                            status: Json(Status {
+                                                description: Some("Tesseract".to_string()),
+                                                players: Some(StatusPlayers {
+                                                    max: 1,
+                                                    online: 0,
+                                                    sample: vec![],
+                                                }),
+                                                version: Some(StatusVersion {
+                                                    name: "1.19.3".to_string(),
+                                                    protocol: 761,
+                                                }),
+                                                favicon: None,
+                                                previews_chat: false,
+                                            }),
+                                        }.encode(&mut data).unwrap();
+                                        data
+                                    }).await.unwrap();
+                                    match c2s::StatusPacket::decode(&mut framed_socket.next().await.unwrap().unwrap().as_slice()).unwrap() {
+                                        c2s::StatusPacket::PingRequest { time } => {
+                                            framed_socket.send({
+                                                let mut data = Vec::<u8>::new();
+                                                s2c::StatusPacket::PongResponse { time }.encode(&mut data).unwrap();
+                                                data
+                                            }).await.unwrap();
+                                        }
+                                        _ => unreachable!(),
                                     }
-                                    IntentionPacketIntention::Login => {}
-                                    _ => unreachable!()
                                 }
+                                Intention::Login => {
+                                    match c2s::LoginPacket::decode(&mut framed_socket.next().await.unwrap().unwrap().as_slice()).unwrap() {
+                                        c2s::LoginPacket::Hello { name, .. } => {
+                                            framed_socket.send({
+                                                let mut data = Vec::<u8>::new();
+                                                s2c::LoginPacket::GameProfile{
+                                                    game_profile: GameProfile {
+                                                        id: Uuid::new_v4(),
+                                                        name,
+                                                        properties: vec![],
+                                                    },
+                                                }.encode(&mut data).unwrap();
+                                                data
+                                            }).await.unwrap();
 
-                            }
+                                            let (receive_packet_tx, receive_packet_rx) = mpsc::unbounded_channel();
+                                            let (send_packet_tx, mut send_packet_rx) = mpsc::unbounded_channel();
+                                            new_connection_tx.send(Connection {
+                                                receiver: receive_packet_rx,
+                                                received: vec![],
+                                                sender: send_packet_tx,
+                                            }).unwrap();
+
+                                            let (mut sink, mut stream) = framed_socket.split();
+
+                                            tokio::spawn(async move {
+                                                while let Some(frame) = stream.next().await {
+                                                    let packet = c2s::GamePacket::decode(&mut frame.unwrap().as_slice()).unwrap();
+                                                    println!("Recv {:?}", packet);
+                                                    receive_packet_tx.send(packet).unwrap();
+                                                }
+                                            });
+
+                                            tokio::spawn(async move {
+                                                while let Some(packet) = send_packet_rx.recv().await {
+                                                    println!("Send {:?}", packet);
+                                                    sink.send({
+                                                        let mut data = Vec::<u8>::new();
+                                                        packet.encode(&mut data).unwrap();
+                                                        data
+                                                    }).await.unwrap();
+                                                }
+                                            });
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }
+                                _ => unreachable!(),
+                            },
                         }
                     });
                 }
@@ -109,9 +156,7 @@ fn initialize_connection(
     }
 }
 
-fn update_connection(
-    mut connections: Query<&mut Connection>,
-) {
+fn update_connection(mut connections: Query<&mut Connection>) {
     for mut connection in connections.iter_mut() {
         connection.received.clear();
         while let Ok(packet) = connection.receiver.try_recv() {

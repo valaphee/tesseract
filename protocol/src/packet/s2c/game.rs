@@ -9,7 +9,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum GamePacket {
     AddEntity {
         id: VarInt,
@@ -541,7 +541,7 @@ pub enum GamePacket {
     },
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum BossEventPacketOperation {
     Add {
         name: String,
@@ -566,21 +566,21 @@ pub enum BossEventPacketOperation {
     },
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum CustomChatCompletionsPacketAction {
     Add,
     Remove,
     Set,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct LevelChunkPacketData {
     heightmaps: (),
     buffer: Vec<u8>,
     block_entities_data: Vec<()>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct LightUpdatePacketData {
     trust_edges: bool,
     sky_y_mask: Vec<i64>,
@@ -591,13 +591,13 @@ pub struct LightUpdatePacketData {
     block_updates: Vec<Vec<u8>>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct PlayerLookAtPacketAtEntity {
     entity: VarInt,
     to_anchor: Anchor,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum SetObjectivePacketMethod {
     Add {
         display_name: String,
@@ -610,7 +610,7 @@ pub enum SetObjectivePacketMethod {
     },
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum SetPlayerTeamPacketMethod {
     Add {
         display_name: String,
@@ -641,7 +641,7 @@ pub enum SetPlayerTeamPacketMethod {
     },
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum SetScorePacketMethod {
     Change {
         objective_name: String,

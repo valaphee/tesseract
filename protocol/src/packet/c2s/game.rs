@@ -9,7 +9,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum GamePacket {
     AcceptTeleportation {
         id: VarInt,
@@ -255,20 +255,20 @@ pub enum GamePacket {
     },
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum ClientCommandPacketAction {
     PerformRespawn,
     RequestStats,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum InteractPacketAction {
     Interact { hand: Hand },
     Attack,
     InteractAt { x: f32, y: f32, z: f32, hand: Hand },
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum PlayerActionPacketAction {
     StartDestroyBlock,
     AbortDestroyBlock,
@@ -279,7 +279,7 @@ pub enum PlayerActionPacketAction {
     SwapItemWithOffhand,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum PlayerCommandPacketAction {
     PressShiftKey,
     ReleaseShiftKey,
@@ -292,7 +292,7 @@ pub enum PlayerCommandPacketAction {
     StartFallFlying,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum ResourcePackPacketAction {
     SuccessfullyLoaded,
     Declined,

@@ -2,11 +2,12 @@
 
 extern crate core;
 
-use std::marker::PhantomData;
-use bytes::{Buf, BytesMut};
+use bytes::{Buf, BufMut, BytesMut};
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
+
 pub use tesseract_protocol_derive::{Decode, Encode};
+
 use crate::types::VarInt;
 
 pub mod packet;
@@ -40,48 +41,40 @@ pub trait Decode<'a>: Sized {
     fn decode(input: &mut &'a [u8]) -> Result<Self>;
 }
 
-pub struct Codec<T> {
-    _phantom: PhantomData<T>
-}
+pub struct Codec;
 
-impl<T> Codec<T> {
-    pub fn new() -> Self {
-        Self {
-            _phantom: Default::default(),
-        }
-    }
-}
-
-impl<T> Encoder<T> for Codec<T>
-where
-    T: Encode
-{
+impl Encoder<Vec<u8>> for Codec {
     type Error = Error;
 
-    fn encode(&mut self, item: T, dst: &mut BytesMut) -> Result<()> {
-        item.encode(&mut &mut dst[..])
+    fn encode(&mut self, item: Vec<u8>, dst: &mut BytesMut) -> Result<()> {
+        let mut length = Vec::new();
+        VarInt(item.len() as i32).encode(&mut length)?;
+        dst.reserve(length.len() + item.len());
+        dst.put_slice(&length);
+        dst.put_slice(&item);
+        Ok(())
     }
 }
 
-impl<T> Decoder for Codec<T>
-where
-    T: Decode<'static>,
-{
-    type Item = T;
+impl Decoder for Codec {
+    type Item = Vec<u8>;
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
         let mut data = &src[..];
         match VarInt::decode(&mut data) {
-            Ok(length) => if src.len() >= length.0 as usize {
-                data = &data[..length.0 as usize];
-                let packet = T::decode(unsafe { std::mem::transmute(&mut data) })?;
-                src.advance(data.as_ptr() as usize - src.as_ptr() as usize);
-                Ok(Some(packet))
-            } else {
-                Ok(None)
+            Ok(frame_length) => {
+                if src.len() >= frame_length.0 as usize {
+                    let frame = data[..frame_length.0 as usize].to_vec();
+                    src.advance(
+                        (data.as_ptr() as usize - src.as_ptr() as usize) + frame_length.0 as usize,
+                    );
+                    Ok(Some(frame))
+                } else {
+                    Ok(None)
+                }
             }
-            Err(_) => Ok(None)
+            Err(_) => Ok(None),
         }
     }
 }

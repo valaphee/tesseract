@@ -237,6 +237,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct TrailingBytes(pub Vec<u8>);
 
 impl Encode for TrailingBytes {
@@ -376,13 +377,13 @@ impl<'a> Decode<'a> for IVec3 {
 
 //======================================================================================== GAME ====
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum Anchor {
     Feet,
     Eyes,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum BossEventColor {
     Pink,
     Blue,
@@ -393,7 +394,7 @@ pub enum BossEventColor {
     White,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum BossEventOverlay {
     Progress,
     Notched6,
@@ -402,7 +403,7 @@ pub enum BossEventOverlay {
     Notched20,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct ChatSession {
     pub session_id: Uuid,
     pub expires_at: i64,
@@ -410,21 +411,21 @@ pub struct ChatSession {
     pub key_signature: Vec<u8>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct ChatType {
     pub chat_type: VarInt,
     pub name: String,
     pub target_name: String,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum ChatVisibility {
     Full,
     System,
     Hidden,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum ClickType {
     Pickup,
     QuickMove,
@@ -435,6 +436,7 @@ pub enum ClickType {
     PickupAll,
 }
 
+#[derive(Debug)]
 pub enum Difficulty {
     Peaceful,
     Easy,
@@ -466,21 +468,21 @@ impl<'a> Decode<'a> for Difficulty {
     }
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct GameProfile {
     pub id: Uuid,
     pub name: String,
     pub properties: Vec<GameProfileProperty>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct GameProfileProperty {
     pub name: String,
     pub value: String,
     pub signature: Option<String>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum GameType {
     Survival,
     Creative,
@@ -488,13 +490,20 @@ pub enum GameType {
     Spectator,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum Hand {
     MainHand,
     OffHand,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
+pub enum Intention {
+    Game,
+    Status,
+    Login,
+}
+
+#[derive(Debug, Encode, Decode)]
 pub struct ItemStack {
     pub item: VarInt,
     pub count: i8,
@@ -521,19 +530,19 @@ where
     }
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct LastSeenMessages {
     pub offset: VarInt,
     pub acknowledged: [u8; 3],
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum MainHand {
     Left,
     Right,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct MapDecoration {
     pub type_: MapDecorationType,
     pub x: i8,
@@ -542,7 +551,7 @@ pub struct MapDecoration {
     pub name: Option<String>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum MapDecorationType {
     Player,
     Frame,
@@ -573,6 +582,7 @@ pub enum MapDecorationType {
     RedX,
 }
 
+#[derive(Debug)]
 pub struct MapPatch {
     pub width: u8,
     pub height: u8,
@@ -613,7 +623,7 @@ impl<'a> Decode<'a> for Option<MapPatch> {
     }
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub struct MerchantOffer {
     pub base_cost_a: Option<ItemStack>,
     pub result: Option<ItemStack>,
@@ -648,7 +658,7 @@ where
     }
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum RecipeBookType {
     Crafting,
     Furnace,
@@ -656,7 +666,7 @@ pub enum RecipeBookType {
     Smoker,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Encode, Decode)]
 pub enum SoundSource {
     Master,
     Music,
@@ -668,4 +678,36 @@ pub enum SoundSource {
     Players,
     Ambient,
     Voice,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Status {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub players: Option<StatusPlayers>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<StatusVersion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favicon: Option<String>,
+    pub previews_chat: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct StatusVersion {
+    pub name: String,
+    pub protocol: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct StatusPlayers {
+    pub max: i32,
+    pub online: i32,
+    pub sample: Vec<StatusPlayersSample>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct StatusPlayersSample {
+    pub id: String,
+    pub name: String,
 }
