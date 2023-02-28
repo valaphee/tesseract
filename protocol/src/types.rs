@@ -93,6 +93,15 @@ impl<'a> Decode<'a> for i32 {
 #[derive(Debug)]
 pub struct VarInt(pub i32);
 
+impl VarInt {
+    pub fn len(&self) -> usize {
+        match self.0 {
+            0 => 1,
+            n => (31 - n.leading_zeros() as usize) / 7 + 1
+        }
+    }
+}
+
 impl Encode for VarInt {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         let encoded_without_trailing_bits =

@@ -13,6 +13,7 @@ use tesseract_protocol::{
     types::{GameProfile, Intention, Json, Status, StatusPlayers, StatusVersion},
     Decode, Encode,
 };
+use tesseract_protocol::types::VarInt;
 
 #[derive(Default)]
 pub struct ConnectionPlugin;
@@ -103,6 +104,14 @@ fn listen(mut commands: Commands) {
                                     });
                                     match framed_socket.next().await.unwrap().unwrap() {
                                         c2s::LoginPacket::Hello { name, .. } => {
+                                            framed_socket
+                                                .send(s2c::LoginPacket::LoginCompression {
+                                                    compression_threshold: VarInt(256),
+                                                })
+                                                .await
+                                                .unwrap();
+                                            framed_socket.codec_mut().compression_threshold = Some(256);
+
                                             framed_socket
                                                 .send(s2c::LoginPacket::GameProfile {
                                                     game_profile: GameProfile {
