@@ -18,7 +18,9 @@ description = "An ECS-based Minecraft server written in Rust."
 [dependencies]
 anyhow = "1.0.69"
 bevy = { git = "https://github.com/bevyengine/bevy.git", default-features = false }
+byteorder = "1.4.3"
 futures = "0.3.26"
+glam = "0.23.0"
 serde = "1.0.152"
 serde_json = "1.0.93"
 tesseract_protocol = { path = "protocol" }

@@ -1,3 +1,7 @@
+use std::io::Write;
+use std::ptr::eq;
+
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::IVec3;
 use serde::{Deserialize, Serialize};
 use serde_value::Value;
@@ -5,12 +9,12 @@ use uuid::Uuid;
 
 use crate::{
     types::{
-        Anchor, BossEventColor, BossEventOverlay, ChatType, GameType, Hand, ItemStack,
-        MapDecoration, MapPatch, MerchantOffer, SoundSource, TrailingBytes, VarInt,
+        Advancement, Anchor, BossEventColor, BossEventOverlay, ChatType, EquipmentSlot, GameType,
+        Hand, ItemStack, MapDecoration, MapPatch, MerchantOffer, Nbt, Registries, SoundSource,
+        TrailingBytes, VarInt,
     },
     Decode, Encode,
 };
-use crate::types::{Nbt, Registries};
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum GamePacket {
@@ -425,7 +429,10 @@ pub enum GamePacket {
         ya: i16,
         za: i16,
     },
-    SetEquipment,
+    SetEquipment {
+        entity: VarInt,
+        slots: SetEquipmentPacketSlots,
+    },
     SetExperience {
         experience_progress: f32,
         experience_level: VarInt,
@@ -488,7 +495,7 @@ pub enum GamePacket {
         pitch: f32,
         seed: i64,
     },
-    StopSound,
+    StopSound(StopSoundPacket),
     SystemChat {
         content: String,
         overlay: bool,
@@ -517,9 +524,9 @@ pub enum GamePacket {
     },
     UpdateAdvancements {
         reset: bool,
-        added: Vec<()>,
+        added: Vec<(String, Advancement)>,
         removed: Vec<String>,
-        progress: Vec<()>,
+        progress: Vec<(String, Vec<(String, Option<i64>)>)>,
     },
     UpdateAttributes {
         entity_id: VarInt,
@@ -616,6 +623,39 @@ pub struct PlayerLookAtPacketAtEntity {
     pub to_anchor: Anchor,
 }
 
+#[derive(Clone, Debug)]
+pub struct SetEquipmentPacketSlots(Vec<(EquipmentSlot, ItemStack)>);
+
+impl Encode for SetEquipmentPacketSlots {
+    fn encode<W: Write>(&self, output: &mut W) -> crate::Result<()> {
+        let mut slots = self.0.iter().peekable();
+        while let Some((equipment_slot, item)) = slots.next() {
+            output.write_u8(
+                u8::from(*equipment_slot) | if slots.peek().is_some() { 0x80 } else { 0 },
+            )?;
+            item.encode(output)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for SetEquipmentPacketSlots {
+    fn decode(input: &mut &'a [u8]) -> crate::Result<Self> {
+        let mut slots = Vec::new();
+        loop {
+            let equipment_slot_with_bit = input.read_u8()?;
+            slots.push((
+                EquipmentSlot::try_from(equipment_slot_with_bit & 0x7F).unwrap(),
+                Decode::decode(input)?,
+            ));
+            if equipment_slot_with_bit & 0x80 == 0 {
+                break;
+            }
+        }
+        Ok(Self(slots))
+    }
+}
+
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum SetObjectivePacketMethod {
     Add {
@@ -669,4 +709,47 @@ pub enum SetScorePacketMethod {
     Remove {
         objective_name: String,
     },
+}
+
+#[derive(Clone, Debug)]
+pub struct StopSoundPacket {
+    pub source: Option<SoundSource>,
+    pub name: Option<String>,
+}
+
+impl Encode for StopSoundPacket {
+    fn encode<W: Write>(&self, output: &mut W) -> crate::Result<()> {
+        let mut flags = 0i8;
+        if self.source.is_some() {
+            flags |= 1 << 0;
+        }
+        if self.name.is_some() {
+            flags |= 1 << 1;
+        }
+        flags.encode(output)?;
+        if let Some(source) = &self.source {
+            source.encode(output)?;
+        }
+        if let Some(name) = &self.name {
+            name.encode(output)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for StopSoundPacket {
+    fn decode(input: &mut &'a [u8]) -> crate::Result<Self> {
+        let flags = input.read_i8()?;
+        let source = if flags & 1 << 0 != 0 {
+            Some(Decode::decode(input)?)
+        } else {
+            None
+        };
+        let name = if flags & 1 << 1 != 0 {
+            Some(Decode::decode(input)?)
+        } else {
+            None
+        };
+        Ok(Self { source, name })
+    }
 }

@@ -2,6 +2,7 @@ use std::io::Write;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use glam::IVec3;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
 use serde_value::Value;
 use uuid::Uuid;
@@ -98,7 +99,7 @@ impl VarInt {
     pub fn len(&self) -> usize {
         match self.0 {
             0 => 1,
-            n => (31 - n.leading_zeros() as usize) / 7 + 1
+            n => (31 - n.leading_zeros() as usize) / 7 + 1,
         }
     }
 }
@@ -388,6 +389,90 @@ impl<'a> Decode<'a> for IVec3 {
 //======================================================================================== GAME ====
 
 #[derive(Clone, Debug, Encode, Decode)]
+pub struct Advancement {
+    pub parent_id: Option<String>,
+    pub display: Option<AdvancementDisplayInfo>,
+    pub criteria: Vec<String>,
+    pub requirements: Vec<Vec<String>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AdvancementDisplayInfo {
+    pub title: String,
+    pub description: String,
+    pub icon: ItemStack,
+    pub frame: AdvancementFrameType,
+    pub background: Option<String>,
+    pub show_toast: bool,
+    pub hidden: bool,
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Encode for AdvancementDisplayInfo {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.title.encode(output)?;
+        self.description.encode(output)?;
+        self.icon.encode(output)?;
+        self.frame.encode(output)?;
+        let mut flags = 0;
+        if self.background.is_some() {
+            flags |= 1 << 0;
+        }
+        if self.show_toast {
+            flags |= 1 << 1;
+        }
+        if self.hidden {
+            flags |= 1 << 2;
+        }
+        flags.encode(output)?;
+        if let Some(background) = &self.background {
+            background.encode(output)?;
+        }
+        self.x.encode(output)?;
+        self.y.encode(output)?;
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for AdvancementDisplayInfo {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        let title = Decode::decode(input)?;
+        let description = Decode::decode(input)?;
+        let icon = Decode::decode(input)?;
+        let frame = Decode::decode(input)?;
+        let flags = i32::decode(input)?;
+        let background = if flags & (1 << 0) != 0 {
+            Some(Decode::decode(input)?)
+        } else {
+            None
+        };
+        let show_toast = flags & (1 << 1) != 0;
+        let hidden = flags & (1 << 2) != 0;
+        let x = Decode::decode(input)?;
+        let y = Decode::decode(input)?;
+        Ok(Self {
+            title,
+            description,
+            icon,
+            frame,
+            background,
+            show_toast,
+            hidden,
+            x,
+            y,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
+pub enum AdvancementFrameType {
+    Task,
+    Challenge,
+    Goal,
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum Anchor {
     Feet,
     Eyes,
@@ -404,19 +489,19 @@ pub struct Biome {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum BiomePrecipitation {
-    #[serde(rename="none")]
+    #[serde(rename = "none")]
     None,
-    #[serde(rename="rain")]
+    #[serde(rename = "rain")]
     Rain,
-    #[serde(rename="snow")]
-    Snow
+    #[serde(rename = "snow")]
+    Snow,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum BiomeTemperatureModifier {
-    #[serde(rename="none")]
+    #[serde(rename = "none")]
     None,
-    #[serde(rename="frozen")]
+    #[serde(rename = "frozen")]
     Frozen,
 }
 
@@ -562,6 +647,17 @@ pub struct DimensionType {
     pub has_raids: bool,
     pub monster_spawn_light_level: i32,
     pub monster_spawn_block_light_limit: i32,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
+pub enum EquipmentSlot {
+    MainHand,
+    OffHand,
+    Feet,
+    Legs,
+    Chest,
+    Head,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
@@ -776,14 +872,14 @@ pub struct Registries {
 pub struct Registry<T> {
     #[serde(rename = "type")]
     pub _type: String,
-    pub value: Vec<RegistryEntry<T>>
+    pub value: Vec<RegistryEntry<T>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RegistryEntry<T> {
     pub name: String,
     pub id: u32,
-    pub element: T
+    pub element: T,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]

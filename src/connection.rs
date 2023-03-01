@@ -10,10 +10,8 @@ use uuid::Uuid;
 use tesseract_protocol::{
     codec::Codec,
     packet::{c2s, s2c},
-    types::{GameProfile, Intention, Json, Status, StatusPlayers, StatusVersion},
-    Decode, Encode,
+    types::{GameProfile, Intention, Json, Status, StatusPlayers, StatusVersion, VarInt},
 };
-use tesseract_protocol::types::VarInt;
 
 #[derive(Default)]
 pub struct ConnectionPlugin;
@@ -32,7 +30,7 @@ struct NewConnectionReceiver(mpsc::UnboundedReceiver<Connection>);
 #[derive(Debug, Component)]
 pub struct Connection {
     receiver: mpsc::UnboundedReceiver<c2s::GamePacket>,
-    received: Vec<c2s::GamePacket>,
+    pub received: Vec<c2s::GamePacket>,
 
     pub sender: mpsc::UnboundedSender<s2c::GamePacket>,
 }
@@ -99,18 +97,19 @@ fn listen(mut commands: Commands) {
                                     }
                                 }
                                 Intention::Login => {
-                                    let mut framed_socket = framed_socket.map_codec(|_| {
-                                        Codec::<s2c::LoginPacket, c2s::LoginPacket>::new()
+                                    let mut framed_socket = framed_socket.map_codec(|codec| {
+                                        Codec::<s2c::LoginPacket, c2s::LoginPacket>::from(codec)
                                     });
                                     match framed_socket.next().await.unwrap().unwrap() {
                                         c2s::LoginPacket::Hello { name, .. } => {
-                                            /*framed_socket
+                                            framed_socket
                                                 .send(s2c::LoginPacket::LoginCompression {
                                                     compression_threshold: VarInt(256),
                                                 })
                                                 .await
                                                 .unwrap();
-                                            framed_socket.codec_mut().compression_threshold = Some(256);*/
+                                            framed_socket.codec_mut().compression_threshold =
+                                                Some(256);
 
                                             framed_socket
                                                 .send(s2c::LoginPacket::GameProfile {
@@ -135,8 +134,10 @@ fn listen(mut commands: Commands) {
                                                 })
                                                 .unwrap();
 
-                                            let mut framed_socket = framed_socket.map_codec(|_| {
-                                                Codec::<s2c::GamePacket, c2s::GamePacket>::new()
+                                            let framed_socket = framed_socket.map_codec(|codec| {
+                                                Codec::<s2c::GamePacket, c2s::GamePacket>::from(
+                                                    codec,
+                                                )
                                             });
                                             let (mut sink, mut stream) = framed_socket.split();
 

@@ -2,8 +2,8 @@ use std::io::Read;
 use std::marker::PhantomData;
 
 use bytes::{Buf, BufMut, BytesMut};
-use flate2::Compression;
 use flate2::read::{ZlibDecoder, ZlibEncoder};
+use flate2::Compression;
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{types::VarInt, Decode, Encode, Error, Result};
@@ -20,7 +20,14 @@ impl<I, O> Codec<I, O> {
         Self {
             compression: Compression::default(),
             compression_threshold: None,
+            _phantom: Default::default(),
+        }
+    }
 
+    pub fn from<I2, O2>(other: Codec<I2, O2>) -> Self {
+        Self {
+            compression: other.compression,
+            compression_threshold: other.compression_threshold,
             _phantom: Default::default(),
         }
     }
@@ -42,12 +49,15 @@ where
         if let Some(compression_threshold) = self.compression_threshold {
             if data_length > compression_threshold {
                 let mut compressed_data = Vec::new();
-                ZlibEncoder::new(&dst[data_offset..], self.compression).read_to_end(&mut compressed_data).unwrap();
+                ZlibEncoder::new(&dst[data_offset..], self.compression)
+                    .read_to_end(&mut compressed_data)
+                    .unwrap();
 
                 dst.truncate(data_length_offset);
                 let mut writer = dst.writer();
                 let data_length_varint = VarInt(data_length as i32);
-                VarInt((data_length_varint.len() + compressed_data.len()) as i32).encode(&mut writer)?;
+                VarInt((data_length_varint.len() + compressed_data.len()) as i32)
+                    .encode(&mut writer)?;
                 data_length_varint.encode(&mut writer)?;
                 dst.extend_from_slice(&mut compressed_data);
             } else {
@@ -86,8 +96,12 @@ where
                     let packet = if self.compression_threshold.is_some() {
                         let decompressed_data_length = VarInt::decode(&mut data)?.0 as usize;
                         if decompressed_data_length != 0 {
-                            let mut decompressed_data = Vec::with_capacity(decompressed_data_length);
-                            ZlibDecoder::new(data).take(decompressed_data_length as u64).read_to_end(&mut decompressed_data).unwrap();
+                            let mut decompressed_data =
+                                Vec::with_capacity(decompressed_data_length);
+                            ZlibDecoder::new(data)
+                                .take(decompressed_data_length as u64)
+                                .read_to_end(&mut decompressed_data)
+                                .unwrap();
                             O::decode(unsafe { std::mem::transmute(&mut decompressed_data) })?
                         } else {
                             O::decode(unsafe { std::mem::transmute(&mut data) })?

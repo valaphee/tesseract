@@ -66,11 +66,11 @@ const MAGIC: [u32; 192] = [
 ];
 
 pub struct BitStorage {
+    size: u32,
+    bits: u32,
     data: Vec<u64>,
 
-    bits: u32,
-    mask: u64,
-    size: u32,
+    mask: u32,
     values_per_long: u32,
     divide_mul: u32,
     divide_add: u32,
@@ -78,17 +78,16 @@ pub struct BitStorage {
 }
 
 impl BitStorage {
-    pub fn new(size: u32, bits: u32, data: Vec<u64>) -> Self {
+    pub fn new(size: u32, bits: u32) -> Self {
+        assert!((1..32).contains(&bits));
         let values_per_long = u64::BITS / bits;
-        assert_eq!(data.len() as u32, (size + values_per_long - 1) / values_per_long);
         let magic_index = 3 * (values_per_long - 1) as usize;
 
         Self {
-            data: vec![0; (size * bits) as usize],
-
-            bits,
-            mask: (1 << bits) - 1,
             size,
+            bits,
+            data: vec![0; ((size + values_per_long - 1) / values_per_long) as usize],
+            mask: (1 << bits) - 1,
             values_per_long,
             divide_mul: MAGIC[magic_index + 0],
             divide_add: MAGIC[magic_index + 1],
@@ -96,42 +95,94 @@ impl BitStorage {
         }
     }
 
+    pub fn from_data(size: u32, bits: u32, data: Vec<u64>) -> Self {
+        assert!((1..32).contains(&bits));
+        let values_per_long = u64::BITS / bits;
+        assert_eq!(
+            data.len(),
+            ((size + values_per_long - 1) / values_per_long) as usize
+        );
+        let magic_index = 3 * (values_per_long - 1) as usize;
+
+        Self {
+            size,
+            bits,
+            data,
+            mask: (1 << bits) - 1,
+            values_per_long,
+            divide_mul: MAGIC[magic_index + 0],
+            divide_add: MAGIC[magic_index + 1],
+            divide_shift: MAGIC[magic_index + 2],
+        }
+    }
+
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+
+    pub fn bits(&self) -> u32 {
+        self.bits
+    }
+
+    pub fn data(&self) -> &[u64] {
+        &self.data
+    }
+
+    pub fn mask(&self) -> u32 {
+        self.mask
+    }
+
+    pub fn get_and_set(&mut self, index: u32, value: u32) -> u32 {
+        assert!(index < self.size);
+        assert!(value < self.mask);
+
+        let cell_index = self.cell_index(index);
+        let bit_index = self.bit_index(index, cell_index);
+        let cell = &mut self.data[cell_index as usize];
+        let old_value = (*cell >> bit_index) as u32 & self.mask;
+        *cell = *cell & !(self.mask as u64 >> bit_index) | (value as u64) << bit_index;
+        old_value
+    }
+
+    pub fn set(&mut self, index: u32, value: u32) {
+        assert!(index < self.size);
+        assert!(value <= self.mask);
+
+        let cell_index = self.cell_index(index);
+        let bit_index = self.bit_index(index, cell_index);
+        let cell = &mut self.data[cell_index as usize];
+        *cell = *cell & !(self.mask as u64 >> bit_index) | (value as u64) << bit_index;
+    }
+
+    pub fn get(&self, index: u32) -> u32 {
+        assert!(index < self.size);
+
+        let cell_index = self.cell_index(index);
+        let bit_index = self.bit_index(index, cell_index);
+        return (self.data[cell_index as usize] >> bit_index) as u32 & self.mask;
+    }
+
     fn cell_index(&self, index: u32) -> u32 {
-        (index as u64 * self.divide_mul as u64 + self.divide_add as u64 >> 32) as u32 >> self.divide_shift
+        (index as u64 * self.divide_mul as u64 + self.divide_add as u64 >> 32) as u32
+            >> self.divide_shift
     }
 
     fn bit_index(&self, index: u32, cell_index: u32) -> u32 {
         (index - cell_index * self.values_per_long) * self.bits
     }
-
-    pub fn set(&mut self, index: u32, value: u64) {
-        let cell_index = self.cell_index(index);
-        let bit_index = self.bit_index(index, cell_index);
-        self.data[cell_index as usize] = self.data[cell_index as usize] & !(self.mask >> bit_index) | (value & self.mask) << bit_index;
-    }
-
-    pub fn get(&self, index: u32) -> u64 {
-        let cell_index = self.cell_index(index);
-        let bit_index = self.bit_index(index, cell_index);
-        return (self.data[cell_index as usize] >> bit_index) & self.mask;
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use rand::{Rng, SeedableRng};
     use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+
     use crate::bit_storage::BitStorage;
 
     #[test]
     fn set_and_get() {
         for bits in 1..32 {
-            let mut bit_array = BitStorage::new(256, bits, {
-                let values_per_long = u64::BITS / bits;
-                let mut data = Vec::with_capacity(((256 + values_per_long - 1) / values_per_long) as usize);
-                data.resize(data.capacity(), 0);
-                data
-            });
+            let mut bit_array = BitStorage::new(256, bits);
             let mut rng = StdRng::seed_from_u64(0);
             for i in 0..256 {
                 bit_array.set(i, rng.gen_range(0..1 << bits));

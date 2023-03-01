@@ -117,8 +117,8 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok> {
-        self.data.write_i32::<BigEndian>(bytes.len() as i32)?;
-        self.data.write(bytes)?;
+        self.data.write_i32::<BigEndian>(v.len() as i32)?;
+        self.data.write(v)?;
         self.last_type = TagType::ByteArray;
         Ok(())
     }
