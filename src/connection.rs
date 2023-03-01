@@ -104,13 +104,13 @@ fn listen(mut commands: Commands) {
                                     });
                                     match framed_socket.next().await.unwrap().unwrap() {
                                         c2s::LoginPacket::Hello { name, .. } => {
-                                            framed_socket
+                                            /*framed_socket
                                                 .send(s2c::LoginPacket::LoginCompression {
                                                     compression_threshold: VarInt(256),
                                                 })
                                                 .await
                                                 .unwrap();
-                                            framed_socket.codec_mut().compression_threshold = Some(256);
+                                            framed_socket.codec_mut().compression_threshold = Some(256);*/
 
                                             framed_socket
                                                 .send(s2c::LoginPacket::GameProfile {

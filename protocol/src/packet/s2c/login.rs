@@ -1,7 +1,7 @@
 use crate::types::{GameProfile, TrailingBytes};
 use crate::{types::VarInt, Decode, Encode};
 
-#[derive(Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum LoginPacket {
     LoginDisconnect {
         reason: String,

@@ -3,7 +3,7 @@ use uuid::Uuid;
 use crate::types::TrailingBytes;
 use crate::{types::VarInt, Decode, Encode};
 
-#[derive(Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum LoginPacket {
     Hello {
         name: String,

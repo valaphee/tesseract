@@ -3,6 +3,7 @@ use std::io::Write;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use glam::IVec3;
 use serde::{Deserialize, Serialize};
+use serde_value::Value;
 use uuid::Uuid;
 
 use crate::{Decode, Encode, Error, Result};
@@ -90,7 +91,7 @@ impl<'a> Decode<'a> for i32 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VarInt(pub i32);
 
 impl VarInt {
@@ -246,7 +247,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TrailingBytes(pub Vec<u8>);
 
 impl Encode for TrailingBytes {
@@ -386,13 +387,77 @@ impl<'a> Decode<'a> for IVec3 {
 
 //======================================================================================== GAME ====
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum Anchor {
     Feet,
     Eyes,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Biome {
+    pub precipitation: BiomePrecipitation,
+    pub temperature: f32,
+    pub temperature_modifier: Option<BiomeTemperatureModifier>,
+    pub downfall: f32,
+    pub effects: BiomeEffects,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum BiomePrecipitation {
+    #[serde(rename="none")]
+    None,
+    #[serde(rename="rain")]
+    Rain,
+    #[serde(rename="snow")]
+    Snow
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum BiomeTemperatureModifier {
+    #[serde(rename="none")]
+    None,
+    #[serde(rename="frozen")]
+    Frozen,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BiomeEffects {
+    pub fog_color: u32,
+    pub water_color: u32,
+    pub water_fog_color: u32,
+    pub sky_color: u32,
+    pub foliage_color: Option<u32>,
+    pub grass_color: Option<u32>,
+    pub grass_color_modifier: Option<String>,
+    pub ambient_sound: Option<String>,
+    pub mood_sound: Option<BiomeEffectsMoodSound>,
+    pub additions_sound: Option<BiomeEffectsAdditionsSound>,
+    pub music: Option<BiomeEffectsMusic>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BiomeEffectsMusic {
+    pub sound: String,
+    pub min_delay: u32,
+    pub max_delay: u32,
+    pub replace_current_music: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BiomeEffectsAdditionsSound {
+    pub sound: String,
+    pub tick_chance: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BiomeEffectsMoodSound {
+    pub sound: String,
+    pub tick_delay: u32,
+    pub block_search_extent: u32,
+    pub offset: f64,
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum BossEventColor {
     Pink,
     Blue,
@@ -403,7 +468,7 @@ pub enum BossEventColor {
     White,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum BossEventOverlay {
     Progress,
     Notched6,
@@ -412,7 +477,7 @@ pub enum BossEventOverlay {
     Notched20,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct ChatSession {
     pub session_id: Uuid,
     pub expires_at: i64,
@@ -420,21 +485,21 @@ pub struct ChatSession {
     pub key_signature: Vec<u8>,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct ChatType {
     pub chat_type: VarInt,
     pub name: String,
     pub target_name: String,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum ChatVisibility {
     Full,
     System,
     Hidden,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum ClickType {
     Pickup,
     QuickMove,
@@ -445,7 +510,7 @@ pub enum ClickType {
     PickupAll,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Difficulty {
     Peaceful,
     Easy,
@@ -477,21 +542,43 @@ impl<'a> Decode<'a> for Difficulty {
     }
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DimensionType {
+    pub fixed_time: Option<u64>,
+    pub has_skylight: bool,
+    pub has_ceiling: bool,
+    pub ultrawarm: bool,
+    pub natural: bool,
+    pub coordinate_scale: f64,
+    pub bed_works: bool,
+    pub respawn_anchor_works: bool,
+    pub min_y: i32,
+    pub height: u32,
+    pub logical_height: u32,
+    pub infiniburn: String,
+    pub effects: String,
+    pub ambient_light: f32,
+    pub piglin_safe: bool,
+    pub has_raids: bool,
+    pub monster_spawn_light_level: i32,
+    pub monster_spawn_block_light_limit: i32,
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct GameProfile {
     pub id: Uuid,
     pub name: String,
     pub properties: Vec<GameProfileProperty>,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct GameProfileProperty {
     pub name: String,
     pub value: String,
     pub signature: Option<String>,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum GameType {
     Survival,
     Creative,
@@ -499,26 +586,27 @@ pub enum GameType {
     Spectator,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum Hand {
     MainHand,
     OffHand,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum Intention {
     Game,
     Status,
     Login,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct ItemStack {
     pub item: VarInt,
     pub count: i8,
-    pub tag: (),
+    pub tag: Nbt<Value>,
 }
 
+#[derive(Clone, Debug)]
 pub struct Json<T>(pub T);
 
 impl<T> Encode for Json<T>
@@ -539,19 +627,19 @@ where
     }
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct LastSeenMessages {
     pub offset: VarInt,
     pub acknowledged: [u8; 3],
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum MainHand {
     Left,
     Right,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct MapDecoration {
     pub type_: MapDecorationType,
     pub x: i8,
@@ -560,7 +648,7 @@ pub struct MapDecoration {
     pub name: Option<String>,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum MapDecorationType {
     Player,
     Frame,
@@ -591,7 +679,7 @@ pub enum MapDecorationType {
     RedX,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MapPatch {
     pub width: u8,
     pub height: u8,
@@ -632,7 +720,7 @@ impl<'a> Decode<'a> for Option<MapPatch> {
     }
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct MerchantOffer {
     pub base_cost_a: Option<ItemStack>,
     pub result: Option<ItemStack>,
@@ -646,6 +734,7 @@ pub struct MerchantOffer {
     pub demand: i32,
 }
 
+#[derive(Clone, Debug)]
 pub struct Nbt<T>(pub T);
 
 impl<T> Encode for Nbt<T>
@@ -667,7 +756,7 @@ where
     }
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum RecipeBookType {
     Crafting,
     Furnace,
@@ -675,7 +764,29 @@ pub enum RecipeBookType {
     Smoker,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Registries {
+    #[serde(rename = "minecraft:worldgen/biome")]
+    pub biome_registry: Registry<Biome>,
+    #[serde(rename = "minecraft:dimension_type")]
+    pub dimension_type_registry: Registry<DimensionType>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Registry<T> {
+    #[serde(rename = "type")]
+    pub _type: String,
+    pub value: Vec<RegistryEntry<T>>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RegistryEntry<T> {
+    pub name: String,
+    pub id: u32,
+    pub element: T
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum SoundSource {
     Master,
     Music,
@@ -689,7 +800,7 @@ pub enum SoundSource {
     Voice,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Status {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -702,20 +813,20 @@ pub struct Status {
     pub previews_chat: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StatusVersion {
     pub name: String,
     pub protocol: i32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StatusPlayers {
     pub max: i32,
     pub online: i32,
     pub sample: Vec<StatusPlayersSample>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StatusPlayersSample {
     pub id: String,
     pub name: String,

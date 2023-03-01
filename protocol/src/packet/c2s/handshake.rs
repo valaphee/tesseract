@@ -3,7 +3,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum HandshakePacket {
     Intention {
         protocol_version: VarInt,

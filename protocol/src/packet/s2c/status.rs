@@ -3,7 +3,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum StatusPacket {
     StatusResponse { status: Json<Status> },
     PongResponse { time: i64 },

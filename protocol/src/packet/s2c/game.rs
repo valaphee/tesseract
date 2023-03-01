@@ -1,4 +1,6 @@
 use glam::IVec3;
+use serde::{Deserialize, Serialize};
+use serde_value::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -8,8 +10,9 @@ use crate::{
     },
     Decode, Encode,
 };
+use crate::types::{Nbt, Registries};
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum GamePacket {
     AddEntity {
         id: VarInt,
@@ -58,7 +61,7 @@ pub enum GamePacket {
     BlockEntityData {
         pos: IVec3,
         type_: VarInt,
-        tag: (),
+        tag: Nbt<Value>,
     },
     BlockEvent {
         pos: IVec3,
@@ -206,7 +209,7 @@ pub enum GamePacket {
         game_type: GameType,
         previous_game_type: i8,
         levels: Vec<String>,
-        registry_holder: (),
+        registry_holder: Nbt<Registries>,
         dimension_type: String,
         dimension: String,
         seed: i64,
@@ -410,7 +413,7 @@ pub enum GamePacket {
     },
     SetEntityData {
         id: VarInt,
-        //
+        // TODO
     },
     SetEntityLink {
         source_id: i32,
@@ -496,7 +499,7 @@ pub enum GamePacket {
     },
     TagQuery {
         transaction_id: VarInt,
-        tag: (),
+        tag: Nbt<Value>,
     },
     TakeItemEntity {
         item_id: VarInt,
@@ -531,7 +534,7 @@ pub enum GamePacket {
         effect_amplifier: i8,
         effect_duration_ticks: VarInt,
         flags: u8,
-        factor_data: (),
+        factor_data: Nbt<Value>,
     },
     UpdateRecipes {
         recipes: Vec<()>,
@@ -541,7 +544,7 @@ pub enum GamePacket {
     },
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum BossEventPacketOperation {
     Add {
         name: String,
@@ -566,38 +569,54 @@ pub enum BossEventPacketOperation {
     },
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum CustomChatCompletionsPacketAction {
     Add,
     Remove,
     Set,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct LevelChunkPacketData {
-    heightmaps: (),
-    buffer: Vec<u8>,
-    block_entities_data: Vec<()>,
+    pub heightmaps: Nbt<LevelChunkPacketDataHeightmap>,
+    pub buffer: Vec<u8>,
+    pub block_entities_data: Vec<LevelChunkPacketDataBlockEntity>,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LevelChunkPacketDataHeightmap {
+    /*#[serde(rename = "MOTION_BLOCKING")]
+    pub motion_blocking: Vec<u64>,
+    #[serde(rename = "WORLD_SURFACE")]
+    pub world_surface: Vec<u64>,*/
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
+pub struct LevelChunkPacketDataBlockEntity {
+    pub xz: i8,
+    pub y: i16,
+    pub type_: VarInt,
+    pub data: Nbt<Value>,
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct LightUpdatePacketData {
-    trust_edges: bool,
-    sky_y_mask: Vec<i64>,
-    block_y_mask: Vec<i64>,
-    empty_sky_y_mask: Vec<i64>,
-    empty_block_y_mask: Vec<i64>,
-    sky_updates: Vec<Vec<u8>>,
-    block_updates: Vec<Vec<u8>>,
+    pub trust_edges: bool,
+    pub sky_y_mask: Vec<i64>,
+    pub block_y_mask: Vec<i64>,
+    pub empty_sky_y_mask: Vec<i64>,
+    pub empty_block_y_mask: Vec<i64>,
+    pub sky_updates: Vec<Vec<u8>>,
+    pub block_updates: Vec<Vec<u8>>,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub struct PlayerLookAtPacketAtEntity {
-    entity: VarInt,
-    to_anchor: Anchor,
+    pub entity: VarInt,
+    pub to_anchor: Anchor,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum SetObjectivePacketMethod {
     Add {
         display_name: String,
@@ -610,7 +629,7 @@ pub enum SetObjectivePacketMethod {
     },
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum SetPlayerTeamPacketMethod {
     Add {
         display_name: String,
@@ -641,7 +660,7 @@ pub enum SetPlayerTeamPacketMethod {
     },
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum SetScorePacketMethod {
     Change {
         objective_name: String,

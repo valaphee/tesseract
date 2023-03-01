@@ -1,6 +1,6 @@
 use crate::{Decode, Encode};
 
-#[derive(Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum StatusPacket {
     StatusRequest,
     PingRequest { time: i64 },

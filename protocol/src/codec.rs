@@ -33,17 +33,6 @@ where
     type Error = Error;
 
     fn encode(&mut self, item: I, dst: &mut BytesMut) -> Result<()> {
-        fn set_varint14(data: &mut [u8], value: usize) {
-            data[0] = (value & 0x7F) as u8 | 0x80;
-            data[1] = (value >> 7 & 0x7F) as u8;
-        }
-
-        fn set_varint21(data: &mut [u8], value: usize) {
-            data[0] = (value & 0x7F) as u8 | 0x80;
-            data[1] = (value >> 7 & 0x7F) as u8 | 0x80;
-            data[2] = (value >> 14 & 0x7F) as u8;
-        }
-
         let data_length_offset = dst.len();
         dst.put_bytes(0, 3);
         let data_offset = dst.len();

@@ -116,8 +116,11 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
         Ok(())
     }
 
-    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok> {
-        unimplemented!()
+    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok> {
+        self.data.write_i32::<BigEndian>(bytes.len() as i32)?;
+        self.data.write(bytes)?;
+        self.last_type = TagType::ByteArray;
+        Ok(())
     }
 
     fn serialize_none(self) -> Result<Self::Ok> {
@@ -147,9 +150,9 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<Self::Ok> {
-        unimplemented!()
+        self.serialize_str(variant)
     }
 
     fn serialize_newtype_struct<T: ?Sized>(

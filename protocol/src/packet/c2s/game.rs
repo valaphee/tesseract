@@ -9,7 +9,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum GamePacket {
     AcceptTeleportation {
         id: VarInt,
@@ -37,9 +37,6 @@ pub enum GamePacket {
         salt: i64,
         signature: Option<[u8; 256]>,
         last_seen_messages: LastSeenMessages,
-    },
-    ChatSessionUpdate {
-        chat_session: ChatSession,
     },
     ClientCommand {
         action: ClientCommandPacketAction,
@@ -164,6 +161,9 @@ pub enum GamePacket {
     Pong {
         id: i32,
     },
+    ChatSessionUpdate {
+        chat_session: ChatSession,
+    },
     RecipeBookChangeSettings {
         book_type: RecipeBookType,
         is_open: bool,
@@ -255,20 +255,20 @@ pub enum GamePacket {
     },
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum ClientCommandPacketAction {
     PerformRespawn,
     RequestStats,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum InteractPacketAction {
     Interact { hand: Hand },
     Attack,
     InteractAt { x: f32, y: f32, z: f32, hand: Hand },
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum PlayerActionPacketAction {
     StartDestroyBlock,
     AbortDestroyBlock,
@@ -279,7 +279,7 @@ pub enum PlayerActionPacketAction {
     SwapItemWithOffhand,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum PlayerCommandPacketAction {
     PressShiftKey,
     ReleaseShiftKey,
@@ -292,7 +292,7 @@ pub enum PlayerCommandPacketAction {
     StartFallFlying,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 pub enum ResourcePackPacketAction {
     SuccessfullyLoaded,
     Declined,
