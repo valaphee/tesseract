@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::{
     types::{
         ChatSession, ChatVisibility, ClickType, Difficulty, Hand, ItemStack, LastSeenMessages,
-        MainHand, RecipeBookType, TrailingBytes, VarInt,
+        MainHand, RecipeBookType, TrailingBytes, VarInt, VarLong,
     },
     Decode, Encode,
 };
@@ -110,13 +110,13 @@ pub enum GamePacket {
         x: f64,
         y: f64,
         z: f64,
-        y_rot: f32,
-        x_rot: f32,
+        yaw: f32,
+        pitch: f32,
         on_ground: bool,
     },
     MovePlayerRot {
-        y_rot: f32,
-        x_rot: f32,
+        yaw: f32,
+        pitch: f32,
         on_ground: bool,
     },
     MovePlayerStatusOnly {
@@ -126,8 +126,8 @@ pub enum GamePacket {
         x: f64,
         y: f64,
         z: f64,
-        y_rot: f32,
-        x_rot: f32,
+        yaw: f32,
+        pitch: f32,
     },
     PaddleBoat {
         left: bool,
@@ -226,7 +226,7 @@ pub enum GamePacket {
         rotation: VarInt,
         data: String,
         integrity: f32,
-        seed: VarInt,
+        seed: VarLong,
         flags: i8,
     },
     SignUpdate {

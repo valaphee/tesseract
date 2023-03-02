@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use glam::IVec3;
+use glam::{DVec3, IVec3};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
 use serde_value::Value;
@@ -106,17 +106,15 @@ impl VarInt {
 
 impl Encode for VarInt {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        let encoded_without_trailing_bits =
-            unsafe { std::arch::x86_64::_pdep_u64(self.0 as u64, 0x0000000000037F7F) };
-        let encoded_length = 8 - ((encoded_without_trailing_bits.leading_zeros() - 1) >> 3);
-        let encoded = encoded_without_trailing_bits
-            | (0x8080808080808080 & (0xFFFFFFFFFFFFFFFF >> (((8 - encoded_length + 1) << 3) - 1)));
-        output.write_all(unsafe {
-            encoded
-                .to_le_bytes()
-                .get_unchecked(..encoded_length as usize)
-        })?;
-        Ok(())
+        let mut value = self.0 as u32;
+        loop {
+            if value & !0b01111111 == 0 {
+                output.write_u8(value as u8)?;
+                return Ok(());
+            }
+            output.write_u8(value as u8 & 0b01111111 | 0b10000000)?;
+            value >>= 7;
+        }
     }
 }
 
@@ -136,6 +134,19 @@ impl<'a> Decode<'a> for VarInt {
     }
 }
 
+impl Encode for i64 {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        output.write_i64::<BigEndian>(*self)?;
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for i64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(input.read_i64::<BigEndian>()?)
+    }
+}
+
 impl Encode for u64 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         output.write_u64::<BigEndian>(*self)?;
@@ -149,16 +160,45 @@ impl<'a> Decode<'a> for u64 {
     }
 }
 
-impl Encode for i64 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        output.write_i64::<BigEndian>(*self)?;
-        Ok(())
+#[derive(Clone, Debug)]
+pub struct VarLong(pub i64);
+
+impl VarLong {
+    pub fn len(&self) -> usize {
+        match self.0 {
+            0 => 1,
+            n => (63 - n.leading_zeros() as usize) / 7 + 1,
+        }
     }
 }
 
-impl<'a> Decode<'a> for i64 {
+impl Encode for VarLong {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        let mut value = self.0 as u64;
+        loop {
+            if value & !0b01111111 == 0 {
+                output.write_u8(value as u8)?;
+                return Ok(());
+            }
+            output.write_u8(value as u8 & 0b01111111 | 0b10000000)?;
+            value >>= 7;
+        }
+    }
+}
+
+impl<'a> Decode<'a> for VarLong {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(input.read_i64::<BigEndian>()?)
+        let mut value = 0;
+        let mut shift = 0;
+        while shift <= 70 {
+            let head = input.read_u8()?;
+            value |= (head as i64 & 0b01111111) << shift;
+            if head & 0b10000000 == 0 {
+                return Ok(VarLong(value));
+            }
+            shift += 7;
+        }
+        Err(Error::VarIntTooWide(70))
     }
 }
 
@@ -363,6 +403,7 @@ impl<'a> Decode<'a> for Uuid {
     }
 }
 
+// interpreted as BlockPos
 impl Encode for IVec3 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         match (self.x, self.y, self.z) {
@@ -383,6 +424,40 @@ impl<'a> Decode<'a> for IVec3 {
             y: (value << 26 >> 38) as i32,
             z: (value << 52 >> 52) as i32,
         })
+    }
+}
+
+impl Encode for DVec3 {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.x.encode(output)?;
+        self.y.encode(output)?;
+        self.z.encode(output)
+    }
+}
+
+impl<'a> Decode<'a> for DVec3 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(DVec3::new(
+            Decode::decode(input)?,
+            Decode::decode(input)?,
+            Decode::decode(input)?,
+        ))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Angle(pub f32);
+
+impl Encode for Angle {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        output.write_u8((self.0.rem_euclid(360.0) / 360.0 * u8::MAX as f32).round() as u8)?;
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for Angle {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(Self(u8::decode(input)? as f32 / u8::MAX as f32 * 360.0))
     }
 }
 
@@ -605,19 +680,19 @@ pub enum Difficulty {
 
 impl Encode for Difficulty {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        match self {
-            Difficulty::Peaceful => 0i8,
-            Difficulty::Easy => 1i8,
-            Difficulty::Normal => 2i8,
-            Difficulty::Hard => 3i8,
-        }
-        .encode(output)
+        output.read_u8(match self {
+            Difficulty::Peaceful => 0,
+            Difficulty::Easy => 1,
+            Difficulty::Normal => 2,
+            Difficulty::Hard => 3,
+        })?;
+        Ok(())
     }
 }
 
 impl<'a> Decode<'a> for Difficulty {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(match input.read_i8()? {
+        Ok(match input.read_u8()? {
             0 => Difficulty::Peaceful,
             1 => Difficulty::Easy,
             2 => Difficulty::Normal,

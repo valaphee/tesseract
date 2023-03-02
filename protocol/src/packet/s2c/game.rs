@@ -1,17 +1,16 @@
 use std::io::Write;
-use std::ptr::eq;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use glam::IVec3;
+use glam::{DVec3, IVec3};
 use serde::{Deserialize, Serialize};
 use serde_value::Value;
 use uuid::Uuid;
 
 use crate::{
     types::{
-        Advancement, Anchor, BossEventColor, BossEventOverlay, ChatType, EquipmentSlot, GameType,
-        Hand, ItemStack, MapDecoration, MapPatch, MerchantOffer, Nbt, Registries, SoundSource,
-        TrailingBytes, VarInt,
+        Advancement, Anchor, Angle, BossEventColor, BossEventOverlay, ChatType, Difficulty, EquipmentSlot,
+        GameType, Hand, ItemStack, MapDecoration, MapPatch, MerchantOffer, Nbt, Registries,
+        SoundSource, TrailingBytes, VarInt, VarLong,
     },
     Decode, Encode,
 };
@@ -22,12 +21,10 @@ pub enum GamePacket {
         id: VarInt,
         uuid: Uuid,
         type_: VarInt,
-        x: f64,
-        y: f64,
-        z: f64,
-        x_rot: i8,
-        y_rot: i8,
-        y_head_rot: i8,
+        pos: DVec3,
+        pitch: Angle,
+        yaw: Angle,
+        head_yaw: Angle,
         data: VarInt,
         xa: i16,
         ya: i16,
@@ -35,19 +32,15 @@ pub enum GamePacket {
     },
     AddExperienceOrb {
         id: VarInt,
-        x: f64,
-        y: f64,
-        z: f64,
+        pos: DVec3,
         value: i16,
     },
     AddPlayer {
         entity_id: VarInt,
         player_id: Uuid,
-        x: f64,
-        y: f64,
-        z: f64,
-        y_rot: i8,
-        x_rot: i8,
+        pos: DVec3,
+        yaw: Angle,
+        pitch: Angle,
     },
     Animate {
         id: VarInt,
@@ -82,7 +75,7 @@ pub enum GamePacket {
         operation: BossEventPacketOperation,
     },
     ChangeDifficulty {
-        difficulty: u8,
+        difficulty: Difficulty,
         locked: bool,
     },
     ClearTitles {
@@ -142,9 +135,7 @@ pub enum GamePacket {
         event_id: i8,
     },
     Explode {
-        x: f64,
-        y: f64,
-        z: f64,
+        pos: DVec3,
         power: f32,
         to_blow: Vec<i8>,
         knockback_x: f32,
@@ -169,7 +160,7 @@ pub enum GamePacket {
         new_center_z: f64,
         old_size: f64,
         new_size: f64,
-        lerp_time: VarInt,
+        lerp_time: VarLong,
         new_absolute_max_size: VarInt,
         warning_blocks: VarInt,
         warning_time: VarInt,
@@ -192,9 +183,7 @@ pub enum GamePacket {
     LevelParticles {
         particle_type: VarInt,
         override_limiter: bool,
-        x: f64,
-        y: f64,
-        z: f64,
+        pos: DVec3,
         x_dist: f32,
         y_dist: f32,
         z_dist: f32,
@@ -253,22 +242,20 @@ pub enum GamePacket {
         xa: i16,
         ya: i16,
         za: i16,
-        y_rot: i8,
-        x_rot: i8,
+        yaw: Angle,
+        pitch: Angle,
         on_ground: bool,
     },
     MoveEntityRot {
         entity_id: VarInt,
-        y_rot: i8,
-        x_rot: i8,
+        yaw: Angle,
+        pitch: Angle,
         on_ground: bool,
     },
     MoveVehicle {
-        x: f64,
-        y: f64,
-        z: f64,
-        y_rot: f32,
-        x_rot: f32,
+        pos: DVec3,
+        yaw: f32,
+        pitch: f32,
     },
     OpenBook {
         hand: Hand,
@@ -320,17 +307,13 @@ pub enum GamePacket {
     PlayerInfoUpdate,
     PlayerLookAt {
         from_anchor: Anchor,
-        x: f64,
-        y: f64,
-        z: f64,
+        pos: DVec3,
         at_entity: Option<PlayerLookAtPacketAtEntity>,
     },
     PlayerPosition {
-        x: f64,
-        y: f64,
-        z: f64,
-        y_rot: f32,
-        x_rot: f32,
+        pos: DVec3,
+        yaw: f32,
+        pitch: f32,
         relative_arguments: u8,
         id: VarInt,
         dismount_vehicle: bool,
@@ -362,7 +345,7 @@ pub enum GamePacket {
     },
     RotateHead {
         entity_id: VarInt,
-        y_head_rot: i8,
+        head_yaw: Angle,
     },
     SectionBlocksUpdate,
     SelectAdvancementsTab {
@@ -383,7 +366,7 @@ pub enum GamePacket {
     SetBorderLerpSize {
         old_size: f64,
         new_size: f64,
-        lerp_time: VarInt,
+        lerp_time: VarLong,
     },
     SetBorderSize {
         size: f64,
@@ -515,11 +498,9 @@ pub enum GamePacket {
     },
     TeleportEntity {
         id: VarInt,
-        x: f64,
-        y: f64,
-        z: f64,
-        y_rot: i8,
-        x_rot: i8,
+        pos: DVec3,
+        yaw: Angle,
+        pitch: Angle,
         on_ground: bool,
     },
     UpdateAdvancements {

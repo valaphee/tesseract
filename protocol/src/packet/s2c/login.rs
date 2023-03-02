@@ -1,5 +1,7 @@
-use crate::types::{GameProfile, TrailingBytes};
-use crate::{types::VarInt, Decode, Encode};
+use crate::{
+    types::{GameProfile, TrailingBytes, VarInt},
+    Decode, Encode,
+};
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum LoginPacket {
