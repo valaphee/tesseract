@@ -284,7 +284,7 @@ where
     T: Decode<'a>,
 {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(std::array::try_from_fn(|_| T::decode(input))?)
+        std::array::try_from_fn(|_| T::decode(input))
     }
 }
 
@@ -680,7 +680,7 @@ pub enum Difficulty {
 
 impl Encode for Difficulty {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        output.read_u8(match self {
+        output.write_u8(match self {
             Difficulty::Peaceful => 0,
             Difficulty::Easy => 1,
             Difficulty::Normal => 2,

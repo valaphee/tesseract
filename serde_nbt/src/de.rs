@@ -14,7 +14,7 @@ where
 struct Deserializer<'de> {
     data: &'de [u8],
 
-    key: bool,
+    name: bool,
     current_type: TagType,
 }
 
@@ -23,12 +23,12 @@ impl<'de> Deserializer<'de> {
         let mut self_ = Self {
             data,
 
-            key: false,
+            name: false,
             current_type: TagType::default(),
         };
         let type_ = TagType::try_from(self_.data.read_i8()?).unwrap();
-        let key_length = self_.data.read_i16::<BigEndian>()?;
-        let (_, data) = self_.data.split_at(key_length as usize);
+        let name_length = self_.data.read_i16::<BigEndian>()?;
+        let (_, data) = self_.data.split_at(name_length as usize);
         self_.data = data;
         self_.current_type = type_;
         Ok(self_)
@@ -47,8 +47,8 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: serde::de::Visitor<'de>,
     {
-        if self.key {
-            self.key = false;
+        if self.name {
+            self.name = false;
 
             let length = self.data.read_i16::<BigEndian>()?;
             let (bytes, data) = self.data.split_at(length as usize);
@@ -150,7 +150,7 @@ impl<'a, 'de> serde::de::MapAccess<'de> for MapAccess<'a, 'de> {
     {
         self.de.current_type = TagType::try_from(self.de.data.read_i8()?).unwrap();
         if !matches!(self.de.current_type, TagType::End) {
-            self.de.key = true;
+            self.de.name = true;
             seed.deserialize(&mut *self.de).map(Some)
         } else {
             Ok(None)

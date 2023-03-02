@@ -111,14 +111,14 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     fn serialize_str(self, v: &str) -> Result<Self::Ok> {
         let bytes = v.as_bytes();
         self.data.write_i16::<BigEndian>(bytes.len() as i16)?;
-        self.data.write(bytes)?;
+        self.data.write_all(bytes)?;
         self.last_type = TagType::String;
         Ok(())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok> {
         self.data.write_i32::<BigEndian>(v.len() as i32)?;
-        self.data.write(v)?;
+        self.data.write_all(v)?;
         self.last_type = TagType::ByteArray;
         Ok(())
     }
@@ -352,9 +352,9 @@ impl<'ser> serde::ser::SerializeStruct for &'ser mut Serializer {
         if self.last_type != TagType::End {
             let mut header = Vec::new();
             header.write_i8(self.last_type.into())?;
-            let key_bytes = key.as_bytes();
-            header.write_i16::<BigEndian>(key_bytes.len() as i16)?;
-            header.write(key_bytes)?;
+            let name_bytes = key.as_bytes();
+            header.write_i16::<BigEndian>(name_bytes.len() as i16)?;
+            header.write_all(name_bytes)?;
             self.data.splice(header_offset..header_offset, header);
         }
         Ok(())

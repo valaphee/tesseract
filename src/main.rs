@@ -1,9 +1,10 @@
-use bevy::app::ScheduleRunnerSettings;
-use bevy::log::LogPlugin;
-use bevy::prelude::*;
+use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, prelude::*};
 use std::time::Duration;
 
+mod actor;
+mod block;
 mod connection;
+mod level;
 
 fn main() {
     App::new()
@@ -12,5 +13,6 @@ fn main() {
         )))
         .add_plugin(LogPlugin::default())
         .add_plugins(MinimalPlugins)
+        .add_plugin(connection::ConnectionPlugin::default())
         .run();
 }

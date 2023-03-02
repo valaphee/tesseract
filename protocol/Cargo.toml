@@ -8,11 +8,11 @@ repository = "https://github.com/valaphee/tesseract.git"
 description = "Minecraft's Protocol"
 
 [dependencies]
-aes = "0.8.2"
+aes = "0.7.5"
 anyhow = "1.0.69"
 byteorder = "1.4.3"
 bytes = "1.4.0"
-cfb8 = "0.8.1"
+cfb8 = "0.7.1"
 flate2 = "1.0.25"
 glam = "0.22.0"
 num_enum = "0.5.11"

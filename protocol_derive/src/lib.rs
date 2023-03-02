@@ -54,9 +54,9 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                         }
                     }
                     Fields::Unnamed(fields) => {
-                        let field_names = (0..fields.unnamed.len()).map(|i| Ident::new(&format!("_{}", i), Span::call_site()));
+                        let field_names = (0..fields.unnamed.len()).map(|i| Ident::new(&format!("_{i}"), Span::call_site()));
                         let mut field_encodes = fields.unnamed.iter().enumerate().map(|(i, field)| {
-                            let field_name = Ident::new(&format!("_{}", i), Span::call_site());
+                            let field_name = Ident::new(&format!("_{i}"), Span::call_site());
                             quote_spanned! {
                                 field.span() => #field_name.encode(output)
                             }

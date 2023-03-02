@@ -22,6 +22,9 @@ byteorder = "1.4.3"
 futures = "0.3.26"
 serde = "1.0.152"
 serde_json = "1.0.93"
+rand = "0.8.5"
+rsa = "0.8.1"
+rsa-der = "0.3.0"
 tesseract_protocol = { path = "protocol" }
 tesseract_serde_nbt = { path = "serde_nbt" }
 tokio = { version = "1.25.0", features = ["full"] }
