@@ -1,7 +1,10 @@
 use std::io::Read;
 use std::marker::PhantomData;
 
-use aes::cipher::{AsyncStreamCipher, NewCipher};
+use aes::{
+    cipher::{AsyncStreamCipher, KeyIvInit},
+    Aes128,
+};
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::{ZlibDecoder, ZlibEncoder};
 pub use flate2::Compression;
@@ -10,7 +13,9 @@ use tokio_util::codec::{Decoder, Encoder};
 use crate::{types::VarInt, Decode, Encode, Error, Result};
 
 pub struct Codec<I, O> {
-    cipher: Option<Cipher>,
+    encryptor: Option<Encryptor>,
+    decryptor: Option<Decryptor>,
+    decrypted_bytes: usize,
 
     compression: Compression,
     compression_threshold: Option<u16>,
@@ -21,7 +26,9 @@ pub struct Codec<I, O> {
 impl<I, O> Codec<I, O> {
     pub fn cast<I2, O2>(self) -> Codec<I2, O2> {
         Codec {
-            cipher: self.cipher,
+            encryptor: self.encryptor,
+            decryptor: self.decryptor,
+            decrypted_bytes: 0,
 
             compression: self.compression,
             compression_threshold: self.compression_threshold,
@@ -30,11 +37,14 @@ impl<I, O> Codec<I, O> {
         }
     }
 
-    pub fn encryption(&mut self, key: Vec<u8>) {
-        self.cipher = Some(Cipher::new_from_slices(&key, &key).unwrap());
+    pub fn enable_encryption(&mut self, key: Vec<u8>) {
+        self.encryptor = Some(Encryptor::new_from_slices(&key, &key).unwrap());
+        self.decryptor = Some(Decryptor::new_from_slices(&key, &key).unwrap());
+        self.decrypted_bytes = 0;
     }
 
-    pub fn compression(&mut self, compression: Compression, compression_threshold: u16) {
+    pub fn enable_compression(&mut self, compression: Compression, compression_threshold: u16) {
+        assert!(compression_threshold <= 16384);
         self.compression = compression;
         self.compression_threshold = Some(compression_threshold);
     }
@@ -43,7 +53,9 @@ impl<I, O> Codec<I, O> {
 impl<I, O> Default for Codec<I, O> {
     fn default() -> Self {
         Self {
-            cipher: Default::default(),
+            encryptor: Default::default(),
+            decryptor: Default::default(),
+            decrypted_bytes: 0,
 
             compression: Default::default(),
             compression_threshold: Default::default(),
@@ -96,8 +108,9 @@ where
             data_length_data[2] = (data_length >> 14 & 0x7F) as u8;
         }
 
-        if let Some(cipher)= &mut self.cipher {
-            cipher.encrypt(&mut dst[data_length_offset..]);
+        // Encrypt written bytes
+        if let Some(encryptor) = &mut self.encryptor {
+            encryptor.encrypt(&mut dst[data_length_offset..]);
         }
 
         Ok(())
@@ -112,18 +125,16 @@ where
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
-        /*let mut data = &mut src[..];
-        if let Some(cipher) = &mut self.cipher {
-            cipher.decrypt(&mut data);
-        }*/
+        // Decrypt all not yet decrypted bytes
+        if let Some(decryptor) = &mut self.decryptor {
+            decryptor.decrypt(&mut src[self.decrypted_bytes..]);
+            self.decrypted_bytes = src.len();
+        }
 
         let mut data = &src[..];
         match VarInt::decode(&mut data) {
             Ok(data_length) => {
-                println!("{:?}", data_length.0);
                 if src.len() >= data_length.0 as usize {
-                    let data_length_length = data.as_ptr() as usize - src.as_ptr() as usize;
-
                     data = &data[..data_length.0 as usize];
 
                     // Is not unsafe as long as no borrowing is used in the packets
@@ -144,7 +155,11 @@ where
                         unsafe { std::mem::transmute(&mut data) }
                     })?;
 
-                    src.advance(data_length_length + data_length.0 as usize);
+                    // Advance, and correct decrypted bytes
+                    src.advance(data_length.len() + data_length.0 as usize);
+                    if self.decryptor.is_some() {
+                        self.decrypted_bytes -= data_length.len() + data_length.0 as usize;
+                    }
 
                     Ok(Some(packet))
                 } else {
@@ -156,4 +171,5 @@ where
     }
 }
 
-type Cipher = cfb8::Cfb8<aes::Aes128>;
+type Encryptor = cfb8::Encryptor<Aes128>;
+type Decryptor = cfb8::Decryptor<Aes128>;

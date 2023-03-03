@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::utils::{HashMap, HashSet};
+
 use crate::actor;
 
 /// Dimension: Look-up table for chunk positions to entities
@@ -15,10 +16,13 @@ pub fn update_hierarchy(
     mut commands: Commands,
     dimensions: Query<&LookupTable>,
     chunks: Query<(&Position, &Parent)>,
-    actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>
+    actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
 ) {
     for (actor, actor_position, dimension_or_chunk) in actors.iter() {
-        let chunk_position = IVec2::new((actor_position.0[0] as i32) >> 4, (actor_position.0[2] as i32) >> 4);
+        let chunk_position = IVec2::new(
+            (actor_position.0[0] as i32) >> 4,
+            (actor_position.0[2] as i32) >> 4,
+        );
         let dimension = (if let Ok((position, dimension)) = chunks.get(dimension_or_chunk.get()) {
             // Skip actors where the chunk hasn't changed
             if position.0 == chunk_position {
@@ -28,7 +32,8 @@ pub fn update_hierarchy(
             dimension
         } else {
             dimension_or_chunk
-        }).get();
+        })
+        .get();
 
         if let Ok(dimension) = dimensions.get(dimension) {
             if let Some(&chunk) = dimension.0.get(&chunk_position) {

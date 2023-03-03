@@ -8,9 +8,9 @@ use uuid::Uuid;
 
 use crate::{
     types::{
-        Advancement, Anchor, Angle, BossEventColor, BossEventOverlay, ChatType, Difficulty, EquipmentSlot,
-        GameType, Hand, ItemStack, MapDecoration, MapPatch, MerchantOffer, Nbt, Registries,
-        SoundSource, TrailingBytes, VarInt, VarLong,
+        Advancement, Anchor, Angle, BossEventColor, BossEventOverlay, ChatType, Difficulty,
+        EquipmentSlot, GameType, Hand, ItemStack, MapDecoration, MapPatch, MerchantOffer, Nbt,
+        Registries, SoundSource, TrailingBytes, VarInt, VarLong,
     },
     Decode, Encode,
 };

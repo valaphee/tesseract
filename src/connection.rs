@@ -2,8 +2,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use bevy::prelude::*;
 use futures::{SinkExt, StreamExt};
-use rsa::{Pkcs1v15Encrypt, PublicKeyParts, RsaPrivateKey};
-use rsa::rand_core::OsRng;
+use rsa::{rand_core::OsRng, Pkcs1v15Encrypt, PublicKeyParts, RsaPrivateKey};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
@@ -14,7 +13,6 @@ use tesseract_protocol::{
     packet::{c2s, s2c},
     types::{GameProfile, Intention, Json, Status, StatusPlayers, StatusVersion, VarInt},
 };
-use tesseract_protocol::types::{Biome, BiomeEffects, BiomePrecipitation, DimensionType, GameType, Nbt, Registries, Registry, RegistryEntry};
 
 #[derive(Component)]
 pub struct Connection {
@@ -146,23 +144,30 @@ async fn handle_new_connection(
                     _ => unreachable!(),
                 };
 
-                /*let nonce: [u8; 16] = rand::random();
+                let nonce: [u8; 16] = rand::random();
                 framed_socket
                     .send(s2c::LoginPacket::Hello {
                         server_id: "".to_string(),
-                        public_key: rsa_der::public_key_to_der(&private_key.n().to_bytes_be(), &private_key.e().to_bytes_be()),
+                        public_key: rsa_der::public_key_to_der(
+                            &private_key.n().to_bytes_be(),
+                            &private_key.e().to_bytes_be(),
+                        ),
                         nonce: nonce.to_vec(),
                     })
                     .await
                     .unwrap();
                 let key = match framed_socket.next().await.unwrap().unwrap() {
                     c2s::LoginPacket::Key { key, nonce } => {
-                        private_key.decrypt(Pkcs1v15Encrypt::default(), &nonce).unwrap();
-                        private_key.decrypt(Pkcs1v15Encrypt::default(), &key).unwrap()
-                    },
+                        private_key
+                            .decrypt(Pkcs1v15Encrypt::default(), &nonce)
+                            .unwrap();
+                        private_key
+                            .decrypt(Pkcs1v15Encrypt::default(), &key)
+                            .unwrap()
+                    }
                     _ => unreachable!(),
                 };
-                framed_socket.codec_mut().encryption(key);*/
+                framed_socket.codec_mut().enable_encryption(key);
 
                 if let Some(compression_threshold) = compression_threshold {
                     framed_socket
@@ -171,7 +176,9 @@ async fn handle_new_connection(
                         })
                         .await
                         .unwrap();
-                    framed_socket.codec_mut().compression(compression, compression_threshold);
+                    framed_socket
+                        .codec_mut()
+                        .enable_compression(compression, compression_threshold);
                 }
 
                 framed_socket
@@ -195,9 +202,9 @@ async fn handle_new_connection(
                     .is_ok()
                 {}
 
-                let (mut sink, mut stream) = framed_socket.map_codec(|codec| {
-                    codec.cast::<s2c::GamePacket, c2s::GamePacket>()
-                }).split();
+                let (mut sink, mut stream) = framed_socket
+                    .map_codec(|codec| codec.cast::<s2c::GamePacket, c2s::GamePacket>())
+                    .split();
                 tokio::spawn(async move {
                     while let Some(packet) = stream.next().await {
                         let packet = packet.unwrap();
@@ -222,82 +229,6 @@ struct NewConnectionRx(mpsc::UnboundedReceiver<Connection>);
 
 fn spawn_new_connection(mut commands: Commands, mut new_connection_rx: ResMut<NewConnectionRx>) {
     while let Ok(connection) = new_connection_rx.0.try_recv() {
-        connection
-            .tx
-            .send(s2c::GamePacket::Login {
-                player_id: 1,
-                hardcore: false,
-                game_type: GameType::Survival,
-                previous_game_type: 0,
-                levels: vec!["minecraft:overworld".to_string()],
-                registry_holder: Nbt(Registries {
-                    biome_registry: Registry {
-                        _type: "minecraft:worldgen/biome".to_string(),
-                        value: vec![RegistryEntry {
-                            name: "plains".to_string(),
-                            id: 0,
-                            element: Biome {
-                                precipitation: BiomePrecipitation::None,
-                                temperature: 0.0,
-                                downfall: 0.0,
-                                temperature_modifier: None,
-                                effects: BiomeEffects {
-                                    sky_color: 0xFFFF0000,
-                                    water_fog_color: 0,
-                                    fog_color: 0,
-                                    water_color: 0,
-                                    foliage_color: None,
-                                    grass_color: None,
-                                    grass_color_modifier: None,
-                                    music: None,
-                                    ambient_sound: None,
-                                    additions_sound: None,
-                                    mood_sound: None,
-                                },
-                            },
-                        }],
-                    },
-                    dimension_type_registry: Registry {
-                        _type: "minecraft:dimension_type".to_string(),
-                        value: vec![RegistryEntry {
-                            name: "minecraft:overworld".to_string(),
-                            id: 0,
-                            element: DimensionType {
-                                piglin_safe: true,
-                                has_raids: true,
-                                monster_spawn_light_level: 0,
-                                monster_spawn_block_light_limit: 0,
-                                natural: true,
-                                ambient_light: 1.0,
-                                fixed_time: None,
-                                infiniburn: "#minecraft:infiniburn_overworld".to_string(),
-                                respawn_anchor_works: true,
-                                has_skylight: true,
-                                bed_works: true,
-                                effects: "minecraft:overworld".to_string(),
-                                min_y: 0,
-                                height: 16 * 16,
-                                logical_height: 16 * 16,
-                                coordinate_scale: 1.0,
-                                ultrawarm: false,
-                                has_ceiling: false,
-                            },
-                        }],
-                    },
-                }),
-                dimension_type: "minecraft:overworld".to_string(),
-                dimension: "minecraft:overworld".to_string(),
-                seed: 0,
-                max_players: VarInt(0),
-                chunk_radius: VarInt(0),
-                simulation_distance: VarInt(0),
-                reduced_debug_info: false,
-                show_death_screen: false,
-                is_debug: false,
-                is_flat: false,
-                last_death_location: None,
-            })
-            .unwrap();
         commands.spawn(connection);
     }
 }
