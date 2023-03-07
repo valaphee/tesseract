@@ -1,7 +1,9 @@
 use uuid::Uuid;
 
-use crate::types::TrailingBytes;
-use crate::{types::VarInt, Decode, Encode};
+use crate::{
+    types::{TrailingBytes, VarInt},
+    Decode, Encode,
+};
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum LoginPacket {

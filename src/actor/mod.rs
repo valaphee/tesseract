@@ -1,7 +1,6 @@
-use bevy::math::DVec3;
-use bevy::prelude::*;
+use bevy::{math::DVec3, prelude::*};
 
-/// Actor: Position in the dimension
+/// Actor: Position in the dimension (MARKER)
 #[derive(Component)]
 pub struct Position(pub DVec3);
 

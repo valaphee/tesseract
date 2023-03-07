@@ -1,13 +1,21 @@
 use std::io::Write;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use glam::{DVec3, IVec3};
+use glam::{DVec3, IVec3, Vec3};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
 use serde_value::Value;
 use uuid::Uuid;
 
+pub use bit_storage::BitStorage;
+pub use entity_data::{EntityData, EntityDataValue};
+pub use paletted_container::PalettedContainer;
+
 use crate::{Decode, Encode, Error, Result};
+
+mod bit_storage;
+mod entity_data;
+mod paletted_container;
 
 //=================================================================================== PRIMITIVE ====
 
@@ -427,6 +435,24 @@ impl<'a> Decode<'a> for IVec3 {
     }
 }
 
+impl Encode for Vec3 {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.x.encode(output)?;
+        self.y.encode(output)?;
+        self.z.encode(output)
+    }
+}
+
+impl<'a> Decode<'a> for Vec3 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(Vec3::new(
+            Decode::decode(input)?,
+            Decode::decode(input)?,
+            Decode::decode(input)?,
+        ))
+    }
+}
+
 impl Encode for DVec3 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         self.x.encode(output)?;
@@ -450,8 +476,7 @@ pub struct Angle(pub f32);
 
 impl Encode for Angle {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        output.write_u8((self.0.rem_euclid(360.0) / 360.0 * u8::MAX as f32).round() as u8)?;
-        Ok(())
+        ((self.0.rem_euclid(360.0) / 360.0 * u8::MAX as f32).round() as u8).encode(output)
     }
 }
 
@@ -724,7 +749,7 @@ pub struct DimensionType {
     pub monster_spawn_block_light_limit: i32,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 pub enum EquipmentSlot {
     MainHand,
@@ -925,6 +950,24 @@ where
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Nbt(tesseract_serde_nbt::de::from_slice(input)?))
     }
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
+pub enum Pose {
+    Standing,
+    FallFlying,
+    Sleeping,
+    Swimming,
+    SpinAttack,
+    Crouching,
+    LongJumping,
+    Dying,
+    Croaking,
+    UsingTongue,
+    Roaring,
+    Sniffing,
+    Emerging,
+    Digging,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]

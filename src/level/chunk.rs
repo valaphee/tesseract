@@ -1,13 +1,12 @@
-use bevy::prelude::*;
-use bevy::utils::{HashMap, HashSet};
+use bevy::{prelude::*, utils::HashMap};
 
 use crate::actor;
 
 /// Dimension: Look-up table for chunk positions to entities
 #[derive(Default, Component)]
-pub struct LookupTable(HashMap<IVec2, Entity>);
+pub struct LookupTable(pub HashMap<IVec2, Entity>);
 
-/// Chunk: Position of the chunk in the dimension
+/// Chunk: Position of the chunk in the dimension (MARKER)
 #[derive(Component)]
 pub struct Position(pub IVec2);
 
@@ -35,22 +34,14 @@ pub fn update_hierarchy(
         })
         .get();
 
-        if let Ok(dimension) = dimensions.get(dimension) {
-            if let Some(&chunk) = dimension.0.get(&chunk_position) {
+        if let Ok(lookup_table) = dimensions.get(dimension) {
+            if let Some(&chunk) = lookup_table.0.get(&chunk_position) {
                 commands.entity(chunk).add_child(actor);
+            } else {
+                warn!("Chunk is not loaded")
             }
+        } else {
+            warn!("Parent is neither a dimension nor a chunk")
         }
     }
 }
-
-/// Chunk: Entities which are currently seeing this chunk
-#[derive(Component)]
-struct ViewedBy(HashSet<Entity>);
-
-/// Actor: View
-#[derive(Component)]
-pub struct View(pub u8);
-
-/// Actor: Chunks are currently in view of the actor
-#[derive(Default, Component)]
-pub struct InView(HashSet<IVec2>);

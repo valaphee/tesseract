@@ -1,6 +1,9 @@
 use std::io::Write;
 
-use crate::{bit_storage::BitStorage, types::VarInt, Encode};
+use crate::{
+    types::{BitStorage, VarInt},
+    Encode,
+};
 
 pub enum PalettedContainer {
     SingleValue {

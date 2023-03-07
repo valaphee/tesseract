@@ -3,8 +3,10 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use bevy::prelude::*;
 use futures::{SinkExt, StreamExt};
 use rsa::{rand_core::OsRng, Pkcs1v15Encrypt, PublicKeyParts, RsaPrivateKey};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::mpsc,
+};
 use tokio_util::codec::Framed;
 use uuid::Uuid;
 
@@ -14,14 +16,17 @@ use tesseract_protocol::{
     types::{GameProfile, Intention, Json, Status, StatusPlayers, StatusVersion, VarInt},
 };
 
+/// Actor
 #[derive(Component)]
 pub struct Connection {
     rx: mpsc::UnboundedReceiver<c2s::GamePacket>,
     tx: mpsc::UnboundedSender<s2c::GamePacket>,
+
+    pub(crate) incoming: Vec<c2s::GamePacket>,
 }
 
 impl Connection {
-    pub fn send(&mut self, packet: s2c::GamePacket) {
+    pub fn send(&self, packet: s2c::GamePacket) {
         self.tx.send(packet).unwrap();
     }
 }
@@ -81,7 +86,8 @@ impl Plugin for ConnectionPlugin {
         };
 
         app.add_startup_system(listen)
-            .add_system(spawn_new_connection);
+            .add_system(spawn_new_connection)
+            .add_system(update_connection);
     }
 }
 
@@ -198,6 +204,7 @@ async fn handle_new_connection(
                     .send(Connection {
                         rx: rx_packet_rx,
                         tx: tx_packet_tx,
+                        incoming: vec![],
                     })
                     .is_ok()
                 {}
@@ -230,5 +237,14 @@ struct NewConnectionRx(mpsc::UnboundedReceiver<Connection>);
 fn spawn_new_connection(mut commands: Commands, mut new_connection_rx: ResMut<NewConnectionRx>) {
     while let Ok(connection) = new_connection_rx.0.try_recv() {
         commands.spawn(connection);
+    }
+}
+
+fn update_connection(mut connections: Query<&mut Connection>) {
+    for mut connection in connections.iter_mut() {
+        connection.incoming.clear();
+        while let Ok(packet) = connection.rx.try_recv() {
+            connection.incoming.push(packet);
+        }
     }
 }

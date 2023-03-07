@@ -175,10 +175,9 @@ impl BitStorage {
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
-    use crate::bit_storage::BitStorage;
+    use crate::types::BitStorage;
 
     #[test]
     fn set_and_get() {

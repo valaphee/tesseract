@@ -1,5 +1,5 @@
 use bevy::prelude::*;
 
-/// Block: Position in the dimension
+/// Block entity: Position in the dimension (MARKER)
 #[derive(Component)]
 pub struct Position(pub IVec3);

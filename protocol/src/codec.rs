@@ -1,13 +1,14 @@
-use std::io::Read;
-use std::marker::PhantomData;
+use std::{io::Read, marker::PhantomData};
 
 use aes::{
-    cipher::{AsyncStreamCipher, KeyIvInit},
+    cipher::{inout::InOutBuf, BlockDecryptMut, BlockEncryptMut, KeyIvInit},
     Aes128,
 };
 use bytes::{Buf, BufMut, BytesMut};
-use flate2::read::{ZlibDecoder, ZlibEncoder};
-pub use flate2::Compression;
+pub use flate2::{
+    read::{ZlibDecoder, ZlibEncoder},
+    Compression,
+};
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{types::VarInt, Decode, Encode, Error, Result};
@@ -95,8 +96,9 @@ where
             } else {
                 data_length += 1;
 
-                // This will limit the maximum compression threshold to 16384 (2 VarInt bytes) as the
-                // third VarInt byte has to be kept zero to indicate no compression.
+                // This will limit the maximum compression threshold to 16384 (2 VarInt bytes)
+                // as the third VarInt byte has to be kept zero to indicate no
+                // compression.
                 let data_length_data = &mut dst[data_length_offset..data_offset];
                 data_length_data[0] = (data_length & 0x7F) as u8 | 0x80;
                 data_length_data[1] = (data_length >> 7 & 0x7F) as u8;
@@ -110,7 +112,11 @@ where
 
         // Encrypt written bytes
         if let Some(encryptor) = &mut self.encryptor {
-            encryptor.encrypt(&mut dst[data_length_offset..]);
+            encryptor.encrypt_blocks_inout_mut(
+                InOutBuf::from(&mut dst[data_length_offset..])
+                    .into_chunks()
+                    .0,
+            );
         }
 
         Ok(())
@@ -127,7 +133,11 @@ where
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
         // Decrypt all not yet decrypted bytes
         if let Some(decryptor) = &mut self.decryptor {
-            decryptor.decrypt(&mut src[self.decrypted_bytes..]);
+            decryptor.decrypt_blocks_inout_mut(
+                InOutBuf::from(&mut src[self.decrypted_bytes..])
+                    .into_chunks()
+                    .0,
+            );
             self.decrypted_bytes = src.len();
         }
 

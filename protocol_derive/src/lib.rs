@@ -9,15 +9,21 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let body = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {
-                let mut field_encodes = fields.named.iter().map(|field| {
-                    let field_name = &field.ident;
-                    quote_spanned! {
-                        field.span() => self.#field_name.encode(output)
+                if !fields.named.is_empty() {
+                    let mut field_encodes = fields.named.iter().map(|field| {
+                        let field_name = &field.ident;
+                        quote_spanned! {
+                            field.span() => self.#field_name.encode(output)
+                        }
+                    });
+                    let first_field_encode = field_encodes.next().unwrap();
+                    quote! {
+                        #first_field_encode #(?;#field_encodes)*
                     }
-                });
-                let first_field_encode = field_encodes.next().unwrap();
-                quote! {
-                    #first_field_encode #(?;#field_encodes)*
+                } else {
+                    quote! {
+                        Ok(())
+                    }
                 }
             }
             Fields::Unit => quote! {
@@ -35,37 +41,49 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 let variant_name = &variant.ident;
                 match &variant.fields {
                     Fields::Named(fields) => {
-                        let field_names = fields
-                            .named
-                            .iter()
-                            .map(|field| field.ident.as_ref().unwrap());
-                        let mut field_encodes = fields.named.iter().map(|field| {
-                            let field_name = &field.ident;
-                            quote_spanned! {
-                                field.span() => #field_name.encode(output)
+                        if !fields.named.is_empty() {
+                            let field_names = fields
+                                .named
+                                .iter()
+                                .map(|field| field.ident.as_ref().unwrap());
+                            let mut field_encodes = fields.named.iter().map(|field| {
+                                let field_name = &field.ident;
+                                quote_spanned! {
+                                    field.span() => #field_name.encode(output)
+                                }
+                            });
+                            let first_field_encode = field_encodes.next().unwrap();
+                            quote! {
+                                Self::#variant_name { #(#field_names,)* } => {
+                                    crate::types::VarInt(#variant_index).encode(output)?;
+                                    #first_field_encode #(?;#field_encodes)*
+                                }
                             }
-                        });
-                        let first_field_encode = field_encodes.next().unwrap();
-                        quote! {
-                            Self::#variant_name { #(#field_names,)* } => {
-                                crate::types::VarInt(#variant_index).encode(output)?;
-                                #first_field_encode #(?;#field_encodes)*
+                        } else {
+                            quote! {
+                                Self::#variant_name {} => crate::types::VarInt(#variant_index).encode(output),
                             }
                         }
                     }
                     Fields::Unnamed(fields) => {
-                        let field_names = (0..fields.unnamed.len()).map(|i| Ident::new(&format!("_{i}"), Span::call_site()));
-                        let mut field_encodes = fields.unnamed.iter().enumerate().map(|(i, field)| {
-                            let field_name = Ident::new(&format!("_{i}"), Span::call_site());
-                            quote_spanned! {
-                                field.span() => #field_name.encode(output)
+                        if !fields.unnamed.is_empty() {
+                            let field_names = (0..fields.unnamed.len()).map(|i| Ident::new(&format!("_{i}"), Span::call_site()));
+                            let mut field_encodes = fields.unnamed.iter().enumerate().map(|(i, field)| {
+                                let field_name = Ident::new(&format!("_{i}"), Span::call_site());
+                                quote_spanned! {
+                                    field.span() => #field_name.encode(output)
+                                }
+                            });
+                            let first_field_encode = field_encodes.next().unwrap();
+                            quote! {
+                                Self::#variant_name(#(#field_names,)*) => {
+                                    crate::types::VarInt(#variant_index).encode(output)?;
+                                    #first_field_encode #(?;#field_encodes)*
+                                }
                             }
-                        });
-                        let first_field_encode = field_encodes.next().unwrap();
-                        quote! {
-                            Self::#variant_name(#(#field_names,)*) => {
-                                crate::types::VarInt(#variant_index).encode(output)?;
-                                #first_field_encode #(?;#field_encodes)*
+                        } else {
+                            quote! {
+                                Self::#variant_name() => crate::types::VarInt(#variant_index).encode(output),
                             }
                         }
                     }

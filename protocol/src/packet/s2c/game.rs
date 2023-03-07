@@ -1,6 +1,5 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
-use byteorder::{ReadBytesExt, WriteBytesExt};
 use glam::{DVec3, IVec3};
 use serde::{Deserialize, Serialize};
 use serde_value::Value;
@@ -9,8 +8,8 @@ use uuid::Uuid;
 use crate::{
     types::{
         Advancement, Anchor, Angle, BossEventColor, BossEventOverlay, ChatType, Difficulty,
-        EquipmentSlot, GameType, Hand, ItemStack, MapDecoration, MapPatch, MerchantOffer, Nbt,
-        Registries, SoundSource, TrailingBytes, VarInt, VarLong,
+        EntityData, EquipmentSlot, GameType, Hand, ItemStack, MapDecoration, MapPatch,
+        MerchantOffer, Nbt, Registries, SoundSource, TrailingBytes, VarInt, VarLong,
     },
     Decode, Encode,
 };
@@ -288,7 +287,6 @@ pub enum GamePacket {
         timestamp: i64,
         salt: i64,
         unsigned_content: Option<String>,
-        // filter mask
         chat_type: ChatType,
     },
     PlayerCombatEnd {
@@ -318,7 +316,7 @@ pub enum GamePacket {
         id: VarInt,
         dismount_vehicle: bool,
     },
-    Recipe,
+    Recipe(RecipePacket),
     RemoveEntities {
         entity_ids: Vec<VarInt>,
     },
@@ -400,7 +398,7 @@ pub enum GamePacket {
     },
     SetEntityData {
         id: VarInt,
-        // TODO
+        packed_items: EntityData,
     },
     SetEntityLink {
         source_id: i32,
@@ -573,10 +571,10 @@ pub struct LevelChunkPacketData {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LevelChunkPacketDataHeightmap {
-    /*#[serde(rename = "MOTION_BLOCKING")]
-    pub motion_blocking: Vec<u64>,
-    #[serde(rename = "WORLD_SURFACE")]
-    pub world_surface: Vec<u64>,*/
+    // #[serde(rename = "MOTION_BLOCKING")]
+    // pub motion_blocking: Vec<u64>,
+    // #[serde(rename = "WORLD_SURFACE")]
+    // pub world_surface: Vec<u64>,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
@@ -604,16 +602,32 @@ pub struct PlayerLookAtPacketAtEntity {
     pub to_anchor: Anchor,
 }
 
+#[derive(Clone, Debug, Encode, Decode)]
+pub enum RecipePacket {
+    Init {
+        recipes: Vec<String>,
+        to_highlight: Vec<String>,
+    },
+    Add {
+        recipes: Vec<String>,
+    },
+    Remove {
+        recipes: Vec<String>,
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct SetEquipmentPacketSlots(Vec<(EquipmentSlot, ItemStack)>);
+pub struct SetEquipmentPacketSlots(HashMap<EquipmentSlot, ItemStack>);
 
 impl Encode for SetEquipmentPacketSlots {
     fn encode<W: Write>(&self, output: &mut W) -> crate::Result<()> {
-        let mut slots = self.0.iter().peekable();
-        while let Some((equipment_slot, item)) = slots.next() {
-            output.write_u8(
-                u8::from(*equipment_slot) | if slots.peek().is_some() { 0x80 } else { 0 },
-            )?;
+        if !self.0.is_empty() {
+            for (&equipment_slot, item) in self.0.iter().take(self.0.len() - 1) {
+                (u8::from(equipment_slot) | 0x80).encode(output)?;
+                item.encode(output)?;
+            }
+            let (&equipment_slot, item) = self.0.iter().clone().last().unwrap();
+            u8::from(equipment_slot).encode(output)?;
             item.encode(output)?;
         }
         Ok(())
@@ -622,14 +636,14 @@ impl Encode for SetEquipmentPacketSlots {
 
 impl<'a> Decode<'a> for SetEquipmentPacketSlots {
     fn decode(input: &mut &'a [u8]) -> crate::Result<Self> {
-        let mut slots = Vec::new();
+        let mut slots = HashMap::new();
         loop {
-            let equipment_slot_with_bit = input.read_u8()?;
-            slots.push((
-                EquipmentSlot::try_from(equipment_slot_with_bit & 0x7F).unwrap(),
+            let equipment_slot_and_next_bit = u8::decode(input)?;
+            slots.insert(
+                EquipmentSlot::try_from(equipment_slot_and_next_bit & 0x7F).unwrap(),
                 Decode::decode(input)?,
-            ));
-            if equipment_slot_with_bit & 0x80 == 0 {
+            );
+            if equipment_slot_and_next_bit & 0x80 == 0 {
                 break;
             }
         }
@@ -720,17 +734,18 @@ impl Encode for StopSoundPacket {
 
 impl<'a> Decode<'a> for StopSoundPacket {
     fn decode(input: &mut &'a [u8]) -> crate::Result<Self> {
-        let flags = input.read_i8()?;
-        let source = if flags & 1 << 0 != 0 {
-            Some(Decode::decode(input)?)
-        } else {
-            None
-        };
-        let name = if flags & 1 << 1 != 0 {
-            Some(Decode::decode(input)?)
-        } else {
-            None
-        };
-        Ok(Self { source, name })
+        let flags = i8::decode(input)?;
+        Ok(Self {
+            source: if flags & 1 << 0 != 0 {
+                Some(Decode::decode(input)?)
+            } else {
+                None
+            },
+            name: if flags & 1 << 1 != 0 {
+                Some(Decode::decode(input)?)
+            } else {
+                None
+            },
+        })
     }
 }

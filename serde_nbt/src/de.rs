@@ -1,8 +1,10 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::forward_to_deserialize_any;
 
-use crate::error::{Error, Result};
-use crate::TagType;
+use crate::{
+    error::{Error, Result},
+    TagType,
+};
 
 pub fn from_slice<'a, T>(v: &'a [u8]) -> Result<T>
 where
@@ -63,12 +65,12 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 TagType::Long => visitor.visit_i64(self.data.read_i64::<BigEndian>()?),
                 TagType::Float => visitor.visit_f32(self.data.read_f32::<BigEndian>()?),
                 TagType::Double => visitor.visit_f64(self.data.read_f64::<BigEndian>()?),
-                /*TagType::ByteArray => {
-                    let length = self.data.read_i32::<BigEndian>()?;
-                    let (bytes, data) = self.data.split_at(length as usize);
-                    self.data = data;
-                    visitor.visit_bytes(bytes)
-                },*/
+                // TagType::ByteArray => {
+                // let length = self.data.read_i32::<BigEndian>()?;
+                // let (bytes, data) = self.data.split_at(length as usize);
+                // self.data = data;
+                // visitor.visit_bytes(bytes)
+                // },
                 TagType::ByteArray => visitor.visit_seq(SeqAccess {
                     type_: TagType::Byte,
                     count: self.data.read_i32::<BigEndian>()? as u32,

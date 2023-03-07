@@ -2,8 +2,10 @@ use std::io::Write;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use crate::error::{Error, Result};
-use crate::TagType;
+use crate::{
+    error::{Error, Result},
+    TagType,
+};
 
 pub fn to_vec<T>(value: &T) -> Result<Vec<u8>>
 where
