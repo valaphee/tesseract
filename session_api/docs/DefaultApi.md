@@ -7,12 +7,13 @@ Method | HTTP request | Description
 [**get_blocked_servers**](DefaultApi.md#get_blocked_servers) | **GET** /blockedservers | 
 [**get_user_by_id**](DefaultApi.md#get_user_by_id) | **GET** /session/minecraft/profile/{userId} | 
 [**has_joined_server**](DefaultApi.md#has_joined_server) | **GET** /session/minecraft/hasJoined | 
+[**join_server**](DefaultApi.md#join_server) | **POST** /session/minecraft/join | 
 
 
 
 ## get_blocked_servers
 
-> get_blocked_servers()
+> String get_blocked_servers()
 
 
 ### Parameters
@@ -21,7 +22,7 @@ This endpoint does not need any parameter.
 
 ### Return type
 
- (empty response body)
+**String**
 
 ### Authorization
 
@@ -30,7 +31,7 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: Not defined
-- **Accept**: Not defined
+- **Accept**: text/plain
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
@@ -74,8 +75,8 @@ No authorization required
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**username** | Option<**String**> |  |  |
-**server_id** | Option<**String**> |  |  |
+**username** | **String** |  | [required] |
+**server_id** | **String** |  | [required] |
 **ip** | Option<**String**> |  |  |
 
 ### Return type
@@ -90,6 +91,34 @@ No authorization required
 
 - **Content-Type**: Not defined
 - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## join_server
+
+> join_server(join_server_request)
+
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**join_server_request** | Option<[**JoinServerRequest**](JoinServerRequest.md)> |  |  |
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: Not defined
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

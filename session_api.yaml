@@ -7,46 +7,6 @@ info:
 servers:
   - url: https://sessionserver.mojang.com
 
-components:
-  schemas:
-    Error:
-      type: object
-      properties:
-        path:
-          type: string
-        errorMessage:
-          type: string
-
-    User:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          pattern: ^[a-zA-Z0-9_]{2,16}$
-        properties:
-          type: array
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-              value:
-                type: string
-                format: byte
-              signature:
-                type: string
-                format: byte
-            required:
-              - name
-              - value
-      required:
-        - id
-        - name
-        - properties
-
 paths:
   /blockedservers:
     get:
@@ -54,6 +14,10 @@ paths:
       responses:
         '200':
           description: Ok
+          content:
+            text/plain:
+              schema:
+                type: string
 
   /session/minecraft/hasJoined:
     get:
@@ -61,10 +25,12 @@ paths:
       parameters:
         - name: username
           in: query
+          required: true
           schema:
             type: string
         - name: serverId
           in: query
+          required: true
           schema:
             type: string
         - name: ip
@@ -78,6 +44,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+
+  /session/minecraft/join:
+    post:
+      operationId: joinServer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accessToken:
+                  type: string
+                selectedProfile:
+                  type: string
+                  format: uuid
+                serverId:
+                  type: string
+              required:
+                - accessToken
+                - selectedProfile
+                - serverId
+      responses:
+        '200':
+          description: Ok
 
   /session/minecraft/profile/{userId}:
     get:
@@ -103,3 +93,37 @@ paths:
                 $ref: '#/components/schemas/User'
         '204':
           description: No Content
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          pattern: ^[a-zA-Z0-9_]{2,16}$
+        properties:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserProperty'
+      required:
+        - id
+        - name
+        - properties
+    UserProperty:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+          format: byte
+        signature:
+          type: string
+          format: byte
+      required:
+        - name
+        - value

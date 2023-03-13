@@ -18,11 +18,11 @@ pub struct User {
     #[serde(rename = "name")]
     pub name: String,
     #[serde(rename = "properties")]
-    pub properties: Vec<crate::models::UserPropertiesInner>,
+    pub properties: Vec<crate::models::UserProperty>,
 }
 
 impl User {
-    pub fn new(id: uuid::Uuid, name: String, properties: Vec<crate::models::UserPropertiesInner>) -> User {
+    pub fn new(id: uuid::Uuid, name: String, properties: Vec<crate::models::UserProperty>) -> User {
         User {
             id,
             name,

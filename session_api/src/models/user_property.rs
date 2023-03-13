@@ -12,7 +12,7 @@
 
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct UserPropertiesInner {
+pub struct UserProperty {
     #[serde(rename = "name")]
     pub name: String,
     #[serde(rename = "value")]
@@ -21,9 +21,9 @@ pub struct UserPropertiesInner {
     pub signature: Option<String>,
 }
 
-impl UserPropertiesInner {
-    pub fn new(name: String, value: String) -> UserPropertiesInner {
-        UserPropertiesInner {
+impl UserProperty {
+    pub fn new(name: String, value: String) -> UserProperty {
+        UserProperty {
             name,
             value,
             signature: None,

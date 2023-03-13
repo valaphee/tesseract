@@ -1,4 +1,4 @@
-# UserPropertiesInner
+# UserProperty
 
 ## Properties
 
