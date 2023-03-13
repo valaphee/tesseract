@@ -6,7 +6,7 @@ use tesseract_protocol::{
     packet::{c2s, s2c},
     types::{
         Biome, BiomeEffects, BiomePrecipitation, DimensionType, GameType, Nbt, PalettedContainer,
-        Registries, Registry, RegistryEntry, VarInt,
+        Registries, Registry, RegistryEntry, VarInt32,
     },
 };
 
@@ -120,9 +120,9 @@ fn load_connection(
             dimension_type: "minecraft:overworld".to_string(),
             dimension: "minecraft:overworld".to_string(),
             seed: 0,
-            max_players: VarInt(0),
-            chunk_radius: VarInt(0),
-            simulation_distance: VarInt(0),
+            max_players: VarInt32(0),
+            chunk_radius: VarInt32(0),
+            simulation_distance: VarInt32(0),
             reduced_debug_info: false,
             show_death_screen: false,
             is_debug: false,

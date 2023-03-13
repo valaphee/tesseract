@@ -14,7 +14,6 @@ pub mod types;
 pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
-
     #[error("UTF8 error")]
     Utf8Str(#[from] std::str::Utf8Error),
     #[error("UTF8 error")]
@@ -24,8 +23,10 @@ pub enum Error {
     #[error("Nbt error")]
     Nbt(#[from] tesseract_serde_nbt::error::Error),
 
+    #[error("Unknown variant: {0}")]
+    UnknownVariant(i32),
     #[error("VarInt wider than {0}-bit")]
-    VarIntTooWide(u8),
+    TooWideVarInt(u8),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

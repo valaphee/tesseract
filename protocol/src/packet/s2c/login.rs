@@ -1,5 +1,5 @@
 use crate::{
-    types::{GameProfile, TrailingBytes, VarInt},
+    types::{TrailingBytes, User, VarInt32},
     Decode, Encode,
 };
 
@@ -13,14 +13,12 @@ pub enum LoginPacket {
         public_key: Vec<u8>,
         nonce: Vec<u8>,
     },
-    GameProfile {
-        game_profile: GameProfile,
-    },
+    GameProfile(User),
     LoginCompression {
-        compression_threshold: VarInt,
+        compression_threshold: VarInt32,
     },
     CustomQuery {
-        transaction_id: VarInt,
+        transaction_id: VarInt32,
         identifier: String,
         data: TrailingBytes,
     },

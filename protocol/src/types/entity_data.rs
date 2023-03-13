@@ -5,7 +5,7 @@ use serde_value::Value;
 use uuid::Uuid;
 
 use crate::{
-    types::{ItemStack, Nbt, Pose, VarInt},
+    types::{ItemStack, Nbt, Pose, VarInt32},
     Decode, Encode, Result,
 };
 
@@ -39,7 +39,7 @@ impl<'a> Decode<'a> for EntityData {
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum EntityDataValue {
     Byte(u8),
-    Int(VarInt),
+    Int(VarInt32),
     Float(f32),
     String(String),
     Component(String),
@@ -49,20 +49,20 @@ pub enum EntityDataValue {
     Rotations(Vec3),
     BlockPos(IVec3),
     OptionalBlockPos(Option<IVec3>),
-    Direction(VarInt),
+    Direction(VarInt32),
     OptionalUuid(Option<Uuid>),
-    BlockState(VarInt),
+    BlockState(VarInt32),
     CompoundTag(Nbt<Value>),
     Particle,
     VillagerData {
-        type_: VarInt,
-        profession: VarInt,
-        level: VarInt,
+        type_: VarInt32,
+        profession: VarInt32,
+        level: VarInt32,
     },
-    OptionalUnsignedInt(VarInt),
+    OptionalUnsignedInt(VarInt32),
     Pose(Pose),
-    CatVariant(VarInt),
-    FrogVariant(VarInt),
+    CatVariant(VarInt32),
+    FrogVariant(VarInt32),
     OptionalGlobalPos(Option<(String, IVec3)>),
-    PaintingVariant(VarInt),
+    PaintingVariant(VarInt32),
 }

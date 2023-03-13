@@ -2,18 +2,20 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use bevy::prelude::*;
 use futures::{SinkExt, StreamExt};
-use rsa::{rand_core::OsRng, Pkcs1v15Encrypt, PublicKeyParts, RsaPrivateKey};
+use num::BigInt;
+use rsa::{pkcs8::EncodePublicKey, rand_core::OsRng, Pkcs1v15Encrypt, RsaPrivateKey};
+use sha1::{digest::Update, Digest, Sha1};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc,
 };
 use tokio_util::codec::Framed;
-use uuid::Uuid;
 
+use mojang_session_api::apis::{configuration::Configuration, default_api::has_joined_server};
 use tesseract_protocol::{
     codec::{Codec, Compression},
     packet::{c2s, s2c},
-    types::{GameProfile, Intention, Json, Status, StatusPlayers, StatusVersion, VarInt},
+    types::{Intention, Json, Status, StatusPlayers, StatusVersion, VarInt32},
 };
 
 /// Actor
@@ -100,7 +102,7 @@ async fn handle_new_connection(
 ) {
     let mut framed_socket = Framed::new(
         socket,
-        Codec::<s2c::StatusPacket, c2s::HandshakePacket>::default(),
+        Codec::<s2c::HandshakePacket, c2s::HandshakePacket>::default(),
     );
     match framed_socket.next().await.unwrap().unwrap() {
         c2s::HandshakePacket::Intention { intention, .. } => match intention {
@@ -109,37 +111,39 @@ async fn handle_new_connection(
                     .map_codec(|codec| codec.cast::<s2c::StatusPacket, c2s::StatusPacket>());
 
                 match framed_socket.next().await.unwrap().unwrap() {
-                    c2s::StatusPacket::StatusRequest => (),
+                    c2s::StatusPacket::StatusRequest => {
+                        framed_socket
+                            .send(s2c::StatusPacket::StatusResponse {
+                                status: Json(Status {
+                                    description: Some("Tesseract".to_string()),
+                                    players: Some(StatusPlayers {
+                                        max: 1,
+                                        online: 0,
+                                        sample: vec![],
+                                    }),
+                                    version: Some(StatusVersion {
+                                        name: "1.19.3".to_string(),
+                                        protocol: 761,
+                                    }),
+                                    favicon: None,
+                                    previews_chat: false,
+                                }),
+                            })
+                            .await
+                            .unwrap();
+                    }
                     _ => unreachable!(),
                 }
-                framed_socket
-                    .send(s2c::StatusPacket::StatusResponse {
-                        status: Json(Status {
-                            description: Some("Tesseract".to_string()),
-                            players: Some(StatusPlayers {
-                                max: 1,
-                                online: 0,
-                                sample: vec![],
-                            }),
-                            version: Some(StatusVersion {
-                                name: "1.19.3".to_string(),
-                                protocol: 761,
-                            }),
-                            favicon: None,
-                            previews_chat: false,
-                        }),
-                    })
-                    .await
-                    .unwrap();
 
-                let time = match framed_socket.next().await.unwrap().unwrap() {
-                    c2s::StatusPacket::PingRequest { time } => time,
+                match framed_socket.next().await.unwrap().unwrap() {
+                    c2s::StatusPacket::PingRequest { time } => {
+                        framed_socket
+                            .send(s2c::StatusPacket::PongResponse { time })
+                            .await
+                            .unwrap();
+                    }
                     _ => unreachable!(),
                 };
-                framed_socket
-                    .send(s2c::StatusPacket::PongResponse { time })
-                    .await
-                    .unwrap();
             }
             Intention::Login => {
                 let mut framed_socket = framed_socket
@@ -147,17 +151,14 @@ async fn handle_new_connection(
 
                 let name = match framed_socket.next().await.unwrap().unwrap() {
                     c2s::LoginPacket::Hello { name, .. } => name,
-                    _ => unreachable!(),
+                    _ => unimplemented!(),
                 };
 
                 let nonce: [u8; 16] = rand::random();
                 framed_socket
                     .send(s2c::LoginPacket::Hello {
                         server_id: "".to_string(),
-                        public_key: rsa_der::public_key_to_der(
-                            &private_key.n().to_bytes_be(),
-                            &private_key.e().to_bytes_be(),
-                        ),
+                        public_key: private_key.to_public_key_der().unwrap().to_vec(),
                         nonce: nonce.to_vec(),
                     })
                     .await
@@ -171,14 +172,30 @@ async fn handle_new_connection(
                             .decrypt(Pkcs1v15Encrypt::default(), &key)
                             .unwrap()
                     }
-                    _ => unreachable!(),
+                    _ => unimplemented!(),
                 };
+
+                let user = has_joined_server(
+                    &Configuration::new(),
+                    &name,
+                    &BigInt::from_signed_bytes_be(
+                        &Sha1::new()
+                            .chain(&key)
+                            .chain(private_key.to_public_key_der().unwrap().as_bytes())
+                            .finalize(),
+                    )
+                    .to_str_radix(16),
+                    None,
+                )
+                .await
+                .unwrap();
+
                 framed_socket.codec_mut().enable_encryption(key);
 
                 if let Some(compression_threshold) = compression_threshold {
                     framed_socket
                         .send(s2c::LoginPacket::LoginCompression {
-                            compression_threshold: VarInt(compression_threshold as i32),
+                            compression_threshold: VarInt32(compression_threshold as i32),
                         })
                         .await
                         .unwrap();
@@ -188,13 +205,7 @@ async fn handle_new_connection(
                 }
 
                 framed_socket
-                    .send(s2c::LoginPacket::GameProfile {
-                        game_profile: GameProfile {
-                            id: Uuid::new_v4(),
-                            name,
-                            properties: vec![],
-                        },
-                    })
+                    .send(s2c::LoginPacket::GameProfile(user))
                     .await
                     .unwrap();
 
@@ -226,7 +237,7 @@ async fn handle_new_connection(
                     }
                 });
             }
-            _ => unreachable!(),
+            _ => unimplemented!(),
         },
     }
 }

@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::{
     types::{
         ChatSession, ChatVisibility, ClickType, Difficulty, Direction, Hand, ItemStack,
-        LastSeenMessages, MainHand, RecipeBookType, TrailingBytes, VarInt, VarLong,
+        LastSeenMessages, MainHand, RecipeBookType, TrailingBytes, VarInt32, VarInt64,
     },
     Decode, Encode,
 };
@@ -12,17 +12,17 @@ use crate::{
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum GamePacket {
     AcceptTeleportation {
-        id: VarInt,
+        id: VarInt32,
     },
     BlockEntityTagQuery {
-        transaction_id: VarInt,
+        transaction_id: VarInt32,
         pos: IVec3,
     },
     ChangeDifficulty {
         difficulty: Difficulty,
     },
     ChatAck {
-        offset: VarInt,
+        offset: VarInt32,
     },
     ChatCommand {
         command: String,
@@ -52,7 +52,7 @@ pub enum GamePacket {
         allow_listing: bool,
     },
     CommandSuggestion {
-        id: VarInt,
+        id: VarInt32,
         command: String,
     },
     ContainerButtonClick {
@@ -61,7 +61,7 @@ pub enum GamePacket {
     },
     ContainerClick {
         container_id: i8,
-        state_id: VarInt,
+        state_id: VarInt32,
         slot_num: i16,
         button_num: i8,
         click_type: ClickType,
@@ -76,22 +76,22 @@ pub enum GamePacket {
         data: TrailingBytes,
     },
     EditBook {
-        slot: VarInt,
+        slot: VarInt32,
         pages: Vec<String>,
         title: Option<String>,
     },
     EntityTagQuery {
-        transaction_id: VarInt,
-        entity_id: VarInt,
+        transaction_id: VarInt32,
+        entity_id: VarInt32,
     },
     Interact {
-        entity_id: VarInt,
+        entity_id: VarInt32,
         action: InteractPacketAction,
         using_secondary_action: bool,
     },
     JigsawGenerate {
         pos: IVec3,
-        levels: VarInt,
+        levels: VarInt32,
         keep_jigsaws: bool,
     },
     KeepAlive {
@@ -134,7 +134,7 @@ pub enum GamePacket {
         right: bool,
     },
     PickItem {
-        slot: VarInt,
+        slot: VarInt32,
     },
     PlaceRecipe {
         container_id: i8,
@@ -148,12 +148,12 @@ pub enum GamePacket {
         action: PlayerActionPacketAction,
         pos: IVec3,
         direction: Direction,
-        sequence: VarInt,
+        sequence: VarInt32,
     },
     PlayerCommand {
-        id: VarInt,
+        id: VarInt32,
         action: PlayerCommandPacketAction,
-        data: VarInt,
+        data: VarInt32,
     },
     PlayerInput {
         xxa: f32,
@@ -178,11 +178,11 @@ pub enum GamePacket {
     ResourcePack(ResourcePackPacket),
     SeenAdvancements(SeenAdvancementsPacket),
     SelectTrade {
-        item: VarInt,
+        item: VarInt32,
     },
     SetBeacon {
-        primary: Option<VarInt>,
-        secondary: Option<VarInt>,
+        primary: Option<VarInt32>,
+        secondary: Option<VarInt32>,
     },
     SetCarriedItem {
         slot: i16,
@@ -190,11 +190,11 @@ pub enum GamePacket {
     SetCommandBlock {
         pos: IVec3,
         command: String,
-        mode: VarInt,
+        mode: VarInt32,
         flags: i8,
     },
     SetCommandMinecart {
-        entity: VarInt,
+        entity: VarInt32,
         command: String,
         track_output: bool,
     },
@@ -212,19 +212,19 @@ pub enum GamePacket {
     },
     SetStructureBlock {
         pos: IVec3,
-        update_type: VarInt,
-        mode: VarInt,
+        update_type: VarInt32,
+        mode: VarInt32,
         offset_x: i8,
         offset_y: i8,
         offset_z: i8,
         size_x: i8,
         size_y: i8,
         size_z: i8,
-        mirror: VarInt,
-        rotation: VarInt,
+        mirror: VarInt32,
+        rotation: VarInt32,
         data: String,
         integrity: f32,
-        seed: VarLong,
+        seed: VarInt64,
         flags: i8,
     },
     SignUpdate {
@@ -240,16 +240,16 @@ pub enum GamePacket {
     UseItemOn {
         hand: Hand,
         block_pos: IVec3,
-        direction: VarInt,
+        direction: VarInt32,
         pos_x: f32,
         pos_y: f32,
         pos_z: f32,
         inside: bool,
-        sequence: VarInt,
+        sequence: VarInt32,
     },
     UseItem {
         hand: Hand,
-        sequence: VarInt,
+        sequence: VarInt32,
     },
 }
 

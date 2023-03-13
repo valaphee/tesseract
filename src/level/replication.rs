@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use tesseract_protocol::{
     packet::s2c,
-    types::{Nbt, VarInt},
+    types::{Nbt, VarInt32},
     Encode,
 };
 
@@ -42,8 +42,8 @@ pub fn replicate(
     {
         if let Ok((chunk_position, dimension)) = chunks.get(parent.get()) {
             connection.send(s2c::GamePacket::SetChunkCacheCenter {
-                x: VarInt(chunk_position.0.x),
-                z: VarInt(chunk_position.0.y),
+                x: VarInt32(chunk_position.0.x),
+                z: VarInt32(chunk_position.0.y),
             });
 
             // Square radius

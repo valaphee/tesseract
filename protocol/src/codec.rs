@@ -1,5 +1,3 @@
-pub use flate2::Compression;
-
 use std::{io::Read, marker::PhantomData};
 
 use aes::{
@@ -8,9 +6,10 @@ use aes::{
 };
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::read::{ZlibDecoder, ZlibEncoder};
+pub use flate2::Compression;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{types::VarInt, Decode, Encode, Error, Result};
+use crate::{types::VarInt32, Decode, Encode, Error, Result};
 
 pub struct Codec<I, O> {
     encryptor: Option<Encryptor>,
@@ -87,8 +86,8 @@ where
 
                 dst.truncate(data_length_offset);
                 let mut writer = dst.writer();
-                let data_length_varint = VarInt(data_length as i32);
-                VarInt((data_length_varint.len() + compressed_data.len()) as i32)
+                let data_length_varint = VarInt32(data_length as i32);
+                VarInt32((data_length_varint.len() + compressed_data.len()) as i32)
                     .encode(&mut writer)?;
                 data_length_varint.encode(&mut writer)?;
                 dst.extend_from_slice(&compressed_data);
@@ -141,28 +140,29 @@ where
         }
 
         let mut data = &src[..];
-        match VarInt::decode(&mut data) {
+        match VarInt32::decode(&mut data) {
             Ok(data_length) => {
-                if src.len() >= data_length.0 as usize {
+                if data.len() >= data_length.0 as usize {
                     data = &data[..data_length.0 as usize];
 
                     // Is not unsafe as long as no borrowing is used in the packets
-                    let packet = O::decode(if self.compression_threshold.is_some() {
-                        let decompressed_data_length = VarInt::decode(&mut data)?.0 as usize;
-                        if decompressed_data_length != 0 {
+                    let packet = if self.compression_threshold.is_some() {
+                        let decompressed_data_length = VarInt32::decode(&mut data)?;
+                        if decompressed_data_length.0 != 0 {
                             let mut decompressed_data =
-                                Vec::with_capacity(decompressed_data_length);
+                                Vec::with_capacity(decompressed_data_length.0 as usize);
                             ZlibDecoder::new(data)
-                                .take(decompressed_data_length as u64)
                                 .read_to_end(&mut decompressed_data)
                                 .unwrap();
-                            unsafe { std::mem::transmute(&mut decompressed_data) }
+                            unsafe {
+                                O::decode(std::mem::transmute(&mut decompressed_data.as_slice()))
+                            }
                         } else {
-                            unsafe { std::mem::transmute(&mut data) }
+                            unsafe { O::decode(std::mem::transmute(&mut data)) }
                         }
                     } else {
-                        unsafe { std::mem::transmute(&mut data) }
-                    })?;
+                        unsafe { O::decode(std::mem::transmute(&mut data)) }
+                    };
 
                     // Advance, and correct decrypted bytes
                     src.advance(data_length.len() + data_length.0 as usize);
@@ -170,7 +170,7 @@ where
                         self.decrypted_bytes -= data_length.len() + data_length.0 as usize;
                     }
 
-                    Ok(Some(packet))
+                    packet.map(|packet| Some(packet))
                 } else {
                     Ok(None)
                 }

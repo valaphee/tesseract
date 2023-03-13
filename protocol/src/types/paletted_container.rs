@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::{
-    types::{BitStorage, VarInt},
+    types::{BitStorage, VarInt32},
     Encode,
 };
 
@@ -115,19 +115,19 @@ impl Encode for PalettedContainer {
         match self {
             PalettedContainer::SingleValue { value, .. } => {
                 0u8.encode(output)?;
-                VarInt(*value as i32).encode(output)?;
-                VarInt(0).encode(output)?;
+                VarInt32(*value as i32).encode(output)?;
+                VarInt32(0).encode(output)?;
             }
             PalettedContainer::Linear {
                 palette, storage, ..
             } => {
                 (storage.bits() as u8).encode(output)?;
-                VarInt(palette.len() as i32).encode(output)?;
+                VarInt32(palette.len() as i32).encode(output)?;
                 for &element in palette {
-                    VarInt(element as i32).encode(output)?;
+                    VarInt32(element as i32).encode(output)?;
                 }
                 let data = storage.data();
-                VarInt(data.len() as i32).encode(output)?;
+                VarInt32(data.len() as i32).encode(output)?;
                 for &element in data {
                     element.encode(output)?;
                 }
@@ -135,7 +135,7 @@ impl Encode for PalettedContainer {
             PalettedContainer::Global(storage) => {
                 (storage.bits() as u8).encode(output)?;
                 let data = storage.data();
-                VarInt(data.len() as i32).encode(output)?;
+                VarInt32(data.len() as i32).encode(output)?;
                 for &element in data {
                     element.encode(output)?;
                 }

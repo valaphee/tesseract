@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 pub use bit_storage::BitStorage;
 pub use entity_data::{EntityData, EntityDataValue};
+pub use mojang_session_api::models::{User, UserProperty};
 pub use paletted_container::PalettedContainer;
 
 use crate::{Decode, Encode, Error, Result};
@@ -100,11 +101,11 @@ impl<'a> Decode<'a> for i32 {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
-pub struct VarInt(pub i32);
+pub struct VarInt32(pub i32);
 
-impl VarInt {
+impl VarInt32 {
     pub fn len(&self) -> usize {
         match self.0 {
             0 => 1,
@@ -113,7 +114,7 @@ impl VarInt {
     }
 }
 
-impl Encode for VarInt {
+impl Encode for VarInt32 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         let mut value = self.0 as u32;
         loop {
@@ -127,7 +128,7 @@ impl Encode for VarInt {
     }
 }
 
-impl<'a> Decode<'a> for VarInt {
+impl<'a> Decode<'a> for VarInt32 {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
@@ -135,11 +136,11 @@ impl<'a> Decode<'a> for VarInt {
             let head = input.read_u8()?;
             value |= (head as i32 & 0b01111111) << shift;
             if head & 0b10000000 == 0 {
-                return Ok(VarInt(value));
+                return Ok(VarInt32(value));
             }
             shift += 7;
         }
-        Err(Error::VarIntTooWide(35))
+        Err(Error::TooWideVarInt(35))
     }
 }
 
@@ -171,9 +172,9 @@ impl<'a> Decode<'a> for u64 {
 
 #[derive(Clone, Debug)]
 #[repr(transparent)]
-pub struct VarLong(pub i64);
+pub struct VarInt64(pub i64);
 
-impl VarLong {
+impl VarInt64 {
     pub fn len(&self) -> usize {
         match self.0 {
             0 => 1,
@@ -182,7 +183,7 @@ impl VarLong {
     }
 }
 
-impl Encode for VarLong {
+impl Encode for VarInt64 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         let mut value = self.0 as u64;
         loop {
@@ -196,7 +197,7 @@ impl Encode for VarLong {
     }
 }
 
-impl<'a> Decode<'a> for VarLong {
+impl<'a> Decode<'a> for VarInt64 {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
@@ -204,11 +205,11 @@ impl<'a> Decode<'a> for VarLong {
             let head = input.read_u8()?;
             value |= (head as i64 & 0b01111111) << shift;
             if head & 0b10000000 == 0 {
-                return Ok(VarLong(value));
+                return Ok(VarInt64(value));
             }
             shift += 7;
         }
-        Err(Error::VarIntTooWide(70))
+        Err(Error::TooWideVarInt(70))
     }
 }
 
@@ -299,6 +300,7 @@ where
 }
 
 #[derive(Clone, Debug)]
+#[repr(transparent)]
 pub struct TrailingBytes(pub Vec<u8>);
 
 impl Encode for TrailingBytes {
@@ -348,7 +350,7 @@ where
     T: Encode,
 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        VarInt(self.len() as i32).encode(output)?;
+        VarInt32(self.len() as i32).encode(output)?;
         for item in self.iter() {
             item.encode(output)?;
         }
@@ -361,7 +363,7 @@ where
     T: Decode<'a>,
 {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        let length = VarInt::decode(input)?.0 as usize;
+        let length = VarInt32::decode(input)?.0 as usize;
         let mut value = Vec::with_capacity(length);
         for _ in 0..length {
             value.push(Decode::decode(input)?);
@@ -372,7 +374,7 @@ where
 
 impl Encode for str {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        VarInt(self.len() as i32).encode(output)?;
+        VarInt32(self.len() as i32).encode(output)?;
         output.write_all(self.as_bytes())?;
         Ok(())
     }
@@ -380,7 +382,7 @@ impl Encode for str {
 
 impl<'a> Decode<'a> for &'a str {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        let length = VarInt::decode(input)?.0 as usize;
+        let length = VarInt32::decode(input)?.0 as usize;
         let (bytes, input_) = input.split_at(length);
         *input = input_;
         Ok(std::str::from_utf8(bytes)?)
@@ -674,7 +676,7 @@ pub struct ChatSession {
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct ChatType {
-    pub chat_type: VarInt,
+    pub chat_type: VarInt32,
     pub name: String,
     pub target_name: String,
 }
@@ -724,7 +726,7 @@ impl<'a> Decode<'a> for Difficulty {
             1 => Difficulty::Easy,
             2 => Difficulty::Normal,
             3 => Difficulty::Hard,
-            _ => unreachable!(),
+            variant => return Err(Error::UnknownVariant(variant as i32)),
         })
     }
 }
@@ -801,20 +803,6 @@ pub enum EquipmentSlot {
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
-pub struct GameProfile {
-    pub id: Uuid,
-    pub name: String,
-    pub properties: Vec<GameProfileProperty>,
-}
-
-#[derive(Clone, Debug, Encode, Decode)]
-pub struct GameProfileProperty {
-    pub name: String,
-    pub value: String,
-    pub signature: Option<String>,
-}
-
-#[derive(Clone, Debug, Encode, Decode)]
 pub enum GameType {
     Survival,
     Creative,
@@ -837,12 +825,13 @@ pub enum Intention {
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct ItemStack {
-    pub item: VarInt,
+    pub item: VarInt32,
     pub count: i8,
     pub tag: Nbt<Value>,
 }
 
 #[derive(Clone, Debug)]
+#[repr(transparent)]
 pub struct Json<T>(pub T);
 
 impl<T> Encode for Json<T>
@@ -865,7 +854,7 @@ where
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct LastSeenMessages {
-    pub offset: VarInt,
+    pub offset: VarInt32,
     pub acknowledged: [u8; 3],
 }
 
@@ -971,6 +960,7 @@ pub struct MerchantOffer {
 }
 
 #[derive(Clone, Debug)]
+#[repr(transparent)]
 pub struct Nbt<T>(pub T);
 
 impl<T> Encode for Nbt<T>
@@ -1013,16 +1003,16 @@ pub enum Pose {
 #[derive(Clone, Debug)]
 pub enum Recipe {
     Shaped {
-        width: VarInt,
-        height: VarInt,
+        width: VarInt32,
+        height: VarInt32,
         group: String,
-        category: VarInt,
+        category: VarInt32,
         ingredients: Vec<Vec<ItemStack>>,
         result: ItemStack,
     },
     Shapeless {
         group: String,
-        category: VarInt,
+        category: VarInt32,
         ingredients: Vec<Vec<ItemStack>>,
         result: ItemStack,
     },
@@ -1129,8 +1119,8 @@ impl<'a> Decode<'a> for Recipe {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match String::decode(input)?.as_str() {
             "minecraft:crafting_shaped" => {
-                let width = VarInt::decode(input)?;
-                let height = VarInt::decode(input)?;
+                let width = VarInt32::decode(input)?;
+                let height = VarInt32::decode(input)?;
                 Recipe::Shaped {
                     group: Decode::decode(input)?,
                     category: Decode::decode(input)?,
@@ -1196,7 +1186,7 @@ impl<'a> Decode<'a> for Recipe {
                 addition: Decode::decode(input)?,
                 result: Decode::decode(input)?,
             },
-            _ => unreachable!(),
+            _ => return Err(Error::UnknownVariant(0))
         })
     }
 }
@@ -1234,16 +1224,16 @@ pub struct RegistryEntry<T> {
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct SimpleCooking {
     group: String,
-    category: VarInt,
+    category: VarInt32,
     ingredient: Vec<Option<ItemStack>>,
     result: Option<ItemStack>,
     experience: f32,
-    cooking_time: VarInt,
+    cooking_time: VarInt32,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct SimpleRecipe {
-    category: VarInt,
+    category: VarInt32,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
@@ -1290,4 +1280,40 @@ pub struct StatusPlayers {
 pub struct StatusPlayersSample {
     pub id: String,
     pub name: String,
+}
+
+impl Encode for User {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.id.encode(output)?;
+        self.name.encode(output)?;
+        self.properties.encode(output)
+    }
+}
+
+impl<'a> Decode<'a> for User {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(User {
+            id: Decode::decode(input)?,
+            name: Decode::decode(input)?,
+            properties: Decode::decode(input)?,
+        })
+    }
+}
+
+impl Encode for UserProperty {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.name.encode(output)?;
+        self.value.encode(output)?;
+        self.signature.encode(output)
+    }
+}
+
+impl<'a> Decode<'a> for UserProperty {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        Ok(UserProperty {
+            name: Decode::decode(input)?,
+            value: Decode::decode(input)?,
+            signature: Decode::decode(input)?,
+        })
+    }
 }
