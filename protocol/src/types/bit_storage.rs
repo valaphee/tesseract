@@ -90,7 +90,7 @@ impl BitStorage {
             data: vec![0; ((size + values_per_long - 1) / values_per_long) as usize],
             mask: (1 << bits) - 1,
             values_per_long,
-            divide_mul: MAGIC[magic_index + 0],
+            divide_mul: MAGIC[magic_index],
             divide_add: MAGIC[magic_index + 1],
             divide_shift: MAGIC[magic_index + 2],
         }
@@ -111,7 +111,7 @@ impl BitStorage {
             data,
             mask: (1 << bits) - 1,
             values_per_long,
-            divide_mul: MAGIC[magic_index + 0],
+            divide_mul: MAGIC[magic_index],
             divide_add: MAGIC[magic_index + 1],
             divide_shift: MAGIC[magic_index + 2],
         }
@@ -136,7 +136,6 @@ impl BitStorage {
     pub fn get_and_set(&mut self, index: u32, value: u32) -> u32 {
         assert!(index < self.size);
         assert!(value < self.mask);
-
         let cell_index = self.cell_index(index);
         let bit_index = self.bit_index(index, cell_index);
         let cell = &mut self.data[cell_index as usize];
@@ -148,7 +147,6 @@ impl BitStorage {
     pub fn set(&mut self, index: u32, value: u32) {
         assert!(index < self.size);
         assert!(value <= self.mask);
-
         let cell_index = self.cell_index(index);
         let bit_index = self.bit_index(index, cell_index);
         let cell = &mut self.data[cell_index as usize];
@@ -157,14 +155,13 @@ impl BitStorage {
 
     pub fn get(&self, index: u32) -> u32 {
         assert!(index < self.size);
-
         let cell_index = self.cell_index(index);
         let bit_index = self.bit_index(index, cell_index);
-        return (self.data[cell_index as usize] >> bit_index) as u32 & self.mask;
+        (self.data[cell_index as usize] >> bit_index) as u32 & self.mask
     }
 
     fn cell_index(&self, index: u32) -> u32 {
-        (index as u64 * self.divide_mul as u64 + self.divide_add as u64 >> 32) as u32
+        ((index as u64 * self.divide_mul as u64 + self.divide_add as u64) >> 32) as u32
             >> self.divide_shift
     }
 
@@ -182,14 +179,14 @@ mod tests {
     #[test]
     fn set_and_get() {
         for bits in 1..32 {
-            let mut bit_array = BitStorage::new(256, bits);
+            let mut bit_storage = BitStorage::new(256, bits);
             let mut rng = StdRng::seed_from_u64(0);
-            for i in 0..256 {
-                bit_array.set(i, rng.gen_range(0..1 << bits));
+            for i in 0..bit_storage.size {
+                bit_storage.set(i, rng.gen_range(0..1 << bits));
             }
             rng = StdRng::seed_from_u64(0);
-            for i in 0..256 {
-                assert_eq!(rng.gen_range(0..1 << bits), bit_array.get(i))
+            for i in 0..bit_storage.size {
+                assert_eq!(rng.gen_range(0..1 << bits), bit_storage.get(i))
             }
         }
     }

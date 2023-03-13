@@ -613,7 +613,7 @@ pub enum RecipePacket {
     },
     Remove {
         recipes: Vec<String>,
-    }
+    },
 }
 
 #[derive(Clone, Debug)]

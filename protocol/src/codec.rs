@@ -1,3 +1,5 @@
+pub use flate2::Compression;
+
 use std::{io::Read, marker::PhantomData};
 
 use aes::{
@@ -5,10 +7,7 @@ use aes::{
     Aes128,
 };
 use bytes::{Buf, BufMut, BytesMut};
-pub use flate2::{
-    read::{ZlibDecoder, ZlibEncoder},
-    Compression,
-};
+use flate2::read::{ZlibDecoder, ZlibEncoder};
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{types::VarInt, Decode, Encode, Error, Result};
@@ -92,7 +91,7 @@ where
                 VarInt((data_length_varint.len() + compressed_data.len()) as i32)
                     .encode(&mut writer)?;
                 data_length_varint.encode(&mut writer)?;
-                dst.extend_from_slice(&mut compressed_data);
+                dst.extend_from_slice(&compressed_data);
             } else {
                 data_length += 1;
 

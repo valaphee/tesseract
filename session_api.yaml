@@ -1,0 +1,105 @@
+openapi: 3.0.0
+
+info:
+  title: Mojang Session Server
+  version: 1.0.0
+
+servers:
+  - url: https://sessionserver.mojang.com
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        path:
+          type: string
+        errorMessage:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          pattern: ^[a-zA-Z0-9_]{2,16}$
+        properties:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: string
+                format: byte
+              signature:
+                type: string
+                format: byte
+            required:
+              - name
+              - value
+      required:
+        - id
+        - name
+        - properties
+
+paths:
+  /blockedservers:
+    get:
+      operationId: getBlockedServers
+      responses:
+        '200':
+          description: Ok
+
+  /session/minecraft/hasJoined:
+    get:
+      operationId: hasJoinedServer
+      parameters:
+        - name: username
+          in: query
+          schema:
+            type: string
+        - name: serverId
+          in: query
+          schema:
+            type: string
+        - name: ip
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /session/minecraft/profile/{userId}:
+    get:
+      operationId: getUserById
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: unsigned
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '204':
+          description: No Content

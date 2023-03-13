@@ -1,0 +1,17 @@
+.gitignore
+.travis.yml
+Cargo.toml
+README.md
+docs/DefaultApi.md
+docs/Error.md
+docs/User.md
+docs/UserPropertiesInner.md
+git_push.sh
+src/apis/configuration.rs
+src/apis/default_api.rs
+src/apis/mod.rs
+src/lib.rs
+src/models/error.rs
+src/models/mod.rs
+src/models/user.rs
+src/models/user_properties_inner.rs

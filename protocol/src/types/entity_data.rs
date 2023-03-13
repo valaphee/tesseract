@@ -1,10 +1,11 @@
 use std::{collections::HashMap, io::Write};
 
 use glam::{IVec3, Vec3};
+use serde_value::Value;
 use uuid::Uuid;
 
 use crate::{
-    types::{ItemStack, Pose, VarInt},
+    types::{ItemStack, Nbt, Pose, VarInt},
     Decode, Encode, Result,
 };
 
@@ -51,7 +52,7 @@ pub enum EntityDataValue {
     Direction(VarInt),
     OptionalUuid(Option<Uuid>),
     BlockState(VarInt),
-    CompoundTag,
+    CompoundTag(Nbt<Value>),
     Particle,
     VillagerData {
         type_: VarInt,

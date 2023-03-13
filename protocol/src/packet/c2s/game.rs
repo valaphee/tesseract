@@ -3,8 +3,8 @@ use uuid::Uuid;
 
 use crate::{
     types::{
-        ChatSession, ChatVisibility, ClickType, Difficulty, Hand, ItemStack, LastSeenMessages,
-        MainHand, RecipeBookType, TrailingBytes, VarInt, VarLong,
+        ChatSession, ChatVisibility, ClickType, Difficulty, Direction, Hand, ItemStack,
+        LastSeenMessages, MainHand, RecipeBookType, TrailingBytes, VarInt, VarLong,
     },
     Decode, Encode,
 };
@@ -141,11 +141,13 @@ pub enum GamePacket {
         recipe: String,
         shift_down: bool,
     },
-    PlayerAbilities,
+    PlayerAbilities {
+        flags: i8,
+    },
     PlayerAction {
         action: PlayerActionPacketAction,
         pos: IVec3,
-        direction: u8,
+        direction: Direction,
         sequence: VarInt,
     },
     PlayerCommand {
@@ -161,9 +163,7 @@ pub enum GamePacket {
     Pong {
         id: i32,
     },
-    ChatSessionUpdate {
-        chat_session: ChatSession,
-    },
+    ChatSessionUpdate(ChatSession),
     RecipeBookChangeSettings {
         book_type: RecipeBookType,
         is_open: bool,
@@ -175,10 +175,8 @@ pub enum GamePacket {
     RenameItem {
         name: String,
     },
-    ResourcePack {
-        action: ResourcePackPacketAction,
-    },
-    SeenAdvancements,
+    ResourcePack(ResourcePackPacket),
+    SeenAdvancements(SeenAdvancementsPacket),
     SelectTrade {
         item: VarInt,
     },
@@ -293,9 +291,15 @@ pub enum PlayerCommandPacketAction {
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
-pub enum ResourcePackPacketAction {
+pub enum ResourcePackPacket {
     SuccessfullyLoaded,
     Declined,
     FailedDownload,
     Accepted,
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
+pub enum SeenAdvancementsPacket {
+    OpenedTab { tab: String },
+    ClosedScreen,
 }
