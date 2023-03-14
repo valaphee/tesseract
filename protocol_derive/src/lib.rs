@@ -55,13 +55,13 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                             let first_field_encode = field_encodes.next().unwrap();
                             quote! {
                                 Self::#variant_name { #(#field_names,)* } => {
-                                    crate::types::VarInt32(#variant_index).encode(output)?;
+                                    crate::types::VarI32(#variant_index).encode(output)?;
                                     #first_field_encode #(?;#field_encodes)*
                                 }
                             }
                         } else {
                             quote! {
-                                Self::#variant_name {} => crate::types::VarInt32(#variant_index).encode(output),
+                                Self::#variant_name {} => crate::types::VarI32(#variant_index).encode(output),
                             }
                         }
                     }
@@ -77,13 +77,13 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                             let first_field_encode = field_encodes.next().unwrap();
                             quote! {
                                 Self::#variant_name(#(#field_names,)*) => {
-                                    crate::types::VarInt32(#variant_index).encode(output)?;
+                                    crate::types::VarI32(#variant_index).encode(output)?;
                                     #first_field_encode #(?;#field_encodes)*
                                 }
                             }
                         } else {
                             quote! {
-                                Self::#variant_name() => crate::types::VarInt32(#variant_index).encode(output),
+                                Self::#variant_name() => crate::types::VarI32(#variant_index).encode(output),
                             }
                         }
                     }
@@ -94,7 +94,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                             }
                         } else {
                             quote! {
-                                Self::#variant_name => crate::types::VarInt32(#variant_index).encode(output),
+                                Self::#variant_name => crate::types::VarI32(#variant_index).encode(output),
                             }
                         }
                     }
@@ -106,7 +106,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 }
             } else if index_only {
                 quote! {
-                    crate::types::VarInt32(match self {
+                    crate::types::VarI32(match self {
                         #(#match_arms)*
                     }).encode(output)
                 }
@@ -187,7 +187,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 }
             });
             quote! {
-                match crate::types::VarInt32::decode(input)?.0 {
+                match crate::types::VarI32::decode(input)?.0 {
                     #(#match_arms,)*
                     variant => return Err(crate::Error::UnknownVariant(variant))
                 }

@@ -104,9 +104,9 @@ impl Decode for i32 {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
-pub struct VarInt32(pub i32);
+pub struct VarI32(pub i32);
 
-impl VarInt32 {
+impl VarI32 {
     pub fn len(&self) -> usize {
         match self.0 {
             0 => 1,
@@ -115,7 +115,7 @@ impl VarInt32 {
     }
 }
 
-impl Encode for VarInt32 {
+impl Encode for VarI32 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         let mut value = self.0 as u32;
         loop {
@@ -129,7 +129,7 @@ impl Encode for VarInt32 {
     }
 }
 
-impl Decode for VarInt32 {
+impl Decode for VarI32 {
     fn decode(input: &mut &[u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
@@ -137,7 +137,7 @@ impl Decode for VarInt32 {
             let head = input.read_u8()?;
             value |= (head as i32 & 0b01111111) << shift;
             if head & 0b10000000 == 0 {
-                return Ok(VarInt32(value));
+                return Ok(VarI32(value));
             }
             shift += 7;
         }
@@ -173,9 +173,9 @@ impl Decode for u64 {
 
 #[derive(Clone, Debug)]
 #[repr(transparent)]
-pub struct VarInt64(pub i64);
+pub struct VarI64(pub i64);
 
-impl VarInt64 {
+impl VarI64 {
     pub fn len(&self) -> usize {
         match self.0 {
             0 => 1,
@@ -184,7 +184,7 @@ impl VarInt64 {
     }
 }
 
-impl Encode for VarInt64 {
+impl Encode for VarI64 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         let mut value = self.0 as u64;
         loop {
@@ -198,7 +198,7 @@ impl Encode for VarInt64 {
     }
 }
 
-impl Decode for VarInt64 {
+impl Decode for VarI64 {
     fn decode(input: &mut &[u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
@@ -206,7 +206,7 @@ impl Decode for VarInt64 {
             let head = input.read_u8()?;
             value |= (head as i64 & 0b01111111) << shift;
             if head & 0b10000000 == 0 {
-                return Ok(VarInt64(value));
+                return Ok(VarI64(value));
             }
             shift += 7;
         }
@@ -351,7 +351,7 @@ where
     T: Encode,
 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        VarInt32(self.len() as i32).encode(output)?;
+        VarI32(self.len() as i32).encode(output)?;
         for item in self.iter() {
             item.encode(output)?;
         }
@@ -364,7 +364,7 @@ where
     T: Decode,
 {
     fn decode(input: &mut &[u8]) -> Result<Self> {
-        let length = VarInt32::decode(input)?.0 as usize;
+        let length = VarI32::decode(input)?.0 as usize;
         let mut value = Vec::with_capacity(length);
         for _ in 0..length {
             value.push(Decode::decode(input)?);
@@ -382,7 +382,7 @@ impl Encode for String {
 
 impl Decode for String {
     fn decode(input: &mut &[u8]) -> Result<Self> {
-        let length = VarInt32::decode(input)?.0 as usize;
+        let length = VarI32::decode(input)?.0 as usize;
         let (bytes, input_) = input.split_at(length);
         *input = input_;
         Ok(from_java_cesu8(bytes)?.to_string())
@@ -420,8 +420,8 @@ impl Decode for IVec3 {
         let value = i64::decode(input)?;
         Ok(Self {
             x: (value >> 38) as i32,
-            y: (value << 26 >> 38) as i32,
-            z: (value << 52 >> 52) as i32,
+            y: (value << 52 >> 52) as i32,
+            z: (value << 26 >> 38) as i32,
         })
     }
 }
@@ -491,7 +491,7 @@ pub struct Advancement {
 pub struct AdvancementDisplayInfo {
     pub title: String,
     pub description: String,
-    pub icon: ItemStack,
+    pub icon: Option<ItemStack>,
     pub frame: AdvancementFrameType,
     pub background: Option<String>,
     pub show_toast: bool,
@@ -663,7 +663,7 @@ pub struct ChatSession {
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct ChatType {
-    pub chat_type: VarInt32,
+    pub chat_type: VarI32,
     pub name: String,
     pub target_name: String,
 }
@@ -830,11 +830,37 @@ pub enum Intention {
     Login,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Debug)]
 pub struct ItemStack {
-    pub item: VarInt32,
+    pub item: VarI32,
     pub count: i8,
-    pub tag: Nbt<Value>,
+    pub tag: Option<Nbt<Value>>,
+}
+
+impl Encode for ItemStack {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.item.encode(output)?;
+        self.count.encode(output)?;
+        if let Some(tag) = &self.tag {
+            tag.encode(output)
+        } else {
+            0u8.encode(output)
+        }
+    }
+}
+
+impl Decode for ItemStack {
+    fn decode(input: &mut &[u8]) -> Result<Self> {
+        Ok(ItemStack {
+            item: Decode::decode(input)?,
+            count: Decode::decode(input)?,
+            tag: if input[0] != 0 {
+                Some(Decode::decode(input)?)
+            } else {
+                None
+            },
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -862,7 +888,7 @@ where
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct LastSeenMessages {
-    pub offset: VarInt32,
+    pub offset: VarI32,
     pub acknowledged: [u8; 3],
 }
 
@@ -1011,16 +1037,16 @@ pub enum Pose {
 #[derive(Clone, Debug)]
 pub enum Recipe {
     Shaped {
-        width: VarInt32,
-        height: VarInt32,
+        width: VarI32,
+        height: VarI32,
         group: String,
-        category: VarInt32,
+        category: VarI32,
         ingredients: Vec<Vec<ItemStack>>,
         result: ItemStack,
     },
     Shapeless {
         group: String,
-        category: VarInt32,
+        category: VarI32,
         ingredients: Vec<Vec<ItemStack>>,
         result: ItemStack,
     },
@@ -1127,8 +1153,8 @@ impl Decode for Recipe {
     fn decode(input: &mut &[u8]) -> Result<Self> {
         Ok(match String::decode(input)?.as_str() {
             "minecraft:crafting_shaped" => {
-                let width = VarInt32::decode(input)?;
-                let height = VarInt32::decode(input)?;
+                let width = VarI32::decode(input)?;
+                let height = VarI32::decode(input)?;
                 Recipe::Shaped {
                     group: Decode::decode(input)?,
                     category: Decode::decode(input)?,
@@ -1232,16 +1258,45 @@ pub struct RegistryEntry<T> {
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct SimpleCooking {
     group: String,
-    category: VarInt32,
+    category: VarI32,
     ingredient: Vec<Option<ItemStack>>,
     result: Option<ItemStack>,
     experience: f32,
-    cooking_time: VarInt32,
+    cooking_time: VarI32,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct SimpleRecipe {
-    category: VarInt32,
+    category: VarI32,
+}
+
+#[derive(Clone, Debug)]
+pub enum Sound {
+    Id(i32),
+    Name(String)
+}
+
+impl Encode for Sound {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        match self {
+            Sound::Id(id) => VarI32(id + 1).encode(output),
+            Sound::Name(name) => {
+                VarI32(0).encode(output)?;
+                name.encode(output)
+            }
+        }
+    }
+}
+
+impl Decode for Sound {
+    fn decode(input: &mut &[u8]) -> Result<Self> {
+        let id = VarI32::decode(input)?;
+        Ok(if id.0 == 0 {
+            Sound::Name(Decode::decode(input)?)
+        } else {
+            Sound::Id(id.0 - 1)
+        })
+    }
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
@@ -1280,7 +1335,7 @@ pub struct StatusVersion {
 pub struct StatusPlayers {
     pub max: i32,
     pub online: i32,
-    pub sample: Vec<StatusPlayersSample>,
+    pub sample: Option<Vec<StatusPlayersSample>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

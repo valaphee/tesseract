@@ -32,9 +32,11 @@ impl<'de> Deserializer<'de> {
             current_type: TagType::default(),
         };
         let type_ = TagType::try_from(self_.data.read_i8()?).unwrap();
-        let name_length = self_.data.read_i16::<BigEndian>()?;
-        let (_, data) = self_.data.split_at(name_length as usize);
-        self_.data = data;
+        if type_ != TagType::End {
+            let name_length = self_.data.read_i16::<BigEndian>()?;
+            let (_, data) = self_.data.split_at(name_length as usize);
+            self_.data = data;
+        }
         self_.current_type = type_;
         Ok(self_)
     }
@@ -61,7 +63,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
             visitor.visit_str(std::str::from_utf8(bytes).unwrap())
         } else {
             match self.current_type {
-                TagType::End => unreachable!(),
+                TagType::End => visitor.visit_unit(),
                 TagType::Byte => visitor.visit_i8(self.data.read_i8()?),
                 TagType::Short => visitor.visit_i16(self.data.read_i16::<BigEndian>()?),
                 TagType::Int => visitor.visit_i32(self.data.read_i32::<BigEndian>()?),

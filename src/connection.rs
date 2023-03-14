@@ -15,7 +15,7 @@ use mojang_session_api::apis::{configuration::Configuration, default_api::has_jo
 use tesseract_protocol::{
     codec::{Codec, Compression},
     packet::{c2s, s2c},
-    types::{Intention, Json, Status, StatusPlayers, StatusVersion, VarInt32},
+    types::{Intention, Json, Status, StatusPlayers, StatusVersion, VarI32},
 };
 
 /// Actor
@@ -194,7 +194,7 @@ async fn handle_new_connection(
                 if let Some(compression_threshold) = compression_threshold {
                     framed_socket
                         .send(s2c::LoginPacket::LoginCompression {
-                            compression_threshold: VarInt32(compression_threshold as i32),
+                            compression_threshold: VarI32(compression_threshold as i32),
                         })
                         .await
                         .unwrap();

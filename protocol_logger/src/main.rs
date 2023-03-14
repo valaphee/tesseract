@@ -33,14 +33,19 @@ async fn main() {
 }
 
 async fn handle_new_connection(socket: TcpStream) {
+    socket.set_nodelay(true).unwrap();
     let mut framed_socket = Framed::new(
         socket,
         Codec::<s2c::HandshakePacket, c2s::HandshakePacket>::default(),
     );
-    let mut framed_client_socket = Framed::new(
-        TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(51, 210, 210, 150), 25565))
+
+    let client_socket =
+        TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(141, 94, 141, 149), 25565))
             .await
-            .unwrap(),
+            .unwrap();
+    client_socket.set_nodelay(true).unwrap();
+    let mut framed_client_socket = Framed::new(
+        client_socket,
         Codec::<c2s::HandshakePacket, s2c::HandshakePacket>::default(),
     );
 
@@ -208,8 +213,26 @@ async fn handle_new_connection(socket: TcpStream) {
                         tokio::spawn(async move {
                             while let Some(packet) = client_stream.next().await {
                                 let packet = packet.unwrap();
-                                println!("Send: {:?}", &packet);
-                                sink.send(packet).await.unwrap();
+                                match packet {
+                                    s2c::GamePacket::UpdateRecipes { .. }
+                                    | s2c::GamePacket::UpdateTags { .. }
+                                    | s2c::GamePacket::Commands
+                                    | s2c::GamePacket::Recipe(..)
+                                    | s2c::GamePacket::AwardStats
+                                    | s2c::GamePacket::PlayerInfoUpdate
+                                    | s2c::GamePacket::UpdateAttributes { .. }
+                                    | s2c::GamePacket::SectionBlocksUpdate
+                                    | s2c::GamePacket::SetEquipment { .. } => {}
+                                    packet => {
+                                        if !matches!(
+                                            packet,
+                                            s2c::GamePacket::LevelChunkWithLight { .. }
+                                        ) {
+                                            println!("Send: {:?}", &packet);
+                                        }
+                                        sink.send(packet).await.unwrap();
+                                    }
+                                }
                             }
                         });
                     }

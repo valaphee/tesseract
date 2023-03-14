@@ -4,7 +4,7 @@ pub mod de;
 pub mod error;
 pub mod ser;
 
-#[derive(Default, Copy, Clone, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Default, Copy, Clone, Debug, Eq, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(i8)]
 enum TagType {
     #[default]

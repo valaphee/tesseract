@@ -1,11 +1,10 @@
 use std::{collections::HashMap, io::Write};
 
 use glam::{IVec3, Vec3};
-use serde_value::Value;
 use uuid::Uuid;
 
 use crate::{
-    types::{ItemStack, Nbt, Pose, VarInt32},
+    types::{Direction, ItemStack, Nbt, Pose, VarI32, VarI64},
     Decode, Encode, Result,
 };
 
@@ -39,7 +38,8 @@ impl Decode for EntityData {
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum EntityDataValue {
     Byte(u8),
-    Int(VarInt32),
+    Int(VarI32),
+    Long(VarI64),
     Float(f32),
     String(String),
     Component(String),
@@ -49,20 +49,20 @@ pub enum EntityDataValue {
     Rotations(Vec3),
     BlockPos(IVec3),
     OptionalBlockPos(Option<IVec3>),
-    Direction(VarInt32),
+    Direction(Direction),
     OptionalUuid(Option<Uuid>),
-    BlockState(VarInt32),
-    CompoundTag(Nbt<Value>),
+    BlockState(VarI32),
+    CompoundTag(Nbt<serde_value::Value>),
     Particle,
     VillagerData {
-        type_: VarInt32,
-        profession: VarInt32,
-        level: VarInt32,
+        type_: VarI32,
+        profession: VarI32,
+        level: VarI32,
     },
-    OptionalUnsignedInt(VarInt32),
+    OptionalUnsignedInt(VarI32),
     Pose(Pose),
-    CatVariant(VarInt32),
-    FrogVariant(VarInt32),
+    CatVariant(VarI32),
+    FrogVariant(VarI32),
     OptionalGlobalPos(Option<(String, IVec3)>),
-    PaintingVariant(VarInt32),
+    PaintingVariant(VarI32),
 }

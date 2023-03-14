@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::{
-    types::{TrailingBytes, VarInt32},
+    types::{TrailingBytes, VarI32},
     Decode, Encode,
 };
 
@@ -16,7 +16,7 @@ pub enum LoginPacket {
         nonce: Vec<u8>,
     },
     CustomQuery {
-        transaction_id: VarInt32,
+        transaction_id: VarI32,
         data: TrailingBytes,
     },
 }

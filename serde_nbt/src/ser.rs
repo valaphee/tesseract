@@ -12,11 +12,19 @@ where
     T: serde::ser::Serialize,
 {
     let mut ser = Serializer {
-        data: vec![0x0A, 0x00, 0x00],
+        data: Vec::new(),
 
         last_type: TagType::default(),
     };
     value.serialize(&mut ser)?;
+
+    let mut header = Vec::new();
+    header.write_i8(ser.last_type.into())?;
+    if ser.last_type != TagType::End {
+        header.write_i16::<BigEndian>(0)?;
+    }
+    ser.data.splice(0..0, header);
+
     Ok(ser.data)
 }
 
@@ -126,8 +134,6 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 
     fn serialize_none(self) -> Result<Self::Ok> {
-        // this is only needed for support writing optional fields
-        // type TagType::End is reserved, and is used here for marking none
         self.last_type = TagType::End;
         Ok(())
     }
@@ -141,7 +147,8 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok> {
-        unimplemented!()
+        self.last_type = TagType::End;
+        Ok(())
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok> {

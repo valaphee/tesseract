@@ -9,7 +9,7 @@ use flate2::read::{ZlibDecoder, ZlibEncoder};
 pub use flate2::Compression;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{types::VarInt32, Decode, Encode, Error, Result};
+use crate::{types::VarI32, Decode, Encode, Error, Result};
 
 pub struct Codec<I, O> {
     encryptor: Option<Encryptor>,
@@ -86,8 +86,8 @@ where
 
                 dst.truncate(data_length_offset);
                 let mut writer = dst.writer();
-                let data_length_varint = VarInt32(data_length as i32);
-                VarInt32((data_length_varint.len() + compressed_data.len()) as i32)
+                let data_length_varint = VarI32(data_length as i32);
+                VarI32((data_length_varint.len() + compressed_data.len()) as i32)
                     .encode(&mut writer)?;
                 data_length_varint.encode(&mut writer)?;
                 dst.extend_from_slice(&compressed_data);
@@ -140,14 +140,13 @@ where
         }
 
         let mut data = &src[..];
-        match VarInt32::decode(&mut data) {
+        match VarI32::decode(&mut data) {
             Ok(data_length) => {
                 if data.len() >= data_length.0 as usize {
                     data = &data[..data_length.0 as usize];
 
-                    // Is not unsafe as long as no borrowing is used in the packets
                     let packet = if self.compression_threshold.is_some() {
-                        let decompressed_data_length = VarInt32::decode(&mut data)?;
+                        let decompressed_data_length = VarI32::decode(&mut data)?;
                         if decompressed_data_length.0 != 0 {
                             let mut decompressed_data =
                                 Vec::with_capacity(decompressed_data_length.0 as usize);
