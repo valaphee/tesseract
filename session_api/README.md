@@ -33,6 +33,7 @@ Class | Method | HTTP request | Description
 
 ## Documentation For Models
 
+ - [Error](docs/Error.md)
  - [JoinServerRequest](docs/JoinServerRequest.md)
  - [User](docs/User.md)
  - [UserProperty](docs/UserProperty.md)

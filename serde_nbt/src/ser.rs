@@ -33,7 +33,7 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
     type SerializeTupleVariant = Self;
-    type SerializeMap = Self;
+    type SerializeMap = SerializeMap<'ser>;
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
 
@@ -190,9 +190,9 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
         // Reset type_, so that an empty list is of type TagType::End
         self.last_type = TagType::End;
         Ok(SerializeSeq {
+            ser: self,
             header_offset,
             count: 0,
-            de: self,
         })
     }
 
@@ -219,7 +219,10 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
-        unimplemented!()
+        Ok(SerializeMap {
+            ser: self,
+            header_offset: 0,
+        })
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
@@ -237,14 +240,14 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 }
 
-struct SerializeSeq<'ser> {
-    de: &'ser mut Serializer,
+struct SerializeSeq<'a> {
+    ser: &'a mut Serializer,
 
     header_offset: usize,
     count: i32,
 }
 
-impl<'ser> serde::ser::SerializeSeq for SerializeSeq<'ser> {
+impl<'a> serde::ser::SerializeSeq for SerializeSeq<'a> {
     type Ok = ();
     type Error = Error;
 
@@ -253,22 +256,21 @@ impl<'ser> serde::ser::SerializeSeq for SerializeSeq<'ser> {
         T: serde::Serialize,
     {
         self.count += 1;
-        value.serialize(&mut *self.de)
+
+        value.serialize(&mut *self.ser)
     }
 
     fn end(self) -> Result<Self::Ok> {
-        // Override empty header
-        let mut header = &mut self.de.data[self.header_offset..self.header_offset + 5];
-        header.write_i8(self.de.last_type.into())?;
+        let mut header = &mut self.ser.data[self.header_offset..self.header_offset + 5];
+        header.write_i8(self.ser.last_type.into())?;
         header.write_i32::<BigEndian>(self.count)?;
 
-        // Set last type to TagType::List
-        self.de.last_type = TagType::List;
+        self.ser.last_type = TagType::List;
         Ok(())
     }
 }
 
-impl<'ser> serde::ser::SerializeTuple for &'ser mut Serializer {
+impl<'a> serde::ser::SerializeTuple for &'a mut Serializer {
     type Ok = ();
     type Error = Error;
 
@@ -284,7 +286,7 @@ impl<'ser> serde::ser::SerializeTuple for &'ser mut Serializer {
     }
 }
 
-impl<'ser> serde::ser::SerializeTupleStruct for &'ser mut Serializer {
+impl<'a> serde::ser::SerializeTupleStruct for &'a mut Serializer {
     type Ok = ();
     type Error = Error;
 
@@ -300,7 +302,7 @@ impl<'ser> serde::ser::SerializeTupleStruct for &'ser mut Serializer {
     }
 }
 
-impl<'ser> serde::ser::SerializeTupleVariant for &'ser mut Serializer {
+impl<'a> serde::ser::SerializeTupleVariant for &'a mut Serializer {
     type Ok = ();
     type Error = Error;
 
@@ -316,30 +318,45 @@ impl<'ser> serde::ser::SerializeTupleVariant for &'ser mut Serializer {
     }
 }
 
-impl<'ser> serde::ser::SerializeMap for &'ser mut Serializer {
+struct SerializeMap<'a> {
+    ser: &'a mut Serializer,
+
+    header_offset: usize,
+}
+
+impl<'a> serde::ser::SerializeMap for SerializeMap<'a> {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_key<T: ?Sized>(&mut self, _key: &T) -> Result<Self::Ok>
+    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<Self::Ok>
     where
         T: serde::Serialize,
     {
-        unimplemented!()
+        self.header_offset = self.ser.data.len();
+        self.ser.data.write_i8(TagType::End.into())?;
+
+        key.serialize(&mut *self.ser)
     }
 
-    fn serialize_value<T: ?Sized>(&mut self, _value: &T) -> Result<Self::Ok>
+    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<Self::Ok>
     where
         T: serde::Serialize,
     {
-        unimplemented!()
+        value.serialize(&mut *self.ser)?;
+
+        let mut header = &mut self.ser.data[self.header_offset..self.header_offset + 1];
+        header.write_i8(self.ser.last_type.into())?;
+        Ok(())
     }
 
     fn end(self) -> Result<Self::Ok> {
-        unimplemented!()
+        self.ser.data.write_i8(TagType::End.into())?;
+        self.ser.last_type = TagType::Compound;
+        Ok(())
     }
 }
 
-impl<'ser> serde::ser::SerializeStruct for &'ser mut Serializer {
+impl<'a> serde::ser::SerializeStruct for &'a mut Serializer {
     type Ok = ();
     type Error = Error;
 
@@ -369,7 +386,7 @@ impl<'ser> serde::ser::SerializeStruct for &'ser mut Serializer {
     }
 }
 
-impl<'ser> serde::ser::SerializeStructVariant for &'ser mut Serializer {
+impl<'a> serde::ser::SerializeStructVariant for &'a mut Serializer {
     type Ok = ();
     type Error = Error;
 

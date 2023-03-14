@@ -64,7 +64,7 @@ fn load_connection(
             levels: vec!["minecraft:overworld".to_string()],
             registry_holder: Nbt(Registries {
                 biome_registry: Registry {
-                    _type: "minecraft:worldgen/biome".to_string(),
+                    type_: "minecraft:worldgen/biome".to_string(),
                     value: vec![RegistryEntry {
                         name: "plains".to_string(),
                         id: 0,
@@ -90,7 +90,7 @@ fn load_connection(
                     }],
                 },
                 dimension_type_registry: Registry {
-                    _type: "minecraft:dimension_type".to_string(),
+                    type_: "minecraft:dimension_type".to_string(),
                     value: vec![RegistryEntry {
                         name: "minecraft:overworld".to_string(),
                         id: 0,

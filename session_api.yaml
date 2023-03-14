@@ -44,6 +44,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '204':
+          description: No Content
 
   /session/minecraft/join:
     post:
@@ -68,6 +70,12 @@ paths:
       responses:
         '200':
           description: Ok
+        '4XX':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /session/minecraft/profile/{userId}:
     get:
@@ -93,9 +101,25 @@ paths:
                 $ref: '#/components/schemas/User'
         '204':
           description: No Content
+        '4XX':
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
+    Error:
+      type: object
+      properties:
+        path:
+          type: string
+        error:
+          type: string
+        errorMessage:
+          type: string
+
     User:
       type: object
       properties:

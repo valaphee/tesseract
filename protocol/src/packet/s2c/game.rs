@@ -2,7 +2,6 @@ use std::{collections::HashMap, io::Write};
 
 use glam::{DVec3, IVec3};
 use serde::{Deserialize, Serialize};
-use serde_value::Value;
 use uuid::Uuid;
 
 use crate::{
@@ -57,7 +56,7 @@ pub enum GamePacket {
     BlockEntityData {
         pos: IVec3,
         type_: VarInt32,
-        tag: Nbt<Value>,
+        tag: Nbt<serde_value::Value>,
     },
     BlockEvent {
         pos: IVec3,
@@ -487,7 +486,7 @@ pub enum GamePacket {
     },
     TagQuery {
         transaction_id: VarInt32,
-        tag: Nbt<Value>,
+        tag: Nbt<serde_value::Value>,
     },
     TakeItemEntity {
         item_id: VarInt32,
@@ -520,7 +519,7 @@ pub enum GamePacket {
         effect_amplifier: i8,
         effect_duration_ticks: VarInt32,
         flags: u8,
-        factor_data: Nbt<Value>,
+        factor_data: Nbt<serde_value::Value>,
     },
     UpdateRecipes {
         recipes: Vec<()>,
@@ -582,7 +581,7 @@ pub struct LevelChunkPacketDataBlockEntity {
     pub xz: i8,
     pub y: i16,
     pub type_: VarInt32,
-    pub data: Nbt<Value>,
+    pub data: Nbt<serde_value::Value>,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]

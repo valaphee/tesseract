@@ -26,6 +26,7 @@ pub enum GetBlockedServersError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GetUserByIdError {
+    Status4XX(crate::models::Error),
     UnknownValue(serde_json::Value),
 }
 
@@ -40,6 +41,7 @@ pub enum HasJoinedServerError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum JoinServerError {
+    Status4XX(crate::models::Error),
     UnknownValue(serde_json::Value),
 }
 

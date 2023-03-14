@@ -1,9 +1,9 @@
 .gitignore
-.openapi-generator-ignore
 .travis.yml
 Cargo.toml
 README.md
 docs/DefaultApi.md
+docs/Error.md
 docs/JoinServerRequest.md
 docs/User.md
 docs/UserProperty.md
@@ -12,6 +12,7 @@ src/apis/configuration.rs
 src/apis/default_api.rs
 src/apis/mod.rs
 src/lib.rs
+src/models/error.rs
 src/models/join_server_request.rs
 src/models/mod.rs
 src/models/user.rs

@@ -187,7 +187,7 @@ async fn handle_new_connection(socket: TcpStream) {
                                         framed_socket.send(packet).await.unwrap();
                                         break;
                                     } else {
-                                        unreachable!()
+                                        unimplemented!()
                                     }
                                 }
                             }
@@ -213,10 +213,10 @@ async fn handle_new_connection(socket: TcpStream) {
                             }
                         });
                     }
-                    _ => unreachable!(),
+                    _ => unimplemented!(),
                 };
             }
-            _ => unreachable!(),
+            _ => unimplemented!(),
         },
     }
 }

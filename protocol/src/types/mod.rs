@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use cesu8::{from_java_cesu8, to_java_cesu8};
 use glam::{DVec3, IVec3, Vec3};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{Deserialize, Serialize};
@@ -31,7 +32,7 @@ impl<'a> Decode<'a> for bool {
         Ok(match u8::decode(input)? {
             0 => false,
             1 => true,
-            _ => todo!(),
+            variant => return Err(Error::UnknownVariant(variant as i32)),
         })
     }
 }
@@ -140,7 +141,7 @@ impl<'a> Decode<'a> for VarInt32 {
             }
             shift += 7;
         }
-        Err(Error::TooWideVarInt(35))
+        Err(Error::VarIntTooWide(35))
     }
 }
 
@@ -209,7 +210,7 @@ impl<'a> Decode<'a> for VarInt64 {
             }
             shift += 7;
         }
-        Err(Error::TooWideVarInt(70))
+        Err(Error::VarIntTooWide(70))
     }
 }
 
@@ -372,33 +373,19 @@ where
     }
 }
 
-impl Encode for str {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        VarInt32(self.len() as i32).encode(output)?;
-        output.write_all(self.as_bytes())?;
-        Ok(())
-    }
-}
-
-impl<'a> Decode<'a> for &'a str {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        let length = VarInt32::decode(input)?.0 as usize;
-        let (bytes, input_) = input.split_at(length);
-        *input = input_;
-        Ok(std::str::from_utf8(bytes)?)
-    }
-}
-
 impl Encode for String {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        self.as_bytes().to_vec().encode(output)?;
+        to_java_cesu8(self).to_vec().encode(output)?;
         Ok(())
     }
 }
 
 impl<'a> Decode<'a> for String {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(String::from_utf8(Vec::<u8>::decode(input)?)?)
+        let length = VarInt32::decode(input)?.0 as usize;
+        let (bytes, input_) = input.split_at(length);
+        *input = input_;
+        Ok(from_java_cesu8(bytes)?.to_string())
     }
 }
 
@@ -584,9 +571,9 @@ pub enum Anchor {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Biome {
-    pub precipitation: BiomePrecipitation,
+    pub precipitation: String,
     pub temperature: f32,
-    pub temperature_modifier: Option<BiomeTemperatureModifier>,
+    pub temperature_modifier: Option<String>,
     pub downfall: f32,
     pub effects: BiomeEffects,
 }
@@ -749,8 +736,28 @@ pub struct DimensionType {
     pub ambient_light: f32,
     pub piglin_safe: bool,
     pub has_raids: bool,
-    pub monster_spawn_light_level: i32,
+    pub monster_spawn_light_level: MonsterSpawnLightLevel,
     pub monster_spawn_block_light_limit: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MonsterSpawnLightLevel {
+    Scalar(i32),
+    Custom(MonsterSpawnLightLevelCustom)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MonsterSpawnLightLevelCustom {
+    #[serde(rename = "type")]
+    type_: String,
+    value: MonsterSpawnLightLevelCustomValue
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MonsterSpawnLightLevelCustomValue {
+    min_inclusive: i32,
+    max_inclusive: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -848,7 +855,8 @@ where
     T: Deserialize<'a>,
 {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(Json(serde_json::from_str(Decode::decode(input)?)?))
+        let value = String::decode(input)?;
+        Ok(Json(serde_json::from_str(unsafe { std::mem::transmute(value.as_str()) })?))
     }
 }
 
@@ -1210,7 +1218,7 @@ pub struct Registries {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Registry<T> {
     #[serde(rename = "type")]
-    pub _type: String,
+    pub type_: String,
     pub value: Vec<RegistryEntry<T>>,
 }
 
@@ -1253,14 +1261,13 @@ pub enum SoundSource {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Status {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub description: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub players: Option<StatusPlayers>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<StatusVersion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub favicon: Option<String>,
-    pub previews_chat: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

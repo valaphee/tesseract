@@ -15,9 +15,7 @@ pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
     #[error("UTF8 error")]
-    Utf8Str(#[from] std::str::Utf8Error),
-    #[error("UTF8 error")]
-    Utf8String(#[from] std::string::FromUtf8Error),
+    Cesu8DecodingError(#[from] cesu8::Cesu8DecodingError),
     #[error("Json error")]
     Json(#[from] serde_json::Error),
     #[error("Nbt error")]
@@ -26,7 +24,7 @@ pub enum Error {
     #[error("Unknown variant: {0}")]
     UnknownVariant(i32),
     #[error("VarInt wider than {0}-bit")]
-    TooWideVarInt(u8),
+    VarIntTooWide(u8),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

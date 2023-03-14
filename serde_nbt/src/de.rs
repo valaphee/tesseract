@@ -6,11 +6,14 @@ use crate::{
     TagType,
 };
 
-pub fn from_slice<'a, T>(v: &'a [u8]) -> Result<T>
+pub fn from_slice<'a, T>(input: &mut &'a [u8]) -> Result<T>
 where
     T: serde::de::Deserialize<'a>,
 {
-    T::deserialize(&mut Deserializer::from_slice(v)?)
+    let mut deserializer = Deserializer::from_slice(input)?;
+    let value = T::deserialize(&mut deserializer);
+    *input = deserializer.data;
+    value
 }
 
 struct Deserializer<'de> {
@@ -21,9 +24,9 @@ struct Deserializer<'de> {
 }
 
 impl<'de> Deserializer<'de> {
-    fn from_slice(data: &'de [u8]) -> Result<Self> {
+    fn from_slice(input: &'de [u8]) -> Result<Self> {
         let mut self_ = Self {
-            data,
+            data: input,
 
             name: false,
             current_type: TagType::default(),
@@ -41,8 +44,8 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
 
     forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf unit unit_struct
-        newtype_struct seq tuple tuple_struct map struct enum identifier ignored_any
+        i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf unit unit_struct
+        newtype_struct seq tuple tuple_struct map struct identifier ignored_any
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
@@ -65,12 +68,6 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 TagType::Long => visitor.visit_i64(self.data.read_i64::<BigEndian>()?),
                 TagType::Float => visitor.visit_f32(self.data.read_f32::<BigEndian>()?),
                 TagType::Double => visitor.visit_f64(self.data.read_f64::<BigEndian>()?),
-                // TagType::ByteArray => {
-                // let length = self.data.read_i32::<BigEndian>()?;
-                // let (bytes, data) = self.data.split_at(length as usize);
-                // self.data = data;
-                // visitor.visit_bytes(bytes)
-                // },
                 TagType::ByteArray => visitor.visit_seq(SeqAccess {
                     type_: TagType::Byte,
                     count: self.data.read_i32::<BigEndian>()? as u32,
@@ -87,7 +84,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     count: self.data.read_i32::<BigEndian>()? as u32,
                     de: self,
                 }),
-                TagType::Compound => visitor.visit_map(MapAccess { de: self }),
+                TagType::Compound => visitor.visit_map(self),
                 TagType::IntArray => visitor.visit_seq(SeqAccess {
                     type_: TagType::Int,
                     count: self.data.read_i32::<BigEndian>()? as u32,
@@ -102,12 +99,42 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        if self.name {
+            self.name = false;
+
+            let length = self.data.read_i16::<BigEndian>()?;
+            let (bytes, data) = self.data.split_at(length as usize);
+            self.data = data;
+            visitor.visit_str(std::str::from_utf8(bytes).unwrap())
+        } else {
+            match self.current_type {
+                TagType::Byte => visitor.visit_bool(match self.data.read_i8()? {
+                    0 => false,
+                    1 => true,
+                    _ => unimplemented!()
+                }),
+                _ => unimplemented!()
+            }
+        }
+    }
+
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
     where
         V: serde::de::Visitor<'de>,
     {
         // this is only needed for support reading optional fields
         visitor.visit_some(self)
+    }
+
+    fn deserialize_enum<V>(self, _name: &'static str, _variants: &'static [&'static str], _visitor: V) -> Result<V::Value>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        unimplemented!()
     }
 }
 
@@ -139,21 +166,17 @@ impl<'a, 'de> serde::de::SeqAccess<'de> for SeqAccess<'a, 'de> {
     }
 }
 
-struct MapAccess<'a, 'de: 'a> {
-    de: &'a mut Deserializer<'de>,
-}
-
-impl<'a, 'de> serde::de::MapAccess<'de> for MapAccess<'a, 'de> {
+impl<'a, 'de> serde::de::MapAccess<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
         K: serde::de::DeserializeSeed<'de>,
     {
-        self.de.current_type = TagType::try_from(self.de.data.read_i8()?).unwrap();
-        if !matches!(self.de.current_type, TagType::End) {
-            self.de.name = true;
-            seed.deserialize(&mut *self.de).map(Some)
+        self.current_type = TagType::try_from(self.data.read_i8()?).unwrap();
+        if !matches!(self.current_type, TagType::End) {
+            self.name = true;
+            seed.deserialize(&mut **self).map(Some)
         } else {
             Ok(None)
         }
@@ -163,6 +186,6 @@ impl<'a, 'de> serde::de::MapAccess<'de> for MapAccess<'a, 'de> {
     where
         V: serde::de::DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.de)
+        seed.deserialize(&mut **self)
     }
 }

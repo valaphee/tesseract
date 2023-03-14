@@ -27,7 +27,7 @@ impl<I, O> Codec<I, O> {
         Codec {
             encryptor: self.encryptor,
             decryptor: self.decryptor,
-            decrypted_bytes: 0,
+            decrypted_bytes: self.decrypted_bytes,
 
             compression: self.compression,
             compression_threshold: self.compression_threshold,
@@ -167,7 +167,7 @@ where
                     // Advance, and correct decrypted bytes
                     src.advance(data_length.len() + data_length.0 as usize);
                     if self.decryptor.is_some() {
-                        self.decrypted_bytes -= data_length.len() + data_length.0 as usize;
+                        self.decrypted_bytes = src.len()
                     }
 
                     packet.map(|packet| Some(packet))

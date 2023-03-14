@@ -115,7 +115,7 @@ async fn handle_new_connection(
                         framed_socket
                             .send(s2c::StatusPacket::StatusResponse {
                                 status: Json(Status {
-                                    description: Some("Tesseract".to_string()),
+                                    description: Some(serde_json::Value::String("Tesseract".to_string())),
                                     players: Some(StatusPlayers {
                                         max: 1,
                                         online: 0,
@@ -126,13 +126,12 @@ async fn handle_new_connection(
                                         protocol: 761,
                                     }),
                                     favicon: None,
-                                    previews_chat: false,
                                 }),
                             })
                             .await
                             .unwrap();
                     }
-                    _ => unreachable!(),
+                    _ => unimplemented!(),
                 }
 
                 match framed_socket.next().await.unwrap().unwrap() {
@@ -142,7 +141,7 @@ async fn handle_new_connection(
                             .await
                             .unwrap();
                     }
-                    _ => unreachable!(),
+                    _ => unimplemented!(),
                 };
             }
             Intention::Login => {
