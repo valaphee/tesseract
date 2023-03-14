@@ -33,6 +33,6 @@ pub trait Encode {
     fn encode<W: std::io::Write>(&self, output: &mut W) -> Result<()>;
 }
 
-pub trait Decode<'a>: Sized {
-    fn decode(input: &mut &'a [u8]) -> Result<Self>;
+pub trait Decode: Sized {
+    fn decode(input: &mut &[u8]) -> Result<Self>;
 }

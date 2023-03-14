@@ -633,8 +633,8 @@ impl Encode for SetEquipmentPacketSlots {
     }
 }
 
-impl<'a> Decode<'a> for SetEquipmentPacketSlots {
-    fn decode(input: &mut &'a [u8]) -> crate::Result<Self> {
+impl Decode for SetEquipmentPacketSlots {
+    fn decode(input: &mut &[u8]) -> crate::Result<Self> {
         let mut slots = HashMap::new();
         loop {
             let equipment_slot_and_next_bit = u8::decode(input)?;
@@ -731,8 +731,8 @@ impl Encode for StopSoundPacket {
     }
 }
 
-impl<'a> Decode<'a> for StopSoundPacket {
-    fn decode(input: &mut &'a [u8]) -> crate::Result<Self> {
+impl Decode for StopSoundPacket {
+    fn decode(input: &mut &[u8]) -> crate::Result<Self> {
         let flags = i8::decode(input)?;
         Ok(Self {
             source: if flags & 1 << 0 != 0 {

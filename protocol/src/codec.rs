@@ -123,7 +123,7 @@ where
 
 impl<I, O> Decoder for Codec<I, O>
 where
-    O: Decode<'static>,
+    O: Decode,
 {
     type Item = O;
     type Error = Error;
@@ -154,14 +154,12 @@ where
                             ZlibDecoder::new(data)
                                 .read_to_end(&mut decompressed_data)
                                 .unwrap();
-                            unsafe {
-                                O::decode(std::mem::transmute(&mut decompressed_data.as_slice()))
-                            }
+                            O::decode(&mut decompressed_data.as_slice())
                         } else {
-                            unsafe { O::decode(std::mem::transmute(&mut data)) }
+                            O::decode(&mut data)
                         }
                     } else {
-                        unsafe { O::decode(std::mem::transmute(&mut data)) }
+                        O::decode(&mut data)
                     };
 
                     // Advance, and correct decrypted bytes

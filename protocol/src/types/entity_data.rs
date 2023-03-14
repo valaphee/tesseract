@@ -22,8 +22,8 @@ impl Encode for EntityData {
     }
 }
 
-impl<'a> Decode<'a> for EntityData {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode for EntityData {
+    fn decode(input: &mut &[u8]) -> Result<Self> {
         let mut fields = HashMap::new();
         loop {
             let index = u8::decode(input)?;
