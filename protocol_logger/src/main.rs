@@ -214,15 +214,12 @@ async fn handle_new_connection(socket: TcpStream) {
                             while let Some(packet) = client_stream.next().await {
                                 let packet = packet.unwrap();
                                 match packet {
-                                    s2c::GamePacket::UpdateRecipes { .. }
-                                    | s2c::GamePacket::UpdateTags { .. }
-                                    | s2c::GamePacket::Commands
+                                    s2c::GamePacket::Commands
                                     | s2c::GamePacket::Recipe(..)
                                     | s2c::GamePacket::AwardStats
                                     | s2c::GamePacket::PlayerInfoUpdate
                                     | s2c::GamePacket::UpdateAttributes { .. }
-                                    | s2c::GamePacket::SectionBlocksUpdate
-                                    | s2c::GamePacket::SetEquipment { .. } => {}
+                                    | s2c::GamePacket::SectionBlocksUpdate => {}
                                     packet => {
                                         if !matches!(
                                             packet,

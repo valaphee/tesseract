@@ -47,7 +47,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
     forward_to_deserialize_any! {
         i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf unit unit_struct
-        newtype_struct seq tuple tuple_struct map struct identifier ignored_any
+        newtype_struct seq tuple tuple_struct map struct enum identifier ignored_any
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
@@ -105,22 +105,14 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: serde::de::Visitor<'de>,
     {
-        if self.name {
-            self.name = false;
-
-            let length = self.data.read_i16::<BigEndian>()?;
-            let (bytes, data) = self.data.split_at(length as usize);
-            self.data = data;
-            visitor.visit_str(std::str::from_utf8(bytes).unwrap())
-        } else {
-            match self.current_type {
-                TagType::Byte => visitor.visit_bool(match self.data.read_i8()? {
-                    0 => false,
-                    1 => true,
-                    _ => unimplemented!()
-                }),
-                _ => unimplemented!()
+        if !self.name && self.current_type == TagType::Byte {
+            match self.data.read_i8()? {
+                0 => visitor.visit_bool(false),
+                1 => visitor.visit_bool(true),
+                value => visitor.visit_i8(value)
             }
+        } else {
+            self.deserialize_any(visitor)
         }
     }
 
@@ -132,11 +124,8 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
         visitor.visit_some(self)
     }
 
-    fn deserialize_enum<V>(self, _name: &'static str, _variants: &'static [&'static str], _visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        unimplemented!()
+    fn is_human_readable(&self) -> bool {
+        false
     }
 }
 

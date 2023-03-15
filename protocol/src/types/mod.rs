@@ -1037,18 +1037,20 @@ pub enum Pose {
 #[derive(Clone, Debug)]
 pub enum Recipe {
     Shaped {
+        id: String,
         width: VarI32,
         height: VarI32,
         group: String,
         category: VarI32,
-        ingredients: Vec<Vec<ItemStack>>,
-        result: ItemStack,
+        ingredients: Vec<Vec<Option<ItemStack>>>,
+        result: Option<ItemStack>,
     },
     Shapeless {
+        id: String,
         group: String,
         category: VarI32,
-        ingredients: Vec<Vec<ItemStack>>,
-        result: ItemStack,
+        ingredients: Vec<Vec<Option<ItemStack>>>,
+        result: Option<ItemStack>,
     },
     ArmorDye(SimpleRecipe),
     BookCloning(SimpleRecipe),
@@ -1068,21 +1070,53 @@ pub enum Recipe {
     Smoking(SimpleCooking),
     CampfireCooking(SimpleCooking),
     Stonecutting {
+        id: String,
         group: String,
-        ingredient: Vec<ItemStack>,
-        result: ItemStack,
+        ingredient: Vec<Option<ItemStack>>,
+        result: Option<ItemStack>,
     },
     Smithing {
-        base: Vec<ItemStack>,
-        addition: Vec<ItemStack>,
-        result: ItemStack,
+        id: String,
+        base: Vec<Option<ItemStack>>,
+        addition: Vec<Option<ItemStack>>,
+        result: Option<ItemStack>,
     },
+}
+
+impl Recipe {
+    fn type_(&self) -> &'static str {
+        match self {
+            Recipe::Shaped { .. } => "minecraft:crafting_shaped",
+            Recipe::Shapeless { .. } => "minecraft:crafting_shapeless",
+            Recipe::ArmorDye(_) => "minecraft:crafting_special_armordye",
+            Recipe::BookCloning(_) => "minecraft:crafting_special_bookcloning",
+            Recipe::MapCloning(_) => "minecraft:crafting_special_mapcloning",
+            Recipe::MapExtending(_) => "minecraft:crafting_special_mapextending",
+            Recipe::FireworkRocket(_) => "minecraft:crafting_special_firework_rocket",
+            Recipe::FireworkStar(_) => "minecraft:crafting_special_firework_star",
+            Recipe::FireworkStarFade(_) => "minecraft:crafting_special_firework_star_fade",
+            Recipe::TippedArrow(_) => "minecraft:crafting_special_tippedarrow",
+            Recipe::BannerDuplicate(_) => "minecraft:crafting_special_bannerduplicate",
+            Recipe::ShieldDecoration(_) => "minecraft:crafting_special_shielddecoration",
+            Recipe::ShulkerBoxColoring(_) => "minecraft:crafting_special_shulkerboxcoloring",
+            Recipe::SuspiciousStew(_) => "minecraft:crafting_special_suspiciousstew",
+            Recipe::RepairItem(_) => "minecraft:crafting_special_repairitem",
+            Recipe::Smelting(_) => "minecraft:smelting",
+            Recipe::Blasting(_) => "minecraft:blasting",
+            Recipe::Smoking(_) => "minecraft:smoking",
+            Recipe::CampfireCooking(_) => "minecraft:campfire_cooking",
+            Recipe::Stonecutting { .. } => "minecraft:stonecutting",
+            Recipe::Smithing { .. } => "minecraft:smithing",
+        }
+    }
 }
 
 impl Encode for Recipe {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.type_().to_string().encode(output)?;
         match self {
             Recipe::Shaped {
+                id,
                 width,
                 height,
                 group,
@@ -1090,6 +1124,7 @@ impl Encode for Recipe {
                 ingredients,
                 result,
             } => {
+                id.encode(output)?;
                 width.encode(output)?;
                 height.encode(output)?;
                 group.encode(output)?;
@@ -1100,11 +1135,13 @@ impl Encode for Recipe {
                 result.encode(output)
             }
             Recipe::Shapeless {
+                id,
                 group,
                 category,
                 ingredients,
                 result,
             } => {
+                id.encode(output)?;
                 group.encode(output)?;
                 category.encode(output)?;
                 ingredients.encode(output)?;
@@ -1128,19 +1165,23 @@ impl Encode for Recipe {
             | Recipe::Smoking(recipe)
             | Recipe::CampfireCooking(recipe) => recipe.encode(output),
             Recipe::Stonecutting {
+                id,
                 group,
                 ingredient,
                 result,
             } => {
+                id.encode(output)?;
                 group.encode(output)?;
                 ingredient.encode(output)?;
                 result.encode(output)
             }
             Recipe::Smithing {
+                id,
                 base,
                 addition,
                 result,
             } => {
+                id.encode(output)?;
                 base.encode(output)?;
                 addition.encode(output)?;
                 result.encode(output)
@@ -1153,25 +1194,29 @@ impl Decode for Recipe {
     fn decode(input: &mut &[u8]) -> Result<Self> {
         Ok(match String::decode(input)?.as_str() {
             "minecraft:crafting_shaped" => {
+                let id = Decode::decode(input)?;
                 let width = VarI32::decode(input)?;
                 let height = VarI32::decode(input)?;
+                let group = Decode::decode(input)?;
+                let category = Decode::decode(input)?;
+                let ingredient_count = width.0 * height.0;
+                let mut ingredients = Vec::with_capacity(ingredient_count as usize);
+                for _ in 0..ingredient_count {
+                    ingredients.push(Decode::decode(input)?);
+                }
+                let result = Decode::decode(input)?;
                 Recipe::Shaped {
-                    group: Decode::decode(input)?,
-                    category: Decode::decode(input)?,
-                    ingredients: {
-                        let length = width.0 * height.0;
-                        let mut value = Vec::with_capacity(length as usize);
-                        for _ in 0..length {
-                            value.push(Decode::decode(input)?);
-                        }
-                        value
-                    },
+                    id,
+                    group,
+                    category,
+                    ingredients,
                     width,
                     height,
-                    result: Decode::decode(input)?,
+                    result,
                 }
             }
             "minecraft:crafting_shapeless" => Recipe::Shapeless {
+                id: Decode::decode(input)?,
                 group: Decode::decode(input)?,
                 category: Decode::decode(input)?,
                 ingredients: Decode::decode(input)?,
@@ -1211,11 +1256,13 @@ impl Decode for Recipe {
             "minecraft:smoking" => Recipe::Smoking(Decode::decode(input)?),
             "minecraft:campfire_cooking" => Recipe::CampfireCooking(Decode::decode(input)?),
             "minecraft:stonecutting" => Recipe::Stonecutting {
+                id: Decode::decode(input)?,
                 group: Decode::decode(input)?,
                 ingredient: Decode::decode(input)?,
                 result: Decode::decode(input)?,
             },
             "minecraft:smithing" => Recipe::Smithing {
+                id: Decode::decode(input)?,
                 base: Decode::decode(input)?,
                 addition: Decode::decode(input)?,
                 result: Decode::decode(input)?,
@@ -1257,17 +1304,19 @@ pub struct RegistryEntry<T> {
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct SimpleCooking {
-    group: String,
-    category: VarI32,
-    ingredient: Vec<Option<ItemStack>>,
-    result: Option<ItemStack>,
-    experience: f32,
-    cooking_time: VarI32,
+    pub id: String,
+    pub group: String,
+    pub category: VarI32,
+    pub ingredient: Vec<Option<ItemStack>>,
+    pub result: Option<ItemStack>,
+    pub experience: f32,
+    pub cooking_time: VarI32,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct SimpleRecipe {
-    category: VarI32,
+    pub id: String,
+    pub category: VarI32,
 }
 
 #[derive(Clone, Debug)]

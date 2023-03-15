@@ -7,7 +7,7 @@ use crate::{
     types::{
         Advancement, Anchor, Angle, BossEventColor, BossEventOverlay, ChatType, Difficulty,
         EntityData, EquipmentSlot, GameType, Hand, ItemStack, MapDecoration, MapPatch,
-        MerchantOffer, Nbt, Registries, Sound, SoundSource, TrailingBytes, VarI32, VarI64,
+        MerchantOffer, Nbt, Recipe, Registries, Sound, SoundSource, TrailingBytes, VarI32, VarI64,
     },
     Decode, Encode,
 };
@@ -523,10 +523,10 @@ pub enum GamePacket {
         factor_data: Option<Nbt<serde_value::Value>>,
     },
     UpdateRecipes {
-        recipes: Vec<()>,
+        recipes: Vec<Recipe>,
     },
     UpdateTags {
-        tags: Vec<()>,
+        tags: Vec<(String, Vec<(String, Vec<VarI32>)>)>,
     },
 }
 
@@ -597,19 +597,43 @@ pub struct PlayerLookAtPacketAtEntity {
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum RecipePacket {
     Init {
+        crafting_recipe_book_open: bool,
+        crafting_recipe_book_filter_active: bool,
+        smelting_recipe_book_open: bool,
+        smelting_recipe_book_filter_active: bool,
+        blast_furnace_recipe_book_open: bool,
+        blast_furnace_recipe_book_filter_active: bool,
+        smoker_recipe_book_open: bool,
+        smoker_recipe_book_filter_active: bool,
         recipes: Vec<String>,
         to_highlight: Vec<String>,
     },
     Add {
+        crafting_recipe_book_open: bool,
+        crafting_recipe_book_filter_active: bool,
+        smelting_recipe_book_open: bool,
+        smelting_recipe_book_filter_active: bool,
+        blast_furnace_recipe_book_open: bool,
+        blast_furnace_recipe_book_filter_active: bool,
+        smoker_recipe_book_open: bool,
+        smoker_recipe_book_filter_active: bool,
         recipes: Vec<String>,
     },
     Remove {
+        crafting_recipe_book_open: bool,
+        crafting_recipe_book_filter_active: bool,
+        smelting_recipe_book_open: bool,
+        smelting_recipe_book_filter_active: bool,
+        blast_furnace_recipe_book_open: bool,
+        blast_furnace_recipe_book_filter_active: bool,
+        smoker_recipe_book_open: bool,
+        smoker_recipe_book_filter_active: bool,
         recipes: Vec<String>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct SetEquipmentPacketSlots(HashMap<EquipmentSlot, ItemStack>);
+pub struct SetEquipmentPacketSlots(HashMap<EquipmentSlot, Option<ItemStack>>);
 
 impl Encode for SetEquipmentPacketSlots {
     fn encode<W: Write>(&self, output: &mut W) -> crate::Result<()> {
@@ -629,7 +653,7 @@ impl Encode for SetEquipmentPacketSlots {
 impl Decode for SetEquipmentPacketSlots {
     fn decode(input: &mut &[u8]) -> crate::Result<Self> {
         let mut slots = HashMap::new();
-        /*loop {
+        loop {
             let equipment_slot_and_next_bit = u8::decode(input)?;
             slots.insert(
                 EquipmentSlot::try_from(equipment_slot_and_next_bit & 0x7F).unwrap(),
@@ -638,7 +662,7 @@ impl Decode for SetEquipmentPacketSlots {
             if equipment_slot_and_next_bit & 0x80 == 0 {
                 break;
             }
-        }*/
+        }
         Ok(Self(slots))
     }
 }

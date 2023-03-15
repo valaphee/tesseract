@@ -245,6 +245,10 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     ) -> Result<Self::SerializeStructVariant> {
         unimplemented!()
     }
+
+    fn is_human_readable(&self) -> bool {
+        false
+    }
 }
 
 struct SerializeSeq<'a> {
