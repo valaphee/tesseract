@@ -20,6 +20,6 @@ pub enum LoginPacket {
     CustomQuery {
         transaction_id: VarI32,
         identifier: String,
-        data: TrailingBytes,
+        data: TrailingBytes<{ 1 << 20 }>,
     },
 }

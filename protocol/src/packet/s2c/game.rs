@@ -129,7 +129,7 @@ pub enum GamePacket {
     },
     CustomPayload {
         identifier: String,
-        data: TrailingBytes,
+        data: TrailingBytes<{ 1 << 20 }>,
     },
     DamageEvent {
         entity_id: VarI32,

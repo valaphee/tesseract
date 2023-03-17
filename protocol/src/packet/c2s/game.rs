@@ -74,7 +74,7 @@ pub enum GamePacket {
     },
     CustomPayload {
         identifier: String,
-        data: TrailingBytes,
+        data: TrailingBytes<{ (1 << 15) - 1 }>,
     },
     EditBook {
         slot: VarI32,

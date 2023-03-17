@@ -303,17 +303,19 @@ where
 
 #[derive(Clone, Debug)]
 #[repr(transparent)]
-pub struct TrailingBytes(pub Vec<u8>);
+pub struct TrailingBytes<const N: usize>(pub Vec<u8>);
 
-impl Encode for TrailingBytes {
+impl<const N: usize> Encode for TrailingBytes<N> {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        assert!(self.0.len() <= N);
         output.write_all(&self.0)?;
         Ok(())
     }
 }
 
-impl Decode for TrailingBytes {
+impl<const N: usize> Decode for TrailingBytes<N> {
     fn decode(input: &mut &[u8]) -> Result<Self> {
+        assert!(input.len() <= N);
         Ok(TrailingBytes(input.to_vec()))
     }
 }
