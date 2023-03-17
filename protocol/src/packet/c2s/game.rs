@@ -38,6 +38,7 @@ pub enum GamePacket {
         signature: Option<[u8; 256]>,
         last_seen_messages: LastSeenMessages,
     },
+    ChatSessionUpdate(ChatSession),
     ClientCommand {
         action: ClientCommandPacketAction,
     },
@@ -163,7 +164,6 @@ pub enum GamePacket {
     Pong {
         id: i32,
     },
-    ChatSessionUpdate(ChatSession),
     RecipeBookChangeSettings {
         book_type: RecipeBookType,
         is_open: bool,

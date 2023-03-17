@@ -109,7 +109,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
             match self.data.read_i8()? {
                 0 => visitor.visit_bool(false),
                 1 => visitor.visit_bool(true),
-                value => visitor.visit_i8(value)
+                value => visitor.visit_i8(value),
             }
         } else {
             self.deserialize_any(visitor)

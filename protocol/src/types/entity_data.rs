@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io::Write};
 
-use glam::{IVec3, Vec3};
+use glam::{IVec3, Quat, Vec3};
 use uuid::Uuid;
 
 use crate::{
@@ -52,6 +52,7 @@ pub enum EntityDataValue {
     Direction(Direction),
     OptionalUuid(Option<Uuid>),
     BlockState(VarI32),
+    OptionalBlockState(VarI32),
     CompoundTag(Nbt<serde_value::Value>),
     Particle,
     VillagerData {
@@ -65,4 +66,7 @@ pub enum EntityDataValue {
     FrogVariant(VarI32),
     OptionalGlobalPos(Option<(String, IVec3)>),
     PaintingVariant(VarI32),
+    SnifferState,
+    Vector3(Vec3),
+    Quaternion(Quat),
 }

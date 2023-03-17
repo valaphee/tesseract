@@ -1,14 +1,14 @@
-use std::io::Write;
+use std::{io::Write, str::from_utf8};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use cesu8::{from_java_cesu8, to_java_cesu8};
-use glam::{DVec3, IVec3, Vec3};
+use glam::{DVec3, IVec3, Quat, Vec3};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_value::Value;
 use uuid::Uuid;
 
 pub use bit_storage::BitStorage;
+pub use chat::{Component, ComponentContents};
 pub use entity_data::{EntityData, EntityDataValue};
 pub use mojang_session_api::models::{User, UserProperty};
 pub use paletted_container::PalettedContainer;
@@ -16,6 +16,7 @@ pub use paletted_container::PalettedContainer;
 use crate::{Decode, Encode, Error, Result};
 
 mod bit_storage;
+mod chat;
 mod entity_data;
 mod paletted_container;
 
@@ -352,14 +353,14 @@ where
 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         VarI32(self.len() as i32).encode(output)?;
-        for item in self.iter() {
+        for item in self {
             item.encode(output)?;
         }
         Ok(())
     }
 }
 
-impl<'a, T> Decode for Vec<T>
+impl<T> Decode for Vec<T>
 where
     T: Decode,
 {
@@ -375,7 +376,9 @@ where
 
 impl Encode for String {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        to_java_cesu8(self).to_vec().encode(output)?;
+        let bytes = self.as_bytes();
+        VarI32(bytes.len() as i32).encode(output)?;
+        output.write_all(bytes)?;
         Ok(())
     }
 }
@@ -385,7 +388,7 @@ impl Decode for String {
         let length = VarI32::decode(input)?.0 as usize;
         let (bytes, input_) = input.split_at(length);
         *input = input_;
-        Ok(from_java_cesu8(bytes)?.to_string())
+        Ok(from_utf8(bytes)?.to_string())
     }
 }
 
@@ -406,8 +409,8 @@ impl Decode for Uuid {
 impl Encode for IVec3 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         match (self.x, self.y, self.z) {
-            (-0x2000000..=0x1ffffff, -0x800..=0x7ff, -0x2000000..=0x1ffffff) => {
-                ((self.x as u64) << 38 | (self.z as u64) << 38 >> 26 | (self.y as u64) & 0xFFF)
+            (-0x2000000..=0x1FFFFFF, -0x800..=0x7FF, -0x2000000..=0x1FFFFFF) => {
+                ((self.x as u64) << 38 | (self.z as u64) << 12 | self.y as u64 & 0xFFF)
                     .encode(output)
             }
             _ => unimplemented!(),
@@ -462,6 +465,26 @@ impl Decode for DVec3 {
     }
 }
 
+impl Encode for Quat {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        self.x.encode(output)?;
+        self.y.encode(output)?;
+        self.z.encode(output)?;
+        self.w.encode(output)
+    }
+}
+
+impl Decode for Quat {
+    fn decode(input: &mut &[u8]) -> Result<Self> {
+        Ok(Quat::from_xyzw(
+            Decode::decode(input)?,
+            Decode::decode(input)?,
+            Decode::decode(input)?,
+            Decode::decode(input)?,
+        ))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Angle(pub f32);
 
@@ -489,8 +512,8 @@ pub struct Advancement {
 
 #[derive(Clone, Debug)]
 pub struct AdvancementDisplayInfo {
-    pub title: String,
-    pub description: String,
+    pub title: Json<Component>,
+    pub description: Json<Component>,
     pub icon: Option<ItemStack>,
     pub frame: AdvancementFrameType,
     pub background: Option<String>,
@@ -538,8 +561,6 @@ impl Decode for AdvancementDisplayInfo {
         } else {
             None
         };
-        let show_toast = flags & (1 << 1) != 0;
-        let hidden = flags & (1 << 2) != 0;
         let x = Decode::decode(input)?;
         let y = Decode::decode(input)?;
         Ok(Self {
@@ -548,8 +569,8 @@ impl Decode for AdvancementDisplayInfo {
             icon,
             frame,
             background,
-            show_toast,
-            hidden,
+            show_toast: flags & (1 << 1) != 0,
+            hidden: flags & (1 << 2) != 0,
             x,
             y,
         })
@@ -571,6 +592,7 @@ pub enum Anchor {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Biome {
+    pub has_precipitation: bool,
     pub precipitation: String,
     pub temperature: f32,
     pub temperature_modifier: Option<String>,
@@ -661,11 +683,23 @@ pub struct ChatSession {
     pub key_signature: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChatType {
+    pub chat: ChatTypeDecoration,
+    pub narration: ChatTypeDecoration,
+}
+
+#[derive(Clone, Debug, Encode, Decode)]
+pub struct ChatTypeBound {
     pub chat_type: VarI32,
-    pub name: String,
-    pub target_name: String,
+    pub name: Json<Component>,
+    pub target_name: Option<Json<Component>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChatTypeDecoration {
+    pub translation_key: String,
+    pub parameters: Vec<String>,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
@@ -713,7 +747,7 @@ impl Decode for Difficulty {
             1 => Difficulty::Easy,
             2 => Difficulty::Normal,
             3 => Difficulty::Hard,
-            variant => return Err(Error::UnknownVariant(variant as i32)),
+            _ => unreachable!(),
         })
     }
 }
@@ -744,14 +778,14 @@ pub struct DimensionType {
 #[serde(untagged)]
 pub enum MonsterSpawnLightLevel {
     Scalar(i32),
-    Custom(MonsterSpawnLightLevelCustom)
+    Custom(MonsterSpawnLightLevelCustom),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MonsterSpawnLightLevelCustom {
     #[serde(rename = "type")]
     type_: String,
-    value: MonsterSpawnLightLevelCustomValue
+    value: MonsterSpawnLightLevelCustomValue,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -878,11 +912,11 @@ where
 
 impl<T> Decode for Json<T>
 where
-    T: Deserialize<'static>,
+    T: DeserializeOwned,
 {
     fn decode(input: &mut &[u8]) -> Result<Self> {
         let value = String::decode(input)?;
-        Ok(Json(serde_json::from_str(unsafe { std::mem::transmute(value.as_str()) })?))
+        Ok(Json(serde_json::from_str(value.as_str())?))
     }
 }
 
@@ -904,7 +938,7 @@ pub struct MapDecoration {
     pub x: i8,
     pub y: i8,
     pub rot: i8,
-    pub name: Option<String>,
+    pub name: Option<Json<Component>>,
 }
 
 #[derive(Clone, Debug, Encode, Decode)]
@@ -1009,10 +1043,10 @@ where
 
 impl<T> Decode for Nbt<T>
 where
-    T: Deserialize<'static>,
+    T: DeserializeOwned,
 {
     fn decode(input: &mut &[u8]) -> Result<Self> {
-        Ok(Nbt(tesseract_serde_nbt::de::from_slice(unsafe { std::mem::transmute(input) })?))
+        Ok(Nbt(tesseract_serde_nbt::de::from_slice(input)?))
     }
 }
 
@@ -1044,6 +1078,7 @@ pub enum Recipe {
         category: VarI32,
         ingredients: Vec<Vec<Option<ItemStack>>>,
         result: Option<ItemStack>,
+        show_notification: bool,
     },
     Shapeless {
         id: String,
@@ -1123,16 +1158,18 @@ impl Encode for Recipe {
                 category,
                 ingredients,
                 result,
+                show_notification,
             } => {
                 id.encode(output)?;
                 width.encode(output)?;
                 height.encode(output)?;
                 group.encode(output)?;
                 category.encode(output)?;
-                for ingredient in ingredients.iter() {
+                for ingredient in ingredients {
                     ingredient.encode(output)?;
                 }
-                result.encode(output)
+                result.encode(output)?;
+                show_notification.encode(output)
             }
             Recipe::Shapeless {
                 id,
@@ -1205,6 +1242,7 @@ impl Decode for Recipe {
                     ingredients.push(Decode::decode(input)?);
                 }
                 let result = Decode::decode(input)?;
+                let show_notification = Decode::decode(input)?;
                 Recipe::Shaped {
                     id,
                     group,
@@ -1213,6 +1251,7 @@ impl Decode for Recipe {
                     width,
                     height,
                     result,
+                    show_notification,
                 }
             }
             "minecraft:crafting_shapeless" => Recipe::Shapeless {
@@ -1267,7 +1306,7 @@ impl Decode for Recipe {
                 addition: Decode::decode(input)?,
                 result: Decode::decode(input)?,
             },
-            _ => return Err(Error::UnknownVariant(0))
+            _ => return Err(Error::UnknownVariant(0)),
         })
     }
 }
@@ -1282,10 +1321,23 @@ pub enum RecipeBookType {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Registries {
-    #[serde(rename = "minecraft:worldgen/biome")]
-    pub biome_registry: Registry<Biome>,
     #[serde(rename = "minecraft:dimension_type")]
     pub dimension_type_registry: Registry<DimensionType>,
+    #[serde(rename = "minecraft:worldgen/biome")]
+    pub biome_registry: Registry<Biome>,
+    #[serde(rename = "minecraft:chat_type")]
+    pub chat_type: Registry<ChatType>,
+    #[serde(rename = "minecraft:damage_type")]
+    pub damage_type_registry: Registry<DamageType>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DamageType {
+    pub message_id: String,
+    pub exhaustion: f32,
+    pub scaling: String,
+    pub effects: Option<String>,
+    pub death_message_type: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1322,7 +1374,7 @@ pub struct SimpleRecipe {
 #[derive(Clone, Debug)]
 pub enum Sound {
     Id(i32),
-    Name(String)
+    Name(String),
 }
 
 impl Encode for Sound {
@@ -1365,7 +1417,7 @@ pub enum SoundSource {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Status {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<serde_json::Value>,
+    pub description: Option<Component>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub players: Option<StatusPlayers>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1384,7 +1436,8 @@ pub struct StatusVersion {
 pub struct StatusPlayers {
     pub max: i32,
     pub online: i32,
-    pub sample: Option<Vec<StatusPlayersSample>>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub sample: Vec<StatusPlayersSample>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

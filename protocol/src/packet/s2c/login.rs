@@ -1,12 +1,12 @@
 use crate::{
-    types::{TrailingBytes, User, VarI32},
+    types::{Component, Json, TrailingBytes, User, VarI32},
     Decode, Encode,
 };
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum LoginPacket {
     LoginDisconnect {
-        reason: String,
+        reason: Json<Component>,
     },
     Hello {
         server_id: String,

@@ -40,7 +40,7 @@ async fn handle_new_connection(socket: TcpStream) {
     );
 
     let client_socket =
-        TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(141, 94, 141, 149), 25565))
+        TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(116, 202, 32, 56), 25565))
             .await
             .unwrap();
     client_socket.set_nodelay(true).unwrap();
@@ -81,6 +81,7 @@ async fn handle_new_connection(socket: TcpStream) {
 
                 let packet = framed_client_socket.next().await.unwrap().unwrap();
                 if matches!(packet, s2c::StatusPacket::StatusResponse { .. }) {
+                    println!("{:?}", packet);
                     framed_socket.send(packet).await.unwrap();
                 } else {
                     unimplemented!()
@@ -214,12 +215,7 @@ async fn handle_new_connection(socket: TcpStream) {
                             while let Some(packet) = client_stream.next().await {
                                 let packet = packet.unwrap();
                                 match packet {
-                                    s2c::GamePacket::Commands
-                                    | s2c::GamePacket::Recipe(..)
-                                    | s2c::GamePacket::AwardStats
-                                    | s2c::GamePacket::PlayerInfoUpdate
-                                    | s2c::GamePacket::UpdateAttributes { .. }
-                                    | s2c::GamePacket::SectionBlocksUpdate => {}
+                                    s2c::GamePacket::LevelParticles { .. } => {}
                                     packet => {
                                         if !matches!(
                                             packet,

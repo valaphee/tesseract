@@ -15,7 +15,7 @@ pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
     #[error("UTF8 error")]
-    Cesu8DecodingError(#[from] cesu8::Cesu8DecodingError),
+    Utf8(#[from] std::str::Utf8Error),
     #[error("Json error")]
     Json(#[from] serde_json::Error),
     #[error("Nbt error")]
