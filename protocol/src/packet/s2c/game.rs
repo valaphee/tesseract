@@ -391,7 +391,7 @@ pub enum GamePacket {
         warning_delay: VarI32,
     },
     SetBorderWarningDistance {
-        warrning_blocks: VarI32,
+        warning_blocks: VarI32,
     },
     SetCamera {
         camera_id: VarI32,
@@ -1208,16 +1208,14 @@ impl Encode for SetEquipmentPacketSlots {
 impl Decode for SetEquipmentPacketSlots {
     fn decode(input: &mut &[u8]) -> Result<Self> {
         let mut slots = HashMap::new();
-        loop {
+        while {
             let equipment_slot_and_next_bit = u8::decode(input)?;
             slots.insert(
                 EquipmentSlot::try_from(equipment_slot_and_next_bit & 0x7F).unwrap(),
                 Decode::decode(input)?,
             );
-            if equipment_slot_and_next_bit & 0x80 == 0 {
-                break;
-            }
-        }
+            equipment_slot_and_next_bit & 0x80 != 0
+        } {}
         Ok(Self(slots))
     }
 }

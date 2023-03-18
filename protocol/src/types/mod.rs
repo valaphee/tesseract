@@ -90,6 +90,49 @@ impl Decode for i16 {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
+pub struct VarI21(pub i32);
+
+impl VarI21 {
+    pub fn len(&self) -> usize {
+        match self.0 {
+            0 => 1,
+            n => (31 - n.leading_zeros() as usize) / 7 + 1,
+        }
+    }
+}
+
+impl Encode for VarI21 {
+    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+        let mut value = self.0 as u32;
+        loop {
+            if value & !0b01111111 == 0 {
+                output.write_u8(value as u8)?;
+                return Ok(());
+            }
+            output.write_u8(value as u8 & 0b01111111 | 0b10000000)?;
+            value >>= 7;
+        }
+    }
+}
+
+impl Decode for VarI21 {
+    fn decode(input: &mut &[u8]) -> Result<Self> {
+        let mut value = 0;
+        let mut shift = 0;
+        while shift <= 21 {
+            let head = input.read_u8()?;
+            value |= (head as i32 & 0b01111111) << shift;
+            if head & 0b10000000 == 0 {
+                return Ok(VarI21(value));
+            }
+            shift += 7;
+        }
+        Err(Error::VarIntTooWide(21))
+    }
+}
+
 impl Encode for i32 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         output.write_i32::<BigEndian>(*self)?;
@@ -316,7 +359,9 @@ impl<const N: usize> Encode for TrailingBytes<N> {
 impl<const N: usize> Decode for TrailingBytes<N> {
     fn decode(input: &mut &[u8]) -> Result<Self> {
         assert!(input.len() <= N);
-        Ok(TrailingBytes(input.to_vec()))
+        let value = input.to_vec();
+        *input = &input[input.len()..];
+        Ok(TrailingBytes(value))
     }
 }
 
@@ -870,18 +915,14 @@ pub enum Intention {
 pub struct ItemStack {
     pub item: VarI32,
     pub count: i8,
-    pub tag: Option<Nbt<Value>>,
+    pub tag: Nbt<Value>,
 }
 
 impl Encode for ItemStack {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
         self.item.encode(output)?;
         self.count.encode(output)?;
-        if let Some(tag) = &self.tag {
-            tag.encode(output)
-        } else {
-            0u8.encode(output)
-        }
+        self.tag.encode(output)
     }
 }
 
@@ -890,11 +931,7 @@ impl Decode for ItemStack {
         Ok(ItemStack {
             item: Decode::decode(input)?,
             count: Decode::decode(input)?,
-            tag: if input[0] != 0 {
-                Some(Decode::decode(input)?)
-            } else {
-                None
-            },
+            tag: Decode::decode(input)?,
         })
     }
 }

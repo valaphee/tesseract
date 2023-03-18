@@ -21,10 +21,12 @@ pub enum Error {
     #[error("Nbt error")]
     Nbt(#[from] tesseract_serde_nbt::error::Error),
 
-    #[error("Unknown variant: {0}")]
-    UnknownVariant(i32),
     #[error("VarInt wider than {0}-bit")]
     VarIntTooWide(u8),
+    #[error("Unknown variant: {0}")]
+    UnknownVariant(i32),
+    #[error("Remaining bytes: {0}")]
+    RemainingBytes(usize),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

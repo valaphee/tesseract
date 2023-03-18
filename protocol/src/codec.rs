@@ -9,7 +9,7 @@ use flate2::read::{ZlibDecoder, ZlibEncoder};
 pub use flate2::Compression;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{types::VarI32, Decode, Encode, Error, Result};
+use crate::{types::{VarI21, VarI32}, Decode, Encode, Error, Result};
 
 pub struct Codec<I, O> {
     encryptor: Option<Encryptor>,
@@ -140,39 +140,44 @@ where
         }
 
         let mut data = &src[..];
-        match VarI32::decode(&mut data) {
-            Ok(data_length) => {
-                if data.len() >= data_length.0 as usize {
-                    data = &data[..data_length.0 as usize];
+        match VarI21::decode(&mut data) {
+            Ok(data_length) => if data.len() >= data_length.0 as usize {
+                data = &data[..data_length.0 as usize];
 
-                    let packet = if self.compression_threshold.is_some() {
-                        let decompressed_data_length = VarI32::decode(&mut data)?;
-                        if decompressed_data_length.0 != 0 {
-                            let mut decompressed_data =
-                                Vec::with_capacity(decompressed_data_length.0 as usize);
-                            ZlibDecoder::new(data)
-                                .read_to_end(&mut decompressed_data)
-                                .unwrap();
-                            O::decode(&mut decompressed_data.as_slice())
-                        } else {
-                            O::decode(&mut data)
-                        }
-                    } else {
-                        O::decode(&mut data)
-                    };
-
-                    // Advance, and correct decrypted bytes
-                    src.advance(data_length.len() + data_length.0 as usize);
-                    if self.decryptor.is_some() {
-                        self.decrypted_bytes = src.len()
+                let mut decompressed_data;
+                if self.compression_threshold.is_some() {
+                    let decompressed_data_length = VarI32::decode(&mut data)?;
+                    if decompressed_data_length.0 != 0 {
+                        decompressed_data =
+                            Vec::with_capacity(decompressed_data_length.0 as usize);
+                        ZlibDecoder::new(data)
+                            .read_to_end(&mut decompressed_data)
+                            .unwrap();
+                        data = &decompressed_data;
                     }
-
-                    packet.map(|packet| Some(packet))
-                } else {
-                    Ok(None)
                 }
+                let packet = O::decode(&mut data)?;
+
+                // Check if there are bytes left
+                if !data.is_empty() {
+                    //FIXME return Err(Error::RemainingBytes(data.len()));
+                }
+
+                // Advance, and correct decrypted bytes
+                src.advance(data_length.len() + data_length.0 as usize);
+                if self.decryptor.is_some() {
+                    self.decrypted_bytes = src.len()
+                }
+
+                Ok(Some(packet))
+            } else {
+                Ok(None)
             }
-            Err(_) => Ok(None),
+            Err(error) => if data.len() >= 3 {
+                Err(error)
+            } else {
+                Ok(None)
+            },
         }
     }
 }

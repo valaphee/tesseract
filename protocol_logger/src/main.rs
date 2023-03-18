@@ -81,7 +81,6 @@ async fn handle_new_connection(socket: TcpStream) {
 
                 let packet = framed_client_socket.next().await.unwrap().unwrap();
                 if matches!(packet, s2c::StatusPacket::StatusResponse { .. }) {
-                    println!("{:?}", packet);
                     framed_socket.send(packet).await.unwrap();
                 } else {
                     unimplemented!()
