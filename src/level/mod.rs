@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use tesseract_protocol::types::{DimensionType, MonsterSpawnLightLevel};
 
 pub mod chunk;
+pub mod terrain;
 
 #[derive(Component)]
 pub struct Level {
@@ -35,6 +36,6 @@ pub fn load_level(mut commands: Commands) {
                 monster_spawn_block_light_limit: 0,
             },
         },
-        chunk::Lut::default(),
+        chunk::LookupTable::default(),
     ));
 }

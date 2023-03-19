@@ -1,4 +1,14 @@
-use bevy::{math::DVec3, prelude::*};
+use bevy::{
+    math::DVec3,
+    prelude::*,
+    utils::{hashbrown::hash_map::Entry, HashMap},
+};
+
+use tesseract_protocol::{
+    packet::s2c,
+    types::{Angle, VarI32},
+};
+use crate::level;
 
 pub mod connection;
 
@@ -14,4 +24,117 @@ pub struct Rotation {
 #[derive(Component)]
 pub struct HeadRotation {
     pub head_yaw: f32,
+}
+
+#[allow(clippy::type_complexity)]
+pub fn replicate(
+    chunks: Query<
+        (&Children, &level::chunk::Replication),
+        Or<(Changed<Children>, Changed<level::chunk::Replication>)>,
+    >,
+    actors: Query<(Entity, &Position)>,
+    players: Query<(Entity, &connection::Connection)>,
+) {
+    // early return
+    if chunks.is_empty() {
+        return;
+    }
+
+    // go through all added childrens and map to every child all subsequent
+    // replicators
+    let mut add = HashMap::<Entity, Vec<Entity>>::new();
+    for (children, replication) in chunks.iter() {
+        for &added in children
+            .iter()
+            .filter(|child| !replication.children.contains(child))
+        {
+            add.insert(added, replication.subsequent.clone());
+        }
+    }
+
+    // go through all removed childrens and check if they are already added again
+    // for the replicator or else collect them in remove
+    let mut remove = HashMap::<Entity, Vec<Entity>>::new();
+    for (children, replication) in chunks.iter() {
+        for &removed in replication
+            .children
+            .iter()
+            .filter(|child| !children.contains(child))
+        {
+            for &player in add
+                .remove(&removed)
+                .unwrap()
+                .iter()
+                .filter(|player| replication.subsequent.contains(player))
+            {
+                match remove.entry(player) {
+                    Entry::Occupied(occupied) => occupied.into_mut(),
+                    Entry::Vacant(vacant) => vacant.insert(Vec::new()),
+                }
+                .push(removed);
+            }
+        }
+    }
+
+    // remove all entities
+    for (player, actors) in remove {
+        players
+            .get_component::<connection::Connection>(player)
+            .unwrap()
+            .send(s2c::GamePacket::RemoveEntities {
+                entity_ids: actors
+                    .iter()
+                    .map(|actor| VarI32(actor.index() as i32))
+                    .collect(),
+            })
+    }
+
+    // send all new entities
+    for (actor, players_) in add {
+        for (entity, connection) in players.iter_many(players_) {
+            // except owner
+            if actor == entity {
+                continue;
+            }
+
+            let (_, actor_position) = actors.get(actor).unwrap();
+            connection.send(s2c::GamePacket::AddEntity {
+                id: VarI32(actor.index() as i32),
+                uuid: Default::default(),
+                type_: VarI32(72),
+                pos: actor_position.0,
+                pitch: Angle(0.0),
+                yaw: Angle(0.0),
+                head_yaw: Angle(0.0),
+                data: VarI32(0),
+                xa: 0,
+                ya: 0,
+                za: 0,
+            });
+        }
+    }
+    for (children, replication) in chunks.iter() {
+        for (actor, actor_position) in actors.iter_many(children) {
+            for (entity, connection) in players.iter_many(&replication.initial) {
+                // except owner
+                if actor == entity {
+                    continue;
+                }
+
+                connection.send(s2c::GamePacket::AddEntity {
+                    id: VarI32(actor.index() as i32),
+                    uuid: Default::default(),
+                    type_: VarI32(72),
+                    pos: actor_position.0,
+                    pitch: Angle(0.0),
+                    yaw: Angle(0.0),
+                    head_yaw: Angle(0.0),
+                    data: VarI32(0),
+                    xa: 0,
+                    ya: 0,
+                    za: 0,
+                });
+            }
+        }
+    }
 }

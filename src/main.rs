@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, prelude::*};
 
-use crate::level::chunk;
-
 mod actor;
 mod block;
 mod level;
@@ -19,7 +17,10 @@ fn main() {
         // custom
         .add_plugin(actor::connection::ConnectionPlugin::default())
         .add_systems(Startup, level::load_level)
-        .add_systems(PostUpdate, chunk::update_hierarchy)
+        .add_systems(PostUpdate, level::chunk::update_hierarchy)
+        .add_systems(PostUpdate, actor::replicate)
+        .add_systems(PostUpdate, level::terrain::replicate)
+        .add_systems(Last, level::chunk::update_replication)
         // debug
         .add_systems(Last, tickln)
         .run();

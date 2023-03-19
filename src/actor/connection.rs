@@ -330,7 +330,7 @@ fn load_connection(
                     value: vec![],
                 },
                 damage_type: {
-                    let data = std::fs::read("../../damage_type.nbt").unwrap();
+                    let data = std::fs::read("damage_type.nbt").unwrap();
                     tesseract_serde_nbt::de::from_slice(&mut data.as_slice()).unwrap()
                 },
             }),
