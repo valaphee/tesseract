@@ -1364,10 +1364,10 @@ pub struct Registries {
     pub dimension_type_registry: Registry<DimensionType>,
     #[serde(rename = "minecraft:worldgen/biome")]
     pub biome_registry: Registry<Biome>,
-    #[serde(rename = "minecraft:chat_type")]
-    pub chat_type: Registry<ChatType>,
-    #[serde(rename = "minecraft:damage_type")]
-    pub damage_type_registry: Registry<DamageType>,
+    // #[serde(rename = "minecraft:chat_type")]
+    // pub chat_type: Registry<ChatType>,
+    // #[serde(rename = "minecraft:damage_type")]
+    // pub damage_type_registry: Registry<DamageType>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

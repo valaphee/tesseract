@@ -15,7 +15,9 @@ use mojang_session_api::apis::{configuration::Configuration, default_api::has_jo
 use tesseract_protocol::{
     codec::{Codec, Compression},
     packet::{c2s, s2c},
-    types::{Intention, Json, Status, StatusPlayers, StatusVersion, VarI32},
+    types::{
+        Component as ChatComponent, Intention, Json, Status, StatusPlayers, StatusVersion, VarI32,
+    },
 };
 
 /// Actor
@@ -87,9 +89,9 @@ impl Plugin for ConnectionPlugin {
             });
         };
 
-        app.add_startup_system(listen)
-            .add_system(spawn_new_connection)
-            .add_system(update_connection);
+        app.add_systems(PostStartup, listen)
+            .add_systems(First, spawn_new_connection)
+            .add_systems(PreUpdate, update_connection);
     }
 }
 
@@ -115,19 +117,17 @@ async fn handle_new_connection(
                         framed_socket
                             .send(s2c::StatusPacket::StatusResponse {
                                 status: Json(Status {
-                                    description: Some(
-                                        tesseract_protocol::types::Component::Literal(
-                                            "Tesseract".to_string(),
-                                        ),
-                                    ),
+                                    description: Some(ChatComponent::Literal(
+                                        "Tesseract".to_string(),
+                                    )),
                                     players: Some(StatusPlayers {
                                         max: 1,
                                         online: 0,
                                         sample: vec![],
                                     }),
                                     version: Some(StatusVersion {
-                                        name: "1.19.3".to_string(),
-                                        protocol: 761,
+                                        name: "1.19.4".to_string(),
+                                        protocol: 762,
                                     }),
                                     favicon: None,
                                 }),
@@ -177,6 +177,7 @@ async fn handle_new_connection(
                     }
                     _ => unimplemented!(),
                 };
+                framed_socket.codec_mut().enable_encryption(&key);
 
                 let user = has_joined_server(
                     &Configuration::new(),
@@ -192,8 +193,6 @@ async fn handle_new_connection(
                 )
                 .await
                 .unwrap();
-
-                framed_socket.codec_mut().enable_encryption(key);
 
                 if let Some(compression_threshold) = compression_threshold {
                     framed_socket

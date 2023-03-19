@@ -39,10 +39,9 @@ async fn handle_new_connection(socket: TcpStream) {
         Codec::<s2c::HandshakePacket, c2s::HandshakePacket>::default(),
     );
 
-    let client_socket =
-        TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 25565))
-            .await
-            .unwrap();
+    let client_socket = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 25565))
+        .await
+        .unwrap();
     client_socket.set_nodelay(true).unwrap();
     let mut framed_client_socket = Framed::new(
         client_socket,
@@ -163,9 +162,7 @@ async fn handle_new_connection(socket: TcpStream) {
                             })
                             .await
                             .unwrap();
-                        framed_client_socket
-                            .codec_mut()
-                            .enable_encryption(key.to_vec());
+                        framed_client_socket.codec_mut().enable_encryption(&key);
 
                         loop {
                             match framed_client_socket.next().await.unwrap().unwrap() {

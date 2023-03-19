@@ -19,7 +19,7 @@ description = "An ECS-based Minecraft server written in Rust."
 
 [dependencies]
 anyhow = "1.0.69"
-bevy = "0.10.0"
+bevy = { git = "https://github.com/bevyengine/bevy.git" }
 futures = "0.3.26"
 num = "0.4.0"
 serde = "1.0.152"

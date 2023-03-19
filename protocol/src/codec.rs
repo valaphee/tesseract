@@ -39,9 +39,9 @@ impl<I, O> Codec<I, O> {
         }
     }
 
-    pub fn enable_encryption(&mut self, key: Vec<u8>) {
-        self.encryptor = Some(Encryptor::new_from_slices(&key, &key).unwrap());
-        self.decryptor = Some(Decryptor::new_from_slices(&key, &key).unwrap());
+    pub fn enable_encryption(&mut self, key: &[u8]) {
+        self.encryptor = Some(Encryptor::new_from_slices(key, key).unwrap());
+        self.decryptor = Some(Decryptor::new_from_slices(key, key).unwrap());
         self.decrypted_bytes = 0;
     }
 

@@ -408,7 +408,7 @@ pub enum GamePacket {
     },
     SetDefaultSpawnPosition {
         pos: IVec3,
-        angle: f32,
+        yaw: f32,
     },
     SetDisplayObjective {
         slot: i8,
