@@ -7,6 +7,51 @@ info:
 servers:
   - url: https://sessionserver.mojang.com
 
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        path:
+          type: string
+        error:
+          type: string
+        errorMessage:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          pattern: ^[a-zA-Z0-9_]{2,16}$
+        properties:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserProperty'
+      required:
+        - id
+        - name
+        - properties
+
+    UserProperty:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+          format: byte
+        signature:
+          type: string
+          format: byte
+      required:
+        - name
+        - value
+
 paths:
   /blockedservers:
     get:
@@ -107,47 +152,3 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
-components:
-  schemas:
-    Error:
-      type: object
-      properties:
-        path:
-          type: string
-        error:
-          type: string
-        errorMessage:
-          type: string
-
-    User:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          pattern: ^[a-zA-Z0-9_]{2,16}$
-        properties:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserProperty'
-      required:
-        - id
-        - name
-        - properties
-    UserProperty:
-      type: object
-      properties:
-        name:
-          type: string
-        value:
-          type: string
-          format: byte
-        signature:
-          type: string
-          format: byte
-      required:
-        - name
-        - value

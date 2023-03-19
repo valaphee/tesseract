@@ -7,7 +7,7 @@ use rsa::{pkcs8::DecodePublicKey, Pkcs1v15Encrypt, PublicKey, RsaPublicKey};
 use sha1::{digest::Update, Digest, Sha1};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
-use uuid::uuid;
+use uuid::Uuid;
 
 use mojang_session_api::{
     apis::{configuration::Configuration, default_api::join_server},
@@ -40,7 +40,7 @@ async fn handle_new_connection(socket: TcpStream) {
     );
 
     let client_socket =
-        TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(116, 202, 32, 56), 25565))
+        TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 25565))
             .await
             .unwrap();
     client_socket.set_nodelay(true).unwrap();
@@ -137,7 +137,7 @@ async fn handle_new_connection(socket: TcpStream) {
                             &Configuration::new(),
                             Some(JoinServerRequest {
                                 access_token: "".to_string(),
-                                selected_profile: uuid!("f7ca1cd3-5e46-4448-ad14-cc3f2ea229a0"),
+                                selected_profile: Uuid::new_v4(),
                                 server_id: BigInt::from_signed_bytes_be(
                                     &Sha1::new()
                                         .chain(server_id.as_bytes())

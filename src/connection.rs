@@ -115,9 +115,11 @@ async fn handle_new_connection(
                         framed_socket
                             .send(s2c::StatusPacket::StatusResponse {
                                 status: Json(Status {
-                                    description: Some(serde_json::Value::String(
-                                        "Tesseract".to_string(),
-                                    )),
+                                    description: Some(
+                                        tesseract_protocol::types::Component::Literal(
+                                            "Tesseract".to_string(),
+                                        ),
+                                    ),
                                     players: Some(StatusPlayers {
                                         max: 1,
                                         online: 0,
