@@ -194,35 +194,35 @@ async fn handle_new_connection(socket: TcpStream) {
                                 }
                             }
                         }
-                        let (mut sink, mut stream) = framed_socket
-                            .map_codec(|codec| codec.cast::<s2c::GamePacket, c2s::GamePacket>())
-                            .split();
-                        let (mut client_sink, mut client_stream) = framed_client_socket
-                            .map_codec(|codec| codec.cast::<c2s::GamePacket, s2c::GamePacket>())
-                            .split();
+                        let mut framed_socket = framed_socket
+                            .map_codec(|codec| codec.cast::<s2c::GamePacket, c2s::GamePacket>());
+                        let mut framed_client_socket = framed_client_socket
+                            .map_codec(|codec| codec.cast::<c2s::GamePacket, s2c::GamePacket>());
                         tokio::spawn(async move {
-                            while let Some(packet) = stream.next().await {
-                                let packet = packet.unwrap();
-                                println!("Recv: {:?}", &packet);
-                                client_sink.send(packet).await.unwrap();
-                            }
-                        });
-                        tokio::spawn(async move {
-                            while let Some(packet) = client_stream.next().await {
-                                let packet = packet.unwrap();
-                                match packet {
-                                    s2c::GamePacket::LevelParticles { .. } => {}
-                                    packet => {
-                                        if !matches!(
-                                            packet,
-                                            s2c::GamePacket::LevelChunkWithLight { .. }
-                                        ) {
-                                            println!("Send: {:?}", &packet);
+                            loop {
+                                tokio::select! {
+                                    packet = framed_socket.next() => {
+                                        if let Some(packet) = packet {
+                                            let packet = packet.unwrap();
+                                            println!("Recv: {:?}", &packet);
+                                            framed_client_socket.send(packet).await.unwrap();
+                                        } else {
+                                            break;
                                         }
-                                        sink.send(packet).await.unwrap();
+                                    }
+                                    packet = framed_client_socket.next() => {
+                                        if let Some(packet) = packet {
+                                            let packet = packet.unwrap();
+                                            println!("Send: {:?}", &packet);
+                                            framed_socket.send(packet).await.unwrap();
+                                        } else {
+                                            break;
+                                        }
                                     }
                                 }
                             }
+                            framed_socket.close().await.unwrap();
+                            framed_client_socket.close().await.unwrap();
                         });
                     }
                     _ => unimplemented!(),

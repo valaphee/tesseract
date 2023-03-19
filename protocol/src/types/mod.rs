@@ -1361,13 +1361,13 @@ pub enum RecipeBookType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Registries {
     #[serde(rename = "minecraft:dimension_type")]
-    pub dimension_type_registry: Registry<DimensionType>,
+    pub dimension_type: Registry<DimensionType>,
     #[serde(rename = "minecraft:worldgen/biome")]
-    pub biome_registry: Registry<Biome>,
-    // #[serde(rename = "minecraft:chat_type")]
-    // pub chat_type: Registry<ChatType>,
-    // #[serde(rename = "minecraft:damage_type")]
-    // pub damage_type_registry: Registry<DamageType>,
+    pub biome: Registry<Biome>,
+    #[serde(rename = "minecraft:chat_type")]
+    pub chat_type: Registry<ChatType>,
+    #[serde(rename = "minecraft:damage_type")]
+    pub damage_type: Registry<DamageType>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

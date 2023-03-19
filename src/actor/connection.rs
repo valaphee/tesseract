@@ -1,6 +1,6 @@
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use bevy::prelude::*;
+use bevy::{math::DVec3, prelude::*};
 use futures::{SinkExt, StreamExt};
 use num::BigInt;
 use rsa::{pkcs8::EncodePublicKey, rand_core::OsRng, Pkcs1v15Encrypt, RsaPrivateKey};
@@ -16,17 +16,17 @@ use tesseract_protocol::{
     codec::{Codec, Compression},
     packet::{c2s, s2c},
     types::{
-        Component as ChatComponent, Intention, Json, Status, StatusPlayers, StatusVersion, VarI32,
+        Biome, BiomeEffects, Component as ChatComponent, GameType, Intention, Json, Nbt,
+        Registries, Registry, RegistryEntry, Status, StatusPlayers, StatusVersion, VarI32,
     },
 };
 
-/// Actor
+use crate::{actor, level};
+
 #[derive(Component)]
 pub struct Connection {
     rx: mpsc::UnboundedReceiver<c2s::GamePacket>,
     tx: mpsc::UnboundedSender<s2c::GamePacket>,
-
-    pub(crate) incoming: Vec<c2s::GamePacket>,
 }
 
 impl Connection {
@@ -90,7 +90,8 @@ impl Plugin for ConnectionPlugin {
         };
 
         app.add_systems(PostStartup, listen)
-            .add_systems(First, spawn_new_connection)
+            .add_systems(First, spawn_connection)
+            .add_systems(PreUpdate, load_connection)
             .add_systems(PreUpdate, update_connection);
     }
 }
@@ -217,26 +218,36 @@ async fn handle_new_connection(
                     .send(Connection {
                         rx: rx_packet_rx,
                         tx: tx_packet_tx,
-                        incoming: vec![],
                     })
                     .is_ok()
                 {}
 
-                let (mut sink, mut stream) = framed_socket
-                    .map_codec(|codec| codec.cast::<s2c::GamePacket, c2s::GamePacket>())
-                    .split();
+                let mut framed_socket = framed_socket
+                    .map_codec(|codec| codec.cast::<s2c::GamePacket, c2s::GamePacket>());
                 tokio::spawn(async move {
-                    while let Some(packet) = stream.next().await {
-                        let packet = packet.unwrap();
-                        println!("Recv: {:?}", &packet);
-                        rx_packet_tx.send(packet).unwrap();
+                    loop {
+                        tokio::select! {
+                            packet = framed_socket.next() => {
+                                if let Some(packet) = packet {
+                                    let packet = packet.unwrap();
+                                    println!("Recv: {:?}", &packet);
+                                    rx_packet_tx.send(packet).unwrap();
+                                } else {
+                                    break;
+                                }
+                            }
+                            packet = tx_packet_rx.recv() => {
+                                if let Some(packet) = packet {
+                                    println!("Send: {:?}", &packet);
+                                    framed_socket.send(packet).await.unwrap();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
                     }
-                });
-                tokio::spawn(async move {
-                    while let Some(packet) = tx_packet_rx.recv().await {
-                        println!("Send: {:?}", &packet);
-                        sink.send(packet).await.unwrap();
-                    }
+                    framed_socket.close().await.unwrap();
+                    tx_packet_rx.close()
                 });
             }
             _ => unimplemented!(),
@@ -247,17 +258,107 @@ async fn handle_new_connection(
 #[derive(Resource)]
 struct NewConnectionRx(mpsc::UnboundedReceiver<Connection>);
 
-fn spawn_new_connection(mut commands: Commands, mut new_connection_rx: ResMut<NewConnectionRx>) {
+fn spawn_connection(mut commands: Commands, mut new_connection_rx: ResMut<NewConnectionRx>) {
     while let Ok(connection) = new_connection_rx.0.try_recv() {
         commands.spawn(connection);
     }
 }
 
-fn update_connection(mut connections: Query<&mut Connection>) {
-    for mut connection in connections.iter_mut() {
-        connection.incoming.clear();
-        while let Ok(packet) = connection.rx.try_recv() {
-            connection.incoming.push(packet);
+fn load_connection(
+    mut commands: Commands,
+    levels: Query<(Entity, &level::Level)>,
+    new_connections: Query<(Entity, &Connection), Added<Connection>>,
+) {
+    for (entity, connection) in new_connections.iter() {
+        let (level_entity, level) = levels.single();
+        commands
+            .entity(entity)
+            .insert((
+                actor::Position(DVec3::new(0.0, 0.0, 0.0)),
+                actor::Rotation {
+                    pitch: 0.0,
+                    yaw: 0.0,
+                },
+                actor::HeadRotation { head_yaw: 0.0 },
+            ))
+            .set_parent(level_entity);
+
+        connection.send(s2c::GamePacket::Login {
+            player_id: entity.index() as i32,
+            hardcore: false,
+            game_type: GameType::Survival,
+            previous_game_type: 0,
+            levels: vec![level.name.clone()],
+            registry_holder: Nbt(Registries {
+                dimension_type: Registry {
+                    type_: "minecraft:dimension_type".to_string(),
+                    value: vec![RegistryEntry {
+                        name: level.name.clone(),
+                        id: 0,
+                        element: level.dimension.clone(),
+                    }],
+                },
+                biome: Registry {
+                    type_: "minecraft:worldgen/biome".to_string(),
+                    value: vec![RegistryEntry {
+                        name: "minecraft:plains".to_string(),
+                        id: 0,
+                        element: Biome {
+                            has_precipitation: true,
+                            precipitation: "rain".to_string(),
+                            temperature: 0.0,
+                            temperature_modifier: None,
+                            downfall: 0.0,
+                            effects: BiomeEffects {
+                                fog_color: 0,
+                                water_color: 0,
+                                water_fog_color: 0,
+                                sky_color: 0,
+                                foliage_color: None,
+                                grass_color: None,
+                                grass_color_modifier: None,
+                                ambient_sound: None,
+                                mood_sound: None,
+                                additions_sound: None,
+                                music: None,
+                            },
+                        },
+                    }],
+                },
+                chat_type: Registry {
+                    type_: "minecraft:chat_type".to_string(),
+                    value: vec![],
+                },
+                damage_type: {
+                    let data = std::fs::read("../../damage_type.nbt").unwrap();
+                    tesseract_serde_nbt::de::from_slice(&mut data.as_slice()).unwrap()
+                },
+            }),
+            dimension_type: level.name.clone(),
+            dimension: level.name.clone(),
+            seed: 0,
+            max_players: VarI32(0),
+            chunk_radius: VarI32(0),
+            simulation_distance: VarI32(0),
+            reduced_debug_info: false,
+            show_death_screen: false,
+            is_debug: false,
+            is_flat: false,
+            last_death_location: None,
+        });
+        connection.send(s2c::game::GamePacket::SetDefaultSpawnPosition {
+            pos: IVec3::new(0, 100, 0),
+            yaw: 0.0,
+        })
+    }
+}
+
+fn update_connection(mut commands: Commands, mut connections: Query<(Entity, &mut Connection)>) {
+    for (entity, mut connection) in connections.iter_mut() {
+        if connection.tx.is_closed() {
+            commands.entity(entity).remove::<Connection>();
+        } else {
+            while let Ok(packet) = connection.rx.try_recv() {}
         }
     }
 }
