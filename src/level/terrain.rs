@@ -1,66 +1,60 @@
-use bevy::prelude::*;
+use bevy::{math::DVec3, prelude::*};
 
-use tesseract_protocol::{
-    packet::s2c,
-    types::{Nbt, PalettedContainer},
-    Encode,
-};
+use tesseract_protocol::types::PalettedContainer;
 
 use crate::{actor, level};
 
 #[derive(Component)]
 pub struct Terrain {
-    sections: Vec<Section>,
+    pub sections: Vec<Section>,
 }
 
-struct Section {
-    blocks: PalettedContainer,
-    biomes: PalettedContainer,
+pub struct Section {
+    pub blocks: PalettedContainer,
+    pub biomes: PalettedContainer,
 }
 
-#[allow(clippy::type_complexity)]
-pub fn replicate(
-    chunks: Query<
-        (
-            &Terrain,
-            &level::chunk::Position,
-            &level::chunk::Replication,
-        ),
-        Or<(Added<Terrain>, Changed<level::chunk::Replication>)>,
-    >,
-    players: Query<&actor::connection::Connection>,
+pub fn populate(
+    mut commands: Commands,
+    chunks: Query<(Entity, &level::chunk::Position), Without<Terrain>>,
 ) {
-    // Early return
-    for (terrain, chunk_position, replication) in chunks.iter() {
-        let mut buffer = Vec::new();
-        for section in &terrain.sections {
-            1i16.encode(&mut buffer).unwrap();
-            section.blocks.encode(&mut buffer).unwrap();
-            section.biomes.encode(&mut buffer).unwrap();
+    for (chunk, chunk_position) in chunks.iter() {
+        let mut columns = Vec::new();
+        for _ in 0..16 {
+            let mut block_paletted_container = PalettedContainer::SingleValue {
+                value: 0,
+                storage_size: 16 * 16 * 16,
+                linear_min_bits: 4,
+                linear_max_bits: 8,
+                global_bits: 15,
+            };
+            for x in 0..16 {
+                for z in 0..16 {
+                    block_paletted_container.get_and_set(0 << 16 | z << 4 | x, 1);
+                }
+            }
+
+            let biome_paletted_container = PalettedContainer::SingleValue {
+                value: 0,
+                storage_size: 4 * 4 * 4,
+                linear_min_bits: 3,
+                linear_max_bits: 3,
+                global_bits: 6,
+            };
+
+            columns.push(Section {
+                blocks: block_paletted_container,
+                biomes: biome_paletted_container,
+            })
         }
 
-        for &player in &replication.initial {
-            players
-                .get(player)
-                .unwrap()
-                .send(s2c::GamePacket::LevelChunkWithLight {
-                    x: chunk_position.0.x,
-                    z: chunk_position.0.y,
-                    chunk_data: s2c::game::LevelChunkPacketData {
-                        heightmaps: Nbt(serde_value::Value::Map(Default::default())),
-                        buffer: buffer.clone(),
-                        block_entities_data: vec![],
-                    },
-                    light_data: s2c::game::LightUpdatePacketData {
-                        trust_edges: true,
-                        sky_y_mask: vec![],
-                        block_y_mask: vec![],
-                        empty_sky_y_mask: vec![],
-                        empty_block_y_mask: vec![],
-                        sky_updates: vec![],
-                        block_updates: vec![],
-                    },
-                });
-        }
+        commands.entity(chunk).insert(Terrain { sections: columns });
+        commands
+            .spawn(actor::Position(DVec3::new(
+                chunk_position.0.x as f64 * 16.0,
+                50.0,
+                chunk_position.0.y as f64 * 16.0,
+            )))
+            .set_parent(chunk);
     }
 }

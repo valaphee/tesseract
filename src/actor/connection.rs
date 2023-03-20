@@ -230,7 +230,7 @@ async fn handle_new_connection(
                             packet = framed_socket.next() => {
                                 if let Some(packet) = packet {
                                     let packet = packet.unwrap();
-                                    println!("Recv: {:?}", &packet);
+                                    //println!("Recv: {:?}", &packet);
                                     rx_packet_tx.send(packet).unwrap();
                                 } else {
                                     break;
@@ -238,7 +238,7 @@ async fn handle_new_connection(
                             }
                             packet = tx_packet_rx.recv() => {
                                 if let Some(packet) = packet {
-                                    println!("Send: {:?}", &packet);
+                                    //println!("Send: {:?}", &packet);
                                     framed_socket.send(packet).await.unwrap();
                                 } else {
                                     break;
@@ -280,13 +280,15 @@ fn load_connection(
                     yaw: 0.0,
                 },
                 actor::HeadRotation { head_yaw: 0.0 },
+                level::chunk::SubscriptionDistance(16),
+                level::chunk::Subscribed::default(),
             ))
             .set_parent(level_entity);
 
         connection.send(s2c::GamePacket::Login {
             player_id: entity.index() as i32,
             hardcore: false,
-            game_type: GameType::Survival,
+            game_type: GameType::Creative,
             previous_game_type: 0,
             levels: vec![level.name.clone()],
             registry_holder: Nbt(Registries {
@@ -338,8 +340,8 @@ fn load_connection(
             dimension: level.name.clone(),
             seed: 0,
             max_players: VarI32(0),
-            chunk_radius: VarI32(0),
-            simulation_distance: VarI32(0),
+            chunk_radius: VarI32(16),
+            simulation_distance: VarI32(16),
             reduced_debug_info: false,
             show_death_screen: false,
             is_debug: false,
@@ -349,16 +351,41 @@ fn load_connection(
         connection.send(s2c::game::GamePacket::SetDefaultSpawnPosition {
             pos: IVec3::new(0, 100, 0),
             yaw: 0.0,
-        })
+        });
+        /*connection.send(s2c::game::GamePacket::PlayerAbilities(PlayerAbilitiesPacket {
+            invulnerable: false,
+            is_flying: true,
+            can_fly: true,
+            instabuild: false,
+            flying_speed: 10.0,
+            walking_speed: 10.0,
+        }));*/
     }
 }
 
-fn update_connection(mut commands: Commands, mut connections: Query<(Entity, &mut Connection)>) {
-    for (entity, mut connection) in connections.iter_mut() {
+fn update_connection(
+    mut commands: Commands,
+    mut connections: Query<(Entity, &mut Connection, &mut actor::Position)>,
+) {
+    for (entity, mut connection, mut position) in connections.iter_mut() {
         if connection.tx.is_closed() {
             commands.entity(entity).remove::<Connection>();
         } else {
-            while let Ok(packet) = connection.rx.try_recv() {}
+            while let Ok(packet) = connection.rx.try_recv() {
+                match packet {
+                    c2s::GamePacket::MovePlayerPos { x, y, z, .. } => {
+                        position.0.x = x;
+                        position.0.y = y;
+                        position.0.z = z;
+                    }
+                    c2s::GamePacket::MovePlayerPosRot { x, y, z, .. } => {
+                        position.0.x = x;
+                        position.0.y = y;
+                        position.0.z = z;
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 }

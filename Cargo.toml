@@ -19,7 +19,6 @@ description = "An ECS-based Minecraft server written in Rust."
 
 [dependencies]
 anyhow = "1.0.69"
-bevy = { git = "https://github.com/bevyengine/bevy.git" }
 futures = "0.3.26"
 num = "0.4.0"
 serde = "1.0.152"
@@ -33,3 +32,16 @@ tesseract_protocol = { path = "protocol" }
 tesseract_serde_nbt = { path = "serde_nbt" }
 tokio = { version = "1.25.0", features = ["full"] }
 tokio-util = { version = "0.7.7", features = ["codec"] }
+
+[dependencies.bevy]
+git = "https://github.com/bevyengine/bevy.git"
+default-features = false
+features = [
+#    "trace_tracy"
+]
+
+[profile.release]
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1

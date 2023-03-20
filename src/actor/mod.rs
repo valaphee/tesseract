@@ -1,13 +1,14 @@
 use bevy::{
     math::DVec3,
     prelude::*,
-    utils::{hashbrown::hash_map::Entry, HashMap},
+    utils::{hashbrown::hash_map::Entry, HashMap, Uuid},
 };
 
 use tesseract_protocol::{
     packet::s2c,
     types::{Angle, VarI32},
 };
+
 use crate::level;
 
 pub mod connection;
@@ -46,9 +47,9 @@ pub fn replicate(
     for (children, replication) in chunks.iter() {
         for &added in children
             .iter()
-            .filter(|child| !replication.children.contains(child))
+            .filter(|child| !replication.replicated.contains(child))
         {
-            add.insert(added, replication.subsequent.clone());
+            add.insert(added, replication.subscriber.clone().into_iter().collect());
         }
     }
 
@@ -57,7 +58,7 @@ pub fn replicate(
     let mut remove = HashMap::<Entity, Vec<Entity>>::new();
     for (children, replication) in chunks.iter() {
         for &removed in replication
-            .children
+            .replicated
             .iter()
             .filter(|child| !children.contains(child))
         {
@@ -65,7 +66,7 @@ pub fn replicate(
                 .remove(&removed)
                 .unwrap()
                 .iter()
-                .filter(|player| replication.subsequent.contains(player))
+                .filter(|player| replication.subscriber.contains(player))
             {
                 match remove.entry(player) {
                     Entry::Occupied(occupied) => occupied.into_mut(),
@@ -76,8 +77,8 @@ pub fn replicate(
         }
     }
 
-    // remove all entities
     for (player, actors) in remove {
+        // connection: remove entity, cause: deleted or moved
         players
             .get_component::<connection::Connection>(player)
             .unwrap()
@@ -89,7 +90,6 @@ pub fn replicate(
             })
     }
 
-    // send all new entities
     for (actor, players_) in add {
         for (entity, connection) in players.iter_many(players_) {
             // except owner
@@ -97,10 +97,11 @@ pub fn replicate(
                 continue;
             }
 
+            // connection: add entity, cause: added or moved
             let (_, actor_position) = actors.get(actor).unwrap();
             connection.send(s2c::GamePacket::AddEntity {
                 id: VarI32(actor.index() as i32),
-                uuid: Default::default(),
+                uuid: Uuid::new_v4(),
                 type_: VarI32(72),
                 pos: actor_position.0,
                 pitch: Angle(0.0),
@@ -111,30 +112,6 @@ pub fn replicate(
                 ya: 0,
                 za: 0,
             });
-        }
-    }
-    for (children, replication) in chunks.iter() {
-        for (actor, actor_position) in actors.iter_many(children) {
-            for (entity, connection) in players.iter_many(&replication.initial) {
-                // except owner
-                if actor == entity {
-                    continue;
-                }
-
-                connection.send(s2c::GamePacket::AddEntity {
-                    id: VarI32(actor.index() as i32),
-                    uuid: Default::default(),
-                    type_: VarI32(72),
-                    pos: actor_position.0,
-                    pitch: Angle(0.0),
-                    yaw: Angle(0.0),
-                    head_yaw: Angle(0.0),
-                    data: VarI32(0),
-                    xa: 0,
-                    ya: 0,
-                    za: 0,
-                });
-            }
         }
     }
 }
