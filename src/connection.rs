@@ -21,7 +21,7 @@ use tesseract_protocol::{
     },
 };
 
-use crate::{actor, level};
+use crate::{actor, level, replication};
 
 #[derive(Component)]
 pub struct Connection {
@@ -90,9 +90,9 @@ impl Plugin for ConnectionPlugin {
         };
 
         app.add_systems(PostStartup, listen)
-            .add_systems(First, spawn_connection)
-            .add_systems(PreUpdate, load_connection)
-            .add_systems(PreUpdate, update_connection);
+            .add_systems(First, spawn_player)
+            .add_systems(PreUpdate, load_players)
+            .add_systems(PreUpdate, update_players);
     }
 }
 
@@ -258,21 +258,21 @@ async fn handle_new_connection(
 #[derive(Resource)]
 struct NewConnectionRx(mpsc::UnboundedReceiver<Connection>);
 
-fn spawn_connection(mut commands: Commands, mut new_connection_rx: ResMut<NewConnectionRx>) {
+fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnectionRx>) {
     while let Ok(connection) = new_connection_rx.0.try_recv() {
         commands.spawn(connection);
     }
 }
 
-fn load_connection(
+fn load_players(
     mut commands: Commands,
     levels: Query<(Entity, &level::Level)>,
-    new_connections: Query<(Entity, &Connection), Added<Connection>>,
+    players: Query<(Entity, &Connection), Added<Connection>>,
 ) {
-    for (entity, connection) in new_connections.iter() {
-        let (level_entity, level) = levels.single();
+    for (player, connection) in players.iter() {
+        let (level, level_data) = levels.single();
         commands
-            .entity(entity)
+            .entity(player)
             .insert((
                 actor::Position(DVec3::new(0.0, 0.0, 0.0)),
                 actor::Rotation {
@@ -280,24 +280,24 @@ fn load_connection(
                     yaw: 0.0,
                 },
                 actor::HeadRotation { head_yaw: 0.0 },
-                level::chunk::SubscriptionDistance(16),
-                level::chunk::Subscribed::default(),
+                replication::SubscriptionDistance(4),
+                replication::Subscriptions::default(),
             ))
-            .set_parent(level_entity);
+            .set_parent(level);
 
         connection.send(s2c::GamePacket::Login {
-            player_id: entity.index() as i32,
+            player_id: player.index() as i32,
             hardcore: false,
             game_type: GameType::Creative,
             previous_game_type: 0,
-            levels: vec![level.name.clone()],
+            levels: vec![level_data.name.clone()],
             registry_holder: Nbt(Registries {
                 dimension_type: Registry {
                     type_: "minecraft:dimension_type".to_string(),
                     value: vec![RegistryEntry {
-                        name: level.name.clone(),
+                        name: level_data.name.clone(),
                         id: 0,
-                        element: level.dimension.clone(),
+                        element: level_data.dimension.clone(),
                     }],
                 },
                 biome: Registry {
@@ -336,12 +336,12 @@ fn load_connection(
                     tesseract_serde_nbt::de::from_slice(&mut data.as_slice()).unwrap()
                 },
             }),
-            dimension_type: level.name.clone(),
-            dimension: level.name.clone(),
+            dimension_type: level_data.name.clone(),
+            dimension: level_data.name.clone(),
             seed: 0,
             max_players: VarI32(0),
-            chunk_radius: VarI32(16),
-            simulation_distance: VarI32(16),
+            chunk_radius: VarI32(4),
+            simulation_distance: VarI32(4),
             reduced_debug_info: false,
             show_death_screen: false,
             is_debug: false,
@@ -352,24 +352,16 @@ fn load_connection(
             pos: IVec3::new(0, 100, 0),
             yaw: 0.0,
         });
-        /*connection.send(s2c::game::GamePacket::PlayerAbilities(PlayerAbilitiesPacket {
-            invulnerable: false,
-            is_flying: true,
-            can_fly: true,
-            instabuild: false,
-            flying_speed: 10.0,
-            walking_speed: 10.0,
-        }));*/
     }
 }
 
-fn update_connection(
+fn update_players(
     mut commands: Commands,
-    mut connections: Query<(Entity, &mut Connection, &mut actor::Position)>,
+    mut players: Query<(Entity, &mut Connection, &mut actor::Position)>,
 ) {
-    for (entity, mut connection, mut position) in connections.iter_mut() {
+    for (player, mut connection, mut position) in players.iter_mut() {
         if connection.tx.is_closed() {
-            commands.entity(entity).remove::<Connection>();
+            commands.entity(player).remove::<Connection>();
         } else {
             while let Ok(packet) = connection.rx.try_recv() {
                 match packet {

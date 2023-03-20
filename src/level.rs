@@ -2,8 +2,7 @@ use bevy::prelude::*;
 
 use tesseract_protocol::types::{DimensionType, MonsterSpawnLightLevel};
 
-pub mod chunk;
-pub mod terrain;
+use crate::chunk;
 
 #[derive(Component)]
 pub struct Level {
@@ -11,7 +10,7 @@ pub struct Level {
     pub dimension: DimensionType,
 }
 
-pub fn load_level(mut commands: Commands) {
+pub fn spawn_levels(mut commands: Commands) {
     commands.spawn((
         Level {
             name: "minecraft:overworld".to_string(),
