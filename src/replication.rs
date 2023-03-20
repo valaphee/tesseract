@@ -34,11 +34,13 @@ pub struct SubscriptionDistance(pub u8);
 #[derive(Default, Component)]
 pub struct Subscriptions(HashSet<IVec2>);
 
+#[allow(clippy::type_complexity)]
 fn subscribe_and_replicate_initial(
     mut commands: Commands,
     mut levels: Query<&mut chunk::LookupTable>,
     chunk_positions: Query<(&chunk::Position, &Parent)>,
-    mut chunks: Query<(Option<&chunk::Terrain>, &Children, &mut Replication)>,
+    mut chunks: Query<(Option<&chunk::Terrain>, &mut Replication)>,
+    actors: Query<(Entity, &actor::Position)>,
     mut players: Query<
         (
             Entity,
@@ -47,7 +49,7 @@ fn subscribe_and_replicate_initial(
             &SubscriptionDistance,
             &mut Subscriptions,
         ),
-        Changed<Parent>,
+        Or<(Changed<Parent>, Changed<SubscriptionDistance>)>,
     >,
 ) {
     for (player, chunk, connection, subscription_distance, mut actual_subscriptions) in
@@ -79,12 +81,13 @@ fn subscribe_and_replicate_initial(
                 .filter(|&chunk_position| !target_subscriptions.contains(chunk_position))
             {
                 if let Some(&chunk) = chunk_lut.0.get(chunk_position) {
-                    let (_, actors, mut replication) = chunks.get_mut(chunk).unwrap();
+                    let (_, mut replication) = chunks.get_mut(chunk).unwrap();
                     replication.subscriber.remove(&player);
 
                     // connection: remove chunk and entities, cause: unsubscribe
                     connection.send(s2c::GamePacket::RemoveEntities {
-                        entity_ids: actors
+                        entity_ids: replication
+                            .replicated
                             .iter()
                             .map(|actor| VarI32(actor.index() as i32))
                             .collect(),
@@ -102,19 +105,38 @@ fn subscribe_and_replicate_initial(
                 .filter(|&chunk_position| !actual_subscriptions.0.contains(chunk_position))
             {
                 if let Some(&chunk) = chunk_lut.0.get(chunk_position) {
-                    let (terrain, _, mut replication) = chunks.get_mut(chunk).unwrap();
+                    let (terrain, mut replication) = chunks.get_mut(chunk).unwrap();
                     replication.subscriber.insert(player);
 
                     if let Some(terrain) = terrain {
-                        println!("hey?");
+                        // connection: add chunk and entities, cause: subscribe
+                        for (actor, actor_position) in actors.iter_many(&replication.replicated) {
+                            // except owner
+                            if actor == player {
+                                continue;
+                            }
+
+                            connection.send(s2c::GamePacket::AddEntity {
+                                id: VarI32(actor.index() as i32),
+                                uuid: Uuid::new_v4(),
+                                type_: VarI32(72),
+                                pos: actor_position.0,
+                                pitch: Angle(0.0),
+                                yaw: Angle(0.0),
+                                head_yaw: Angle(0.0),
+                                data: VarI32(0),
+                                xa: 0,
+                                ya: 0,
+                                za: 0,
+                            });
+                        }
+
                         let mut buffer = Vec::new();
                         for section in &terrain.sections {
-                            i16::MAX.encode(&mut buffer).unwrap();
+                            1i16.encode(&mut buffer).unwrap();
                             section.blocks.encode(&mut buffer).unwrap();
                             section.biomes.encode(&mut buffer).unwrap();
                         }
-
-                        // connection: add chunk and entities, cause: subscribe
                         connection.send(s2c::GamePacket::LevelChunkWithLight {
                             x: chunk_position.x,
                             z: chunk_position.y,
@@ -160,7 +182,6 @@ fn subscribe_and_replicate_initial(
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn replicate_chunks_late(
     chunks: Query<(&chunk::Terrain, &chunk::Position, &Replication), Added<chunk::Terrain>>,
     players: Query<&connection::Connection>,
@@ -169,17 +190,15 @@ fn replicate_chunks_late(
     for (terrain, chunk_position, replication) in chunks.iter() {
         let mut buffer = Vec::new();
         for section in &terrain.sections {
-            i16::MAX.encode(&mut buffer).unwrap();
+            1i16.encode(&mut buffer).unwrap();
             section.blocks.encode(&mut buffer).unwrap();
             section.biomes.encode(&mut buffer).unwrap();
         }
 
         for &player in &replication.subscriber {
             // connection: add chunk, cause: subscribe (late)
-            players
-                .get(player)
-                .unwrap()
-                .send(s2c::GamePacket::LevelChunkWithLight {
+            if let Ok(connection) = players.get(player) {
+                connection.send(s2c::GamePacket::LevelChunkWithLight {
                     x: chunk_position.0.x,
                     z: chunk_position.0.y,
                     chunk_data: s2c::game::LevelChunkPacketData {
@@ -197,91 +216,80 @@ fn replicate_chunks_late(
                         block_updates: vec![],
                     },
                 });
+            } else {
+                warn!("Replication not possible without connection")
+            }
         }
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn replicate_actors(
-    chunks: Query<(&Children, &Replication), Or<(Changed<Children>, Changed<Replication>)>>,
-    actors: Query<(Entity, &actor::Position)>,
-    players: Query<(Entity, &connection::Connection)>,
+    mut chunks: Query<(&Children, &mut Replication), Changed<Children>>,
+    actors: Query<&actor::Position>,
+    players: Query<&connection::Connection>,
 ) {
     // early return
     if chunks.is_empty() {
         return;
     }
 
-    // go through all added actors and map to every actor all subsequent replicators
-    let mut add = HashMap::<Entity, Vec<Entity>>::new();
     for (actors, replication) in chunks.iter() {
-        for &actor in actors
+        for &actor in replication
+            .replicated
+            .iter()
+            .filter(|actor| !actors.contains(actor))
+        {
+            for &player in replication.subscriber.iter() {
+                // except owner
+                if actor == player {
+                    continue;
+                }
+
+                // connection: add entities, cause: despawn
+                if let Ok(connection) = players.get(player) {
+                    connection.send(s2c::GamePacket::RemoveEntities {
+                        entity_ids: vec![VarI32(actor.index() as i32)],
+                    })
+                }
+            }
+        }
+    }
+
+    for (actors_, replication) in chunks.iter() {
+        for &actor in actors_
             .iter()
             .filter(|actor| !replication.replicated.contains(actor))
         {
-            add.insert(actor, replication.subscriber.clone().into_iter().collect());
-        }
-    }
+            let actor_position = actors.get(actor).unwrap();
 
-    // go through all removed actors and check if they are already added again for
-    // the replicator or else collect them in remove
-    let mut remove = HashMap::<Entity, Vec<Entity>>::new();
-    for (children, replication) in chunks.iter() {
-        for &removed in replication
-            .replicated
-            .iter()
-            .filter(|child| !children.contains(child))
-        {
-            for &player in add
-                .remove(&removed)
-                .unwrap()
-                .iter()
-                .filter(|player| replication.subscriber.contains(player))
-            {
-                match remove.entry(player) {
-                    Entry::Occupied(occupied) => occupied.into_mut(),
-                    Entry::Vacant(vacant) => vacant.insert(Vec::new()),
+            for &player in replication.subscriber.iter() {
+                // except owner
+                if actor == player {
+                    continue;
                 }
-                .push(removed);
+
+                // connection: add entities, cause: spawn
+                if let Ok(connection) = players.get(player) {
+                    connection.send(s2c::GamePacket::AddEntity {
+                        id: VarI32(actor.index() as i32),
+                        uuid: Uuid::new_v4(),
+                        type_: VarI32(72),
+                        pos: actor_position.0,
+                        pitch: Angle(0.0),
+                        yaw: Angle(0.0),
+                        head_yaw: Angle(0.0),
+                        data: VarI32(0),
+                        xa: 0,
+                        ya: 0,
+                        za: 0,
+                    });
+                }
             }
         }
     }
 
-    for (player, actors) in remove {
-        // connection: remove entity, cause: deleted or moved
-        players
-            .get_component::<connection::Connection>(player)
-            .unwrap()
-            .send(s2c::GamePacket::RemoveEntities {
-                entity_ids: actors
-                    .iter()
-                    .map(|actor| VarI32(actor.index() as i32))
-                    .collect(),
-            })
-    }
-
-    for (actor, players_) in add {
-        for (entity, connection) in players.iter_many(players_) {
-            // except owner
-            if actor == entity {
-                continue;
-            }
-
-            // connection: add entity, cause: added or moved
-            let (_, actor_position) = actors.get(actor).unwrap();
-            connection.send(s2c::GamePacket::AddEntity {
-                id: VarI32(actor.index() as i32),
-                uuid: Uuid::new_v4(),
-                type_: VarI32(72),
-                pos: actor_position.0,
-                pitch: Angle(0.0),
-                yaw: Angle(0.0),
-                head_yaw: Angle(0.0),
-                data: VarI32(0),
-                xa: 0,
-                ya: 0,
-                za: 0,
-            });
-        }
+    for (actors, mut replication) in chunks.iter_mut() {
+        replication.replicated.clear();
+        replication.replicated.extend(actors.iter())
     }
 }

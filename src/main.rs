@@ -16,7 +16,7 @@ mod replication;
 fn main() {
     App::new()
         .insert_resource(ScheduleRunnerSettings::run_loop(Duration::from_secs_f64(
-            1.0 / 20.0, // 1.0,
+            1.0 / 20.0,
         )))
         .add_plugin(LogPlugin::default())
         .add_plugin(DiagnosticsPlugin::default())
@@ -31,11 +31,5 @@ fn main() {
         // game loop
         .add_systems(PreUpdate, chunk::populate)
         .add_systems(PostUpdate, chunk::update_hierarchy)
-        // debug
-        //.add_systems(Last, tickln)
         .run();
 }
-
-// fn tickln() {
-//    println!(".")
-//}

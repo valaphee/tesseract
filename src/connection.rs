@@ -280,7 +280,7 @@ fn load_players(
                     yaw: 0.0,
                 },
                 actor::HeadRotation { head_yaw: 0.0 },
-                replication::SubscriptionDistance(4),
+                replication::SubscriptionDistance(16),
                 replication::Subscriptions::default(),
             ))
             .set_parent(level);
@@ -340,8 +340,8 @@ fn load_players(
             dimension: level_data.name.clone(),
             seed: 0,
             max_players: VarI32(0),
-            chunk_radius: VarI32(4),
-            simulation_distance: VarI32(4),
+            chunk_radius: VarI32(16),
+            simulation_distance: VarI32(16),
             reduced_debug_info: false,
             show_death_screen: false,
             is_debug: false,
