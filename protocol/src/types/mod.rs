@@ -1075,7 +1075,7 @@ where
     T: Serialize,
 {
     fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
-        output.write_all(&tesseract_serde_nbt::ser::to_vec(&self.0)?)?;
+        output.write_all(&tesseract_nbt::ser::to_vec(&self.0)?)?;
         Ok(())
     }
 }
@@ -1085,7 +1085,7 @@ where
     T: DeserializeOwned,
 {
     fn decode(input: &mut &[u8]) -> Result<Self> {
-        Ok(Nbt(tesseract_serde_nbt::de::from_slice(input)?))
+        Ok(Nbt(tesseract_nbt::de::from_slice(input)?))
     }
 }
 

@@ -1,0 +1,14 @@
+[package]
+name = "tesseract_savegame"
+version = "0.0.0"
+edition = "2021"
+authors = ["Valaphee <iam@valaphee.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/tesseract.git"
+description = "Minecraft's Savegame"
+
+[dependencies]
+byteorder = "1.4.3"
+flate2 = "1.0.25"
+glam = "0.23.0"
+thiserror = "1.0.38"

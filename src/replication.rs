@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    utils::{Entry, HashMap, HashSet, Uuid},
+    utils::{HashSet, Uuid},
 };
 
 use tesseract_protocol::{
@@ -18,7 +18,8 @@ impl Plugin for ReplicationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PostUpdate, subscribe_and_replicate_initial)
             .add_systems(PostUpdate, replicate_chunks_late)
-            .add_systems(PostUpdate, replicate_actors);
+            .add_systems(PostUpdate, replicate_actors)
+            .add_systems(PostUpdate, replicate_actors_movement);
     }
 }
 
@@ -28,7 +29,7 @@ pub struct Replication {
     replicated: Vec<Entity>,
 }
 
-#[derive(Component)]
+#[derive(Default, Component)]
 pub struct SubscriptionDistance(pub u8);
 
 #[derive(Default, Component)]
@@ -95,7 +96,7 @@ fn subscribe_and_replicate_initial(
                     connection.send(s2c::GamePacket::ForgetLevelChunk {
                         x: chunk_position.x,
                         z: chunk_position.y,
-                    })
+                    });
                 }
             }
 
@@ -133,7 +134,7 @@ fn subscribe_and_replicate_initial(
 
                         let mut buffer = Vec::new();
                         for section in &terrain.sections {
-                            1i16.encode(&mut buffer).unwrap();
+                            4096i16.encode(&mut buffer).unwrap();
                             section.blocks.encode(&mut buffer).unwrap();
                             section.biomes.encode(&mut buffer).unwrap();
                         }
@@ -190,7 +191,7 @@ fn replicate_chunks_late(
     for (terrain, chunk_position, replication) in chunks.iter() {
         let mut buffer = Vec::new();
         for section in &terrain.sections {
-            1i16.encode(&mut buffer).unwrap();
+            4096i16.encode(&mut buffer).unwrap();
             section.blocks.encode(&mut buffer).unwrap();
             section.biomes.encode(&mut buffer).unwrap();
         }
@@ -217,7 +218,7 @@ fn replicate_chunks_late(
                     },
                 });
             } else {
-                warn!("Replication not possible without connection")
+                warn!("Replication requires a connection")
             }
         }
     }
@@ -245,7 +246,7 @@ fn replicate_actors(
                     continue;
                 }
 
-                // connection: add entities, cause: despawn
+                // connection: add entity, cause: despawn
                 if let Ok(connection) = players.get(player) {
                     connection.send(s2c::GamePacket::RemoveEntities {
                         entity_ids: vec![VarI32(actor.index() as i32)],
@@ -268,7 +269,7 @@ fn replicate_actors(
                     continue;
                 }
 
-                // connection: add entities, cause: spawn
+                // connection: add entity, cause: spawn
                 if let Ok(connection) = players.get(player) {
                     connection.send(s2c::GamePacket::AddEntity {
                         id: VarI32(actor.index() as i32),
@@ -291,5 +292,41 @@ fn replicate_actors(
     for (actors, mut replication) in chunks.iter_mut() {
         replication.replicated.clear();
         replication.replicated.extend(actors.iter())
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn replicate_actors_movement(
+    chunks: Query<&Replication>,
+    actors: Query<
+        (Entity, &Parent, &actor::Position, &actor::Rotation),
+        Or<(Changed<actor::Position>, Changed<actor::Rotation>)>,
+    >,
+    players: Query<&connection::Connection>,
+) {
+    for (actor, chunk, actor_position, actor_rotation) in actors.iter() {
+        if let Ok(replication) = chunks.get(chunk.get()) {
+            for &player in replication.subscriber.iter() {
+                // except owner
+                if actor == player {
+                    continue;
+                }
+
+                // connection: teleport entity, cause: movement
+                if let Ok(connection) = players.get(player) {
+                    connection.send(s2c::GamePacket::TeleportEntity {
+                        id: VarI32(actor.index() as i32),
+                        pos: actor_position.0,
+                        pitch: Angle(actor_rotation.pitch),
+                        yaw: Angle(actor_rotation.yaw),
+                        on_ground: false,
+                    });
+                    connection.send(s2c::GamePacket::RotateHead {
+                        entity_id: VarI32(actor.index() as i32),
+                        head_yaw: Angle(actor_rotation.yaw),
+                    });
+                }
+            }
+        }
     }
 }

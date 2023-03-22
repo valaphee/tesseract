@@ -19,7 +19,7 @@ pub enum Error {
     #[error("Json error")]
     Json(#[from] serde_json::Error),
     #[error("Nbt error")]
-    Nbt(#[from] tesseract_serde_nbt::error::Error),
+    Nbt(#[from] tesseract_nbt::error::Error),
 
     #[error("VarInt wider than {0}-bit")]
     VarIntTooWide(u8),

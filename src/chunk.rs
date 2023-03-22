@@ -101,7 +101,7 @@ pub fn update_hierarchy(
                 chunk_lut.0.insert(chunk_position, chunk);
             }
         } else {
-            warn!("Parent of actor is neither a level nor a chunk")
+            warn!("Parent of actor is neither a savegame nor a chunk")
         }
     }
 }

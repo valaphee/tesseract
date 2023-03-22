@@ -229,16 +229,13 @@ async fn handle_new_connection(
                         tokio::select! {
                             packet = framed_socket.next() => {
                                 if let Some(packet) = packet {
-                                    let packet = packet.unwrap();
-                                    //println!("Recv: {:?}", &packet);
-                                    rx_packet_tx.send(packet).unwrap();
+                                    rx_packet_tx.send(packet.unwrap()).unwrap();
                                 } else {
                                     break;
                                 }
                             }
                             packet = tx_packet_rx.recv() => {
                                 if let Some(packet) = packet {
-                                    //println!("Send: {:?}", &packet);
                                     framed_socket.send(packet).await.unwrap();
                                 } else {
                                     break;
@@ -280,7 +277,7 @@ fn load_players(
                     yaw: 0.0,
                 },
                 actor::HeadRotation { head_yaw: 0.0 },
-                replication::SubscriptionDistance(16),
+                replication::SubscriptionDistance::default(),
                 replication::Subscriptions::default(),
             ))
             .set_parent(level);
@@ -333,7 +330,7 @@ fn load_players(
                 },
                 damage_type: {
                     let data = std::fs::read("damage_type.nbt").unwrap();
-                    tesseract_serde_nbt::de::from_slice(&mut data.as_slice()).unwrap()
+                    tesseract_nbt::de::from_slice(&mut data.as_slice()).unwrap()
                 },
             }),
             dimension_type: level_data.name.clone(),
@@ -357,23 +354,47 @@ fn load_players(
 
 fn update_players(
     mut commands: Commands,
-    mut players: Query<(Entity, &mut Connection, &mut actor::Position)>,
+    mut players: Query<(
+        Entity,
+        &mut Connection,
+        &mut actor::Position,
+        &mut actor::Rotation,
+        &mut replication::SubscriptionDistance,
+    )>,
 ) {
-    for (player, mut connection, mut position) in players.iter_mut() {
+    for (player, mut connection, mut position, mut rotation, mut subscription_distance) in
+        players.iter_mut()
+    {
         if connection.tx.is_closed() {
             commands.entity(player).remove::<Connection>();
         } else {
             while let Ok(packet) = connection.rx.try_recv() {
                 match packet {
+                    c2s::GamePacket::ClientInformation { view_distance, .. } => {
+                        subscription_distance.0 = view_distance as u8
+                    }
                     c2s::GamePacket::MovePlayerPos { x, y, z, .. } => {
                         position.0.x = x;
                         position.0.y = y;
                         position.0.z = z;
                     }
-                    c2s::GamePacket::MovePlayerPosRot { x, y, z, .. } => {
+                    c2s::GamePacket::MovePlayerPosRot {
+                        x,
+                        y,
+                        z,
+                        pitch,
+                        yaw,
+                        ..
+                    } => {
                         position.0.x = x;
                         position.0.y = y;
                         position.0.z = z;
+                        rotation.pitch = pitch;
+                        rotation.yaw = yaw;
+                    }
+                    c2s::GamePacket::MovePlayerRot { pitch, yaw, .. } => {
+                        rotation.pitch = pitch;
+                        rotation.yaw = yaw;
                     }
                     _ => {}
                 }

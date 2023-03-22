@@ -1,11 +1,6 @@
 use std::time::Duration;
 
-use bevy::{
-    app::ScheduleRunnerSettings,
-    diagnostic::{DiagnosticsPlugin, FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
-    log::LogPlugin,
-    prelude::*,
-};
+use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, prelude::*};
 
 mod actor;
 mod chunk;
@@ -19,9 +14,6 @@ fn main() {
             1.0 / 20.0,
         )))
         .add_plugin(LogPlugin::default())
-        .add_plugin(DiagnosticsPlugin::default())
-        .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugins(MinimalPlugins)
         // plugins
         .add_plugin(connection::ConnectionPlugin::default())

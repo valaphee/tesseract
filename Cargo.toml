@@ -1,9 +1,10 @@
 [workspace]
 members = [
+    "nbt",
     "protocol",
     "protocol_derive",
     "protocol_logger",
-    "serde_nbt",
+    "savegame",
     "session_api",
 ]
 resolver = "2"
@@ -28,8 +29,9 @@ sha1 = "0.10.5"
 mojang_session_api = { path = "session_api" }
 rand = "0.8.5"
 rsa = "0.8.1"
+tesseract_nbt = { path = "nbt" }
 tesseract_protocol = { path = "protocol" }
-tesseract_serde_nbt = { path = "serde_nbt" }
+tesseract_savegame = { path = "savegame" }
 tokio = { version = "1.25.0", features = ["full"] }
 tokio-util = { version = "0.7.7", features = ["codec"] }
 
