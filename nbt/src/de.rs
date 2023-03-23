@@ -46,7 +46,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
 
     forward_to_deserialize_any! {
-        i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf unit unit_struct
+        i8 i16 i32 i64 f32 f64 char str string bytes byte_buf unit unit_struct
         newtype_struct seq tuple tuple_struct map struct enum identifier ignored_any
     }
 
@@ -111,6 +111,50 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 1 => visitor.visit_bool(true),
                 value => visitor.visit_i8(value),
             }
+        } else {
+            self.deserialize_any(visitor)
+        }
+    }
+
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        if !self.name && self.current_type == TagType::Byte {
+            visitor.visit_u8(self.data.read_u8()?)
+        } else {
+            self.deserialize_any(visitor)
+        }
+    }
+
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        if !self.name && self.current_type == TagType::Short {
+            visitor.visit_u16(self.data.read_u16::<BigEndian>()?)
+        } else {
+            self.deserialize_any(visitor)
+        }
+    }
+
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        if !self.name && self.current_type == TagType::Int {
+            visitor.visit_u32(self.data.read_u32::<BigEndian>()?)
+        } else {
+            self.deserialize_any(visitor)
+        }
+    }
+
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        if !self.name && self.current_type == TagType::Long {
+            visitor.visit_u64(self.data.read_u64::<BigEndian>()?)
         } else {
             self.deserialize_any(visitor)
         }

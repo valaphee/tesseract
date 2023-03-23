@@ -96,13 +96,9 @@ impl BitStorage {
         }
     }
 
-    pub fn from_data(size: u32, bits: u32, data: Vec<u64>) -> Self {
-        assert!((1..32).contains(&bits));
-        let values_per_long = u64::BITS / bits;
-        assert_eq!(
-            data.len(),
-            ((size + values_per_long - 1) / values_per_long) as usize
-        );
+    pub fn from_data(size: u32, data: Vec<u64>) -> Self {
+        let values_per_long = (size - 1) / (data.len() as u32 - 1);
+        let bits = u64::BITS / values_per_long;
         let magic_index = 3 * (values_per_long - 1) as usize;
 
         Self {

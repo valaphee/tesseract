@@ -9,7 +9,7 @@ use tesseract_protocol::{
     Encode,
 };
 
-use crate::{actor, chunk, connection};
+use crate::{actor, connection, level};
 
 #[derive(Default)]
 pub struct ReplicationPlugin;
@@ -29,6 +29,19 @@ pub struct Replication {
     replicated: Vec<Entity>,
 }
 
+impl Replication {
+    pub fn with_subscriber(subscriber_: Entity) -> Self {
+        Self {
+            subscriber: {
+                let mut subscriber = HashSet::new();
+                subscriber.insert(subscriber_);
+                subscriber
+            },
+            replicated: default(),
+        }
+    }
+}
+
 #[derive(Default, Component)]
 pub struct SubscriptionDistance(pub u8);
 
@@ -38,9 +51,9 @@ pub struct Subscriptions(HashSet<IVec2>);
 #[allow(clippy::type_complexity)]
 fn subscribe_and_replicate_initial(
     mut commands: Commands,
-    mut levels: Query<&mut chunk::LookupTable>,
-    chunk_positions: Query<(&chunk::Position, &Parent)>,
-    mut chunks: Query<(Option<&chunk::Terrain>, &mut Replication)>,
+    mut levels: Query<&mut level::chunk::LookupTable>,
+    chunk_positions: Query<(&level::chunk::Position, &Parent)>,
+    mut chunks: Query<(Option<&level::chunk::Terrain>, &mut Replication)>,
     actors: Query<(Entity, &actor::Position)>,
     mut players: Query<
         (
@@ -135,8 +148,10 @@ fn subscribe_and_replicate_initial(
                         let mut buffer = Vec::new();
                         for section in &terrain.sections {
                             4096i16.encode(&mut buffer).unwrap();
-                            section.blocks.encode(&mut buffer).unwrap();
-                            section.biomes.encode(&mut buffer).unwrap();
+                            section.encode(&mut buffer).unwrap();
+                            0u8.encode(&mut buffer).unwrap();
+                            VarI32(0).encode(&mut buffer).unwrap();
+                            VarI32(0).encode(&mut buffer).unwrap();
                         }
                         connection.send(s2c::GamePacket::LevelChunkWithLight {
                             x: chunk_position.x,
@@ -161,16 +176,9 @@ fn subscribe_and_replicate_initial(
                     chunk_lut.0.insert(
                         *chunk_position,
                         commands
-                            .spawn((
-                                chunk::Position(*chunk_position),
-                                Replication {
-                                    subscriber: {
-                                        let mut subscriber = HashSet::new();
-                                        subscriber.insert(player);
-                                        subscriber
-                                    },
-                                    replicated: vec![],
-                                },
+                            .spawn(level::chunk::ChunkBundle::with_subscriber(
+                                *chunk_position,
+                                player,
                             ))
                             .set_parent(level.get())
                             .id(),
@@ -184,7 +192,14 @@ fn subscribe_and_replicate_initial(
 }
 
 fn replicate_chunks_late(
-    chunks: Query<(&chunk::Terrain, &chunk::Position, &Replication), Added<chunk::Terrain>>,
+    chunks: Query<
+        (
+            &level::chunk::Terrain,
+            &level::chunk::Position,
+            &Replication,
+        ),
+        Added<level::chunk::Terrain>,
+    >,
     players: Query<&connection::Connection>,
 ) {
     // early return
@@ -192,8 +207,10 @@ fn replicate_chunks_late(
         let mut buffer = Vec::new();
         for section in &terrain.sections {
             4096i16.encode(&mut buffer).unwrap();
-            section.blocks.encode(&mut buffer).unwrap();
-            section.biomes.encode(&mut buffer).unwrap();
+            section.encode(&mut buffer).unwrap();
+            0u8.encode(&mut buffer).unwrap();
+            VarI32(0).encode(&mut buffer).unwrap();
+            VarI32(0).encode(&mut buffer).unwrap();
         }
 
         for &player in &replication.subscriber {

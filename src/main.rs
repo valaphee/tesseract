@@ -3,9 +3,10 @@ use std::time::Duration;
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, prelude::*};
 
 mod actor;
-mod chunk;
 mod connection;
 mod level;
+mod persistence;
+mod registry;
 mod replication;
 
 fn main() {
@@ -19,9 +20,10 @@ fn main() {
         .add_plugin(connection::ConnectionPlugin::default())
         .add_plugin(replication::ReplicationPlugin::default())
         // startup
+        .insert_resource(registry::BlockStateRegistry::new("generated/reports/blocks.json"))
         .add_systems(Startup, level::spawn_levels)
         // game loop
-        .add_systems(PreUpdate, chunk::populate)
-        .add_systems(PostUpdate, chunk::update_hierarchy)
+        .add_systems(PreUpdate, persistence::load_chunks)
+        .add_systems(PostUpdate, level::chunk::update_hierarchy)
         .run();
 }

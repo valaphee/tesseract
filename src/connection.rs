@@ -21,7 +21,7 @@ use tesseract_protocol::{
     },
 };
 
-use crate::{actor, level, replication};
+use crate::{actor, actor::PlayerBundle, level, replication};
 
 #[derive(Component)]
 pub struct Connection {
@@ -270,16 +270,16 @@ fn load_players(
         let (level, level_data) = levels.single();
         commands
             .entity(player)
-            .insert((
-                actor::Position(DVec3::new(0.0, 0.0, 0.0)),
-                actor::Rotation {
+            .insert(PlayerBundle {
+                position: actor::Position(DVec3::new(0.0, 0.0, 0.0)),
+                rotation: actor::Rotation {
                     pitch: 0.0,
                     yaw: 0.0,
                 },
-                actor::HeadRotation { head_yaw: 0.0 },
-                replication::SubscriptionDistance::default(),
-                replication::Subscriptions::default(),
-            ))
+                head_rotation: actor::HeadRotation { head_yaw: 0.0 },
+                subscription_distance: default(),
+                subscriptions: default(),
+            })
             .set_parent(level);
 
         connection.send(s2c::GamePacket::Login {
