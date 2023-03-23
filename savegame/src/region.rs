@@ -40,7 +40,7 @@ impl RegionStorage {
                 }
             }
         }
-        .read((position.x & 0x1F | position.y & 0x1F << 5) as usize)
+        .read(((position.x & 0x1F) as u32 | ((position.y & 0x1F) as u32) << 5) as usize)
     }
 }
 
