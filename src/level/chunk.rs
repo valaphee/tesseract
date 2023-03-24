@@ -1,4 +1,6 @@
-use bevy::{prelude::*, utils::HashMap};
+use std::collections::HashMap;
+
+use bevy::prelude::*;
 
 use tesseract_protocol::types::PalettedContainer;
 
@@ -65,10 +67,7 @@ pub fn update_hierarchy(
                 commands.entity(chunk).add_child(actor);
             } else {
                 let chunk = commands
-                    .spawn(ChunkBundle {
-                        position: Position(chunk_position),
-                        replication: default(),
-                    })
+                    .spawn(ChunkBundle::new(chunk_position))
                     .set_parent(level)
                     .add_child(actor)
                     .id();

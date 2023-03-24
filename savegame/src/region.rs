@@ -11,7 +11,6 @@ use glam::IVec2;
 
 pub struct RegionStorage {
     path: PathBuf,
-    cache: HashMap<IVec2, Region>,
 }
 
 impl RegionStorage {
@@ -22,25 +21,18 @@ impl RegionStorage {
                 path_.push(path);
                 path_
             },
-            cache: Default::default(),
         }
     }
 
     pub fn read(&mut self, position: IVec2) -> Option<Vec<u8>> {
-        match self.cache.entry(position) {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => {
-                let path = self
-                    .path
-                    .join(format!("r.{}.{}.mca", position.x >> 5, position.y >> 5));
-                if path.exists() {
-                    entry.insert(Region::new(path))
-                } else {
-                    return None;
-                }
-            }
+        let path = self
+            .path
+            .join(format!("r.{}.{}.mca", position.x >> 5, position.y >> 5));
+        if !path.exists() {
+            None
+        } else {
+            Region::new(path).read(((position.x & 0x1F) as u32 | ((position.y & 0x1F) as u32) << 5) as usize)
         }
-        .read(((position.x & 0x1F) as u32 | ((position.y & 0x1F) as u32) << 5) as usize)
     }
 }
 

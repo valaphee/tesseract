@@ -640,21 +640,10 @@ pub enum Anchor {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Biome {
     pub has_precipitation: bool,
-    pub precipitation: String,
     pub temperature: f32,
     pub temperature_modifier: Option<String>,
     pub downfall: f32,
     pub effects: BiomeEffects,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum BiomePrecipitation {
-    #[serde(rename = "none")]
-    None,
-    #[serde(rename = "rain")]
-    Rain,
-    #[serde(rename = "snow")]
-    Snow,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
