@@ -3,7 +3,6 @@ use std::time::Duration;
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, prelude::*};
 
 mod actor;
-mod connection;
 mod level;
 mod persistence;
 mod registry;
@@ -16,14 +15,11 @@ fn main() {
         )))
         .add_plugin(LogPlugin::default())
         .add_plugins(MinimalPlugins)
-        // plugins
-        .add_plugin(connection::ConnectionPlugin::default())
+        .insert_resource(registry::BlockStateRegistry::new(
+            "generated/reports/blocks.json",
+        ))
         .add_plugin(replication::ReplicationPlugin::default())
-        // startup
-        .insert_resource(registry::BlockStateRegistry::new("generated/reports/blocks.json"))
-        .add_systems(Startup, level::spawn_levels)
-        // game loop
-        .add_systems(PreUpdate, persistence::load_chunks)
+        .add_plugin(persistence::PersistencePlugin::default())
         .add_systems(PostUpdate, level::chunk::update_hierarchy)
         .run();
 }

@@ -1,14 +1,10 @@
 use bevy::{math::DVec3, prelude::*};
 
-use crate::replication::{SubscriptionDistance, Subscriptions};
-
 #[derive(Bundle)]
-pub struct PlayerBundle {
+pub struct ActorBundle {
     pub position: Position,
     pub rotation: Rotation,
     pub head_rotation: HeadRotation,
-    pub subscription_distance: SubscriptionDistance,
-    pub subscriptions: Subscriptions,
 }
 
 /// Position of the actor in the level (Actor)
