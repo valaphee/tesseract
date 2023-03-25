@@ -82,5 +82,8 @@ pub fn update_hierarchy(
 /// Terrain (Chunk)
 #[derive(Component)]
 pub struct Terrain {
-    pub sections: Vec<PalettedContainer>,
+    pub sections: Vec<(
+        PalettedContainer<4096, 4, 8, 15>,
+        PalettedContainer<64, 3, 3, 6>,
+    )>,
 }

@@ -1,4 +1,7 @@
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::{
+    borrow::Cow,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+};
 
 use bevy::{
     math::DVec3,
@@ -21,8 +24,8 @@ use tesseract_protocol::{
     codec::{Codec, Compression},
     packet::{c2s, s2c},
     types::{
-        Angle, Biome, Component as ChatComponent, DamageType, GameType, Intention, Json, Nbt,
-        Registries, Registry, RegistryEntry, Status, StatusPlayers, StatusVersion, VarI32,
+        Angle, Biome, Component as ChatComponent, DamageType, DimensionType, GameType, Intention,
+        Json, Nbt, Registries, Registry, Status, StatusPlayers, StatusVersion, VarI32,
     },
     Decode, Encode,
 };
@@ -91,7 +94,7 @@ impl Plugin for ReplicationPlugin {
         };
 
         app.add_systems(PostStartup, listen)
-            .add_systems(First, spawn_player)
+            .add_systems(PreUpdate, spawn_player)
             .add_systems(PreUpdate, load_players)
             .add_systems(PreUpdate, update_players)
             .add_systems(PostUpdate, subscribe_and_replicate_initial)
@@ -272,14 +275,15 @@ fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnect
 }
 
 fn load_players(
+    dimension_type_registry: Res<DataRegistry<DimensionType>>,
     biome_registry: Res<DataRegistry<Biome>>,
     damage_type_registry: Res<DataRegistry<DamageType>>,
     mut commands: Commands,
-    levels: Query<(Entity, &level::Level)>,
+    levels: Query<(Entity, &Name, &level::DimensionType)>,
     players: Query<(Entity, &Connection), Added<Connection>>,
 ) {
     for (player, connection) in players.iter() {
-        let (level, level_data) = levels.single();
+        let (level, level_name, level_dimension_type) = levels.single();
         commands
             .entity(player)
             .insert((
@@ -301,25 +305,18 @@ fn load_players(
             hardcore: false,
             game_type: GameType::Creative,
             previous_game_type: 0,
-            levels: vec![level_data.name.clone()],
+            levels: vec![level_name.to_string()],
             registry_holder: Nbt(Registries {
-                dimension_type: Registry {
-                    type_: "minecraft:dimension_type".to_string(),
-                    value: vec![RegistryEntry {
-                        name: level_data.name.clone(),
-                        id: 0,
-                        element: level_data.dimension.clone(),
-                    }],
-                },
-                biome: biome_registry.registry().clone(),
-                chat_type: Registry {
-                    type_: "minecraft:chat_type".to_string(),
+                dimension_type: Cow::Borrowed(dimension_type_registry.registry()),
+                biome: Cow::Borrowed(biome_registry.registry()),
+                chat_type: Cow::Owned(Registry {
+                    type_: "minecraft:chat_type".into(),
                     value: vec![],
-                },
-                damage_type: damage_type_registry.registry().clone(),
+                }),
+                damage_type: Cow::Borrowed(damage_type_registry.registry()),
             }),
-            dimension_type: level_data.name.clone(),
-            dimension: level_data.name.clone(),
+            dimension_type: level_dimension_type.0.clone(),
+            dimension: level_name.to_string(),
             seed: 0,
             max_players: VarI32(0),
             chunk_radius: VarI32(16),
@@ -561,10 +558,8 @@ fn subscribe_and_replicate_initial(
                             let mut sky_updates = Vec::new();
                             for (i, section) in terrain.sections.iter().enumerate() {
                                 4096i16.encode(&mut buffer).unwrap();
-                                section.encode(&mut buffer).unwrap();
-                                0u8.encode(&mut buffer).unwrap();
-                                VarI32(0).encode(&mut buffer).unwrap();
-                                VarI32(0).encode(&mut buffer).unwrap();
+                                section.0.encode(&mut buffer).unwrap();
+                                section.1.encode(&mut buffer).unwrap();
 
                                 sky_y_mask |= 1 << (i + 1);
                                 sky_updates.push(vec![0xFF; 2048])
@@ -627,10 +622,8 @@ fn replicate_chunks_late(
         let mut sky_updates = Vec::new();
         for (i, section) in terrain.sections.iter().enumerate() {
             4096i16.encode(&mut buffer).unwrap();
-            section.encode(&mut buffer).unwrap();
-            0u8.encode(&mut buffer).unwrap();
-            VarI32(0).encode(&mut buffer).unwrap();
-            VarI32(0).encode(&mut buffer).unwrap();
+            section.0.encode(&mut buffer).unwrap();
+            section.1.encode(&mut buffer).unwrap();
 
             sky_y_mask |= 1 << (i + 1);
             sky_updates.push(vec![0xFF; 2048])

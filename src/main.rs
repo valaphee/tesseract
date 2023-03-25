@@ -4,8 +4,9 @@ use bevy::{app::ScheduleRunnerSettings, prelude::*};
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+use tesseract_protocol::types::{Biome, DamageType, DimensionType};
+
 use crate::{persistence::PersistencePlugin, replication::ReplicationPlugin};
-use tesseract_protocol::types::{Biome, DamageType};
 
 mod actor;
 mod level;
@@ -48,6 +49,10 @@ fn main() {
         ))
         .insert_resource(registry::BlockStateRegistry::new(
             "generated/reports/blocks.json",
+        ))
+        .insert_resource(registry::DataRegistry::<DimensionType>::new(
+            "generated/data/dimension_type",
+            "minecraft:dimension_type",
         ))
         .insert_resource(registry::DataRegistry::<Biome>::new(
             "generated/data/worldgen/biome",

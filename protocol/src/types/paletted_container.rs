@@ -5,60 +5,45 @@ use crate::{
     Encode,
 };
 
-pub enum PalettedContainer {
-    SingleValue {
-        value: u32,
-
-        // Configuration
-        storage_size: u32,
-        linear_min_bits: u32,
-        linear_max_bits: u32,
-        global_bits: u32,
-    },
+pub enum PalettedContainer<
+    const STORAGE_SIZE: u32,
+    const LINEAR_MIN_BITS: u32,
+    const LINEAR_MAX_BITS: u32,
+    const GLOBAL_BITS: u32,
+> {
+    SingleValue(u32),
     Linear {
         palette: Vec<u32>,
         storage: BitStorage,
-
-        // Configuration
-        linear_max_bits: u32,
-        global_bits: u32,
     },
     Global(BitStorage),
 }
 
-impl PalettedContainer {
+impl<
+        const STORAGE_SIZE: u32,
+        const LINEAR_MIN_BITS: u32,
+        const LINEAR_MAX_BITS: u32,
+        const GLOBAL_BITS: u32,
+    > PalettedContainer<STORAGE_SIZE, LINEAR_MIN_BITS, LINEAR_MAX_BITS, GLOBAL_BITS>
+{
     pub fn get_and_set(&mut self, index: u32, value: u32) -> u32 {
         match self {
-            PalettedContainer::SingleValue {
-                value: old_value,
-                storage_size,
-                linear_min_bits,
-                linear_max_bits,
-                global_bits,
-            } => {
+            PalettedContainer::SingleValue(old_value) => {
                 let old_value = *old_value;
 
                 // Resize
                 if old_value != value {
-                    let mut storage = BitStorage::new(*storage_size, *linear_min_bits);
+                    let mut storage = BitStorage::new(STORAGE_SIZE, LINEAR_MIN_BITS);
                     storage.set(index, 1);
                     *self = Self::Linear {
                         palette: vec![old_value, value],
                         storage,
-
-                        linear_max_bits: *linear_max_bits,
-                        global_bits: *global_bits,
                     }
                 }
 
                 old_value
             }
-            PalettedContainer::Linear {
-                palette,
-                storage,
-                linear_max_bits,
-                global_bits,
-            } => {
+            PalettedContainer::Linear { palette, storage } => {
                 let palette_index = if let Some(palette_index) = palette
                     .iter()
                     .position(|&palette_value| palette_value == value)
@@ -67,7 +52,7 @@ impl PalettedContainer {
                 } else {
                     // Resize
                     if palette.len() as u32 >= storage.mask() {
-                        *self = if storage.bits() < 8 {
+                        *self = if storage.bits() < LINEAR_MAX_BITS {
                             let mut new_storage =
                                 BitStorage::new(storage.size(), storage.bits() + 1);
                             for i in 0..new_storage.size() {
@@ -76,12 +61,9 @@ impl PalettedContainer {
                             Self::Linear {
                                 palette: palette.clone(),
                                 storage: new_storage,
-
-                                linear_max_bits: *linear_max_bits,
-                                global_bits: *global_bits,
                             }
                         } else {
-                            let mut new_storage = BitStorage::new(storage.size(), 15);
+                            let mut new_storage = BitStorage::new(storage.size(), GLOBAL_BITS);
                             for i in 0..new_storage.size() {
                                 new_storage.set(i, palette[storage.get(i) as usize]);
                             }
@@ -101,26 +83,48 @@ impl PalettedContainer {
 
     pub fn get(&self, index: u32) -> u32 {
         match self {
-            PalettedContainer::SingleValue { value, .. } => *value,
-            PalettedContainer::Linear {
-                palette, storage, ..
-            } => palette[storage.get(index) as usize],
+            PalettedContainer::SingleValue(value) => *value,
+            PalettedContainer::Linear { palette, storage } => palette[storage.get(index) as usize],
             PalettedContainer::Global(storage) => storage.get(index),
+        }
+    }
+
+    pub fn fix(self) -> Self {
+        match self {
+            PalettedContainer::Linear { palette, storage } => {
+                if storage.bits() < LINEAR_MIN_BITS {
+                    let mut new_storage = BitStorage::new(storage.size(), LINEAR_MIN_BITS);
+                    for i in 0..new_storage.size() {
+                        new_storage.set(i, storage.get(i));
+                    }
+                    Self::Linear {
+                        palette,
+                        storage: new_storage,
+                    }
+                } else {
+                    Self::Linear { palette, storage }
+                }
+            }
+            _ => self,
         }
     }
 }
 
-impl Encode for PalettedContainer {
+impl<
+        const STORAGE_SIZE: u32,
+        const LINEAR_MIN_BITS: u32,
+        const LINEAR_MAX_BITS: u32,
+        const GLOBAL_BITS: u32,
+    > Encode for PalettedContainer<STORAGE_SIZE, LINEAR_MIN_BITS, LINEAR_MAX_BITS, GLOBAL_BITS>
+{
     fn encode(&self, output: &mut impl Write) -> crate::Result<()> {
         match self {
-            PalettedContainer::SingleValue { value, .. } => {
+            PalettedContainer::SingleValue(value) => {
                 0u8.encode(output)?;
                 VarI32(*value as i32).encode(output)?;
                 VarI32(0).encode(output)?;
             }
-            PalettedContainer::Linear {
-                palette, storage, ..
-            } => {
+            PalettedContainer::Linear { palette, storage } => {
                 (storage.bits() as u8).encode(output)?;
                 VarI32(palette.len() as i32).encode(output)?;
                 for &element in palette {

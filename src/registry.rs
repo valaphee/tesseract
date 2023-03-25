@@ -24,10 +24,10 @@ impl Registries {
         }
     }
 
-    pub fn id(&self, type_: &str, value: &str) -> u32 {
+    pub fn id(&self, type_: &str, name: &str) -> u32 {
         self.registries
             .get(type_)
-            .and_then(|registry| registry.entries.get(value).map(|entry| entry.protocol_id))
+            .and_then(|registry| registry.entries.get(name).map(|entry| entry.protocol_id))
             .unwrap_or(0)
     }
 }
@@ -77,8 +77,8 @@ impl BlockStateRegistry {
         Self { id_by_name }
     }
 
-    pub fn id(&self, value: &str) -> u32 {
-        *self.id_by_name.get(value).unwrap_or(&0)
+    pub fn id(&self, name: &str) -> u32 {
+        *self.id_by_name.get(name).unwrap_or(&0)
     }
 }
 
@@ -116,20 +116,17 @@ impl<T: DeserializeOwned> DataRegistry<T> {
         let mut registry = Vec::with_capacity(paths.len());
         let mut id_by_name = HashMap::with_capacity(paths.len());
         for (id, path) in paths.into_iter().enumerate() {
-            let name = path
-                .path()
-                .file_stem()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+            let name = format!(
+                "minecraft:{}",
+                path.path().file_stem().unwrap().to_str().unwrap()
+            );
             let id = id as u32;
             registry.push(RegistryEntry {
                 name: name.clone(),
                 id,
                 element: serde_json::from_reader(File::open(path.path()).unwrap()).unwrap(),
             });
-            id_by_name.insert(name.to_string(), id);
+            id_by_name.insert(name, id);
         }
 
         Self {
@@ -145,7 +142,7 @@ impl<T: DeserializeOwned> DataRegistry<T> {
         &self.registry
     }
 
-    pub fn id(&self, value: &str) -> u32 {
-        *self.id_by_name.get(value).unwrap_or(&0)
+    pub fn id(&self, name: &str) -> u32 {
+        *self.id_by_name.get(name).unwrap_or(&0)
     }
 }

@@ -11,6 +11,6 @@ description = "Minecraft's Savegame"
 byteorder = "1.4.3"
 flate2 = "1.0.25"
 glam = "0.23.0"
-serde = "1.0.152"
+serde = { version = "1.0.152", features = ["derive"] }
 tesseract_nbt = { path = "../nbt" }
 thiserror = "1.0.38"

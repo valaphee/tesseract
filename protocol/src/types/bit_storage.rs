@@ -97,7 +97,11 @@ impl BitStorage {
     }
 
     pub fn from_data(size: u32, data: Vec<u64>) -> Self {
-        let values_per_long = (size - 1) / (data.len() as u32 - 1);
+        let values_per_long = if size <= 64 && data.len() == 1 {
+            64
+        } else {
+            (size - 1) / (data.len() as u32 - 1)
+        };
         let bits = u64::BITS / values_per_long;
         let magic_index = 3 * (values_per_long - 1) as usize;
 

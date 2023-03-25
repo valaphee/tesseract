@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Encode, Decode)]
-pub enum GamePacket {
+pub enum GamePacket<'a> {
     BundleDelimiter,
     AddEntity {
         id: VarI32,
@@ -224,7 +224,7 @@ pub enum GamePacket {
         game_type: GameType,
         previous_game_type: i8,
         levels: Vec<String>,
-        registry_holder: Nbt<Registries>,
+        registry_holder: Nbt<Registries<'a>>,
         dimension_type: String,
         dimension: String,
         seed: i64,

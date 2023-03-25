@@ -1,4 +1,4 @@
-use std::{io::Write, str::from_utf8};
+use std::{borrow::Cow, io::Write, str::from_utf8};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use glam::{DVec3, IVec3, Quat, Vec3};
@@ -1373,15 +1373,15 @@ pub enum RecipeBookType {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Registries {
+pub struct Registries<'a> {
     #[serde(rename = "minecraft:dimension_type")]
-    pub dimension_type: Registry<DimensionType>,
+    pub dimension_type: Cow<'a, Registry<DimensionType>>,
     #[serde(rename = "minecraft:worldgen/biome")]
-    pub biome: Registry<Biome>,
+    pub biome: Cow<'a, Registry<Biome>>,
     #[serde(rename = "minecraft:chat_type")]
-    pub chat_type: Registry<ChatType>,
+    pub chat_type: Cow<'a, Registry<ChatType>>,
     #[serde(rename = "minecraft:damage_type")]
-    pub damage_type: Registry<DamageType>,
+    pub damage_type: Cow<'a, Registry<DamageType>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
+
+use crate::{BlockState, PalettedContainer};
 
 #[derive(Serialize, Deserialize)]
 pub struct Chunk {
@@ -19,38 +19,6 @@ pub struct Chunk {
 pub struct ChunkSection {
     #[serde(rename = "Y")]
     pub y: i8,
-    pub block_states: ChunkSectionPalette<BlockState>,
-    pub biomes: ChunkSectionPalette<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ChunkSectionPalette<T> {
-    pub palette: Vec<T>,
-    pub data: Option<Vec<u64>>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct BlockState {
-    #[serde(rename = "Name")]
-    pub name: String,
-    #[serde(
-        rename = "Properties",
-        skip_serializing_if = "BTreeMap::is_empty",
-        default
-    )]
-    pub properties: BTreeMap<String, String>,
-}
-
-impl BlockState {
-    pub fn name(&self) -> String {
-        format!(
-            "{}[{}]",
-            self.name,
-            self.properties
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        )
-    }
+    pub block_states: PalettedContainer<BlockState>,
+    pub biomes: PalettedContainer<String>,
 }
