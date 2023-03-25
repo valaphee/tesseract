@@ -1,11 +1,14 @@
 use proc_macro2::{Ident, Span};
-use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields};
+use quote::{quote, quote_spanned, ToTokens};
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, GenericParam, LifetimeDef, parse_quote, Lifetime};
 
 #[proc_macro_derive(Encode)]
 pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let input_name = input.ident;
+
+    let name = input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
     let body = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {
@@ -120,8 +123,11 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         }
         _ => unreachable!(),
     };
+
     proc_macro::TokenStream::from(quote! {
-        impl Encode for #input_name {
+        impl #impl_generics Encode for #name #ty_generics
+        #where_clause
+        {
             fn encode(&self, output: &mut impl std::io::Write) -> crate::Result<()> {
                 #body
             }
@@ -131,8 +137,22 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
 #[proc_macro_derive(Decode)]
 pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let input_name = input.ident;
+    let mut input = parse_macro_input!(input as DeriveInput);
+
+    let name = input.ident;
+    let (_, ty_generics, _) = input.generics.split_for_impl();
+    let ty_generics = ty_generics.to_token_stream();
+    let lifetime = if let Some(lifetime) = input.generics.lifetimes().next() {
+        lifetime.lifetime.clone()
+    } else {
+        let lifetime: Lifetime = parse_quote!('a);
+        input.generics
+            .params
+            .push(GenericParam::Lifetime(LifetimeDef::new(lifetime.clone())));
+        lifetime
+    };
+    let (impl_generics, _, where_clause) = input.generics.split_for_impl();
+
     let body = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {
@@ -195,9 +215,12 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         }
         _ => unreachable!(),
     };
+
     proc_macro::TokenStream::from(quote! {
-        impl<'a> Decode<'a> for #input_name {
-            fn decode(input: &mut &[u8]) -> crate::Result<Self> {
+        impl #impl_generics Decode<#lifetime> for #name #ty_generics
+        #where_clause
+        {
+            fn decode(input: &mut &#lifetime [u8]) -> crate::Result<Self> {
                 Ok(#body)
             }
         }

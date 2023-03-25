@@ -290,18 +290,18 @@ macro_rules! tuple {
     ($($ty:ident)*) => {
         #[allow(non_snake_case)]
         impl<$($ty: Encode,)*> Encode for ($($ty,)*) {
-            fn encode(&self, _output: &mut impl Write) -> Result<()> {
+            fn encode(&self, output: &mut impl Write) -> Result<()> {
                 let ($($ty,)*) = self;
                 $(
-                    $ty.encode(_output)?;
+                    $ty.encode(output)?;
                 )*
                 Ok(())
             }
         }
 
         impl<'a, $($ty: Decode<'a>,)*> Decode<'a> for ($($ty,)*) {
-            fn decode(_input: &mut &'a [u8]) -> Result<Self> {
-                Ok(($($ty::decode(_input)?,)*))
+            fn decode(input: &mut &'a [u8]) -> Result<Self> {
+                Ok(($($ty::decode(input)?,)*))
             }
         }
     }
@@ -321,12 +321,9 @@ tuple!(A B C D E F G H I J);
 tuple!(A B C D E F G H I J K);
 tuple!(A B C D E F G H I J K L);
 
-//======================================================================================= ARRAY ====
+//=============================================================================== ARRAY / SLICE ====
 
-impl<T, const N: usize> Encode for [T; N]
-where
-    T: Encode,
-{
+impl<T: Encode, const N: usize> Encode for [T; N] {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         for value in self {
             value.encode(output)?;
@@ -335,12 +332,26 @@ where
     }
 }
 
-impl<'a, T, const N: usize> Decode<'a> for [T; N]
-where
-    T: Decode<'a>,
-{
+impl<'a, T: Decode<'a>, const N: usize> Decode<'a> for [T; N] {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         std::array::try_from_fn(|_| Decode::decode(input))
+    }
+}
+
+impl Encode for &[u8] {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
+        VarI32(self.len() as i32).encode(output)?;
+        output.write_all(self)?;
+        Ok(())
+    }
+}
+
+impl<'a> Decode<'a> for &'a [u8] {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        let length = VarI32::decode(input)?.0 as usize;
+        let (bytes, input_) = input.split_at(length);
+        *input = input_;
+        Ok(bytes)
     }
 }
 
@@ -367,10 +378,7 @@ impl<'a, const N: usize> Decode<'a> for TrailingBytes<N> {
 
 //========================================================================================= STD ====
 
-impl<T> Encode for Option<T>
-where
-    T: Encode,
-{
+impl<T: Encode> Encode for Option<T> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             None => false.encode(output),
@@ -382,10 +390,7 @@ where
     }
 }
 
-impl<'a, T> Decode<'a> for Option<T>
-where
-    T: Decode<'a>,
-{
+impl<'a, T: Decode<'a>> Decode<'a> for Option<T> {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match bool::decode(input)? {
             true => Some(Decode::decode(input)?),
@@ -394,11 +399,8 @@ where
     }
 }
 
-impl<T> Encode for Vec<T>
-where
-    T: Encode,
-{
-    fn encode(&self, output: &mut impl Write) -> Result<()> {
+impl<T: Encode> Encode for Vec<T> {
+    default fn encode(&self, output: &mut impl Write) -> Result<()> {
         VarI32(self.len() as i32).encode(output)?;
         for item in self {
             item.encode(output)?;
@@ -407,17 +409,52 @@ where
     }
 }
 
-impl<'a, T> Decode<'a> for Vec<T>
-where
-    T: Decode<'a>,
-{
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl<'a, T: Decode<'a>> Decode<'a> for Vec<T> {
+    default fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let length = VarI32::decode(input)?.0 as usize;
         let mut value = Vec::with_capacity(length);
         for _ in 0..length {
             value.push(Decode::decode(input)?);
         }
         Ok(value)
+    }
+}
+
+trait VecEncode<T> {
+    fn encode_special(value: &[T], output: &mut impl Write) -> Result<()>;
+}
+
+trait VecDecode<T> {
+    fn decode_special(input: &mut &[u8], length: usize) -> Result<Vec<T>>;
+}
+
+impl<T : Encode + VecEncode<T>> Encode for Vec<T> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
+        VarI32(self.len() as i32).encode(output)?;
+        T::encode_special(self, output)?;
+        Ok(())
+    }
+}
+
+impl<'a, T: Decode<'a> + VecDecode<T>> Decode<'a> for Vec<T> {
+    default fn decode(input: &mut &'a [u8]) -> Result<Self> {
+        let length = VarI32::decode(input)?.0 as usize;
+        T::decode_special(input, length)
+    }
+}
+
+impl VecEncode<u8> for u8 {
+    fn encode_special(value: &[u8], output: &mut impl Write) -> Result<()> {
+        output.write_all(value)?;
+        Ok(())
+    }
+}
+
+impl VecDecode<u8> for u8 {
+    fn decode_special(input: &mut &[u8], length: usize) -> Result<Vec<u8>> {
+        let (value, input_) = input.split_at(length);
+        *input = input_;
+        Ok(value.to_vec())
     }
 }
 
@@ -438,6 +475,8 @@ impl<'a> Decode<'a> for String {
         Ok(from_utf8(bytes)?.to_string())
     }
 }
+
+//======================================================================================= OTHER ====
 
 impl Encode for Uuid {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
@@ -546,8 +585,6 @@ impl<'a> Decode<'a> for Angle {
         Ok(Self(u8::decode(input)? as f32 / u8::MAX as f32 * 360.0))
     }
 }
-
-//======================================================================================== GAME ====
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub struct Advancement {
@@ -929,19 +966,13 @@ impl<'a> Decode<'a> for ItemStack {
 #[repr(transparent)]
 pub struct Json<T>(pub T);
 
-impl<T> Encode for Json<T>
-where
-    T: Serialize,
-{
+impl<T: Serialize> Encode for Json<T> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         serde_json::to_string(&self.0)?.encode(output)
     }
 }
 
-impl<'a, T> Decode<'a> for Json<T>
-where
-    T: DeserializeOwned,
-{
+impl<'a, T: DeserializeOwned> Decode<'a> for Json<T> {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let value = String::decode(input)?;
         Ok(Json(serde_json::from_str(value.as_str())?))
@@ -1059,20 +1090,14 @@ pub struct MerchantOffer {
 #[repr(transparent)]
 pub struct Nbt<T>(pub T);
 
-impl<T> Encode for Nbt<T>
-where
-    T: Serialize,
-{
+impl<T: Serialize> Encode for Nbt<T> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_all(&tesseract_nbt::ser::to_vec(&self.0)?)?;
         Ok(())
     }
 }
 
-impl<'a, T> Decode<'a> for Nbt<T>
-where
-    T: DeserializeOwned,
-{
+impl<'a, T: DeserializeOwned> Decode<'a> for Nbt<T> {
     fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Nbt(tesseract_nbt::de::from_slice(input)?))
     }

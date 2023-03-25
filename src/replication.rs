@@ -120,7 +120,7 @@ async fn handle_new_connection(
             Intention::Status => {
                 match next(&mut framed_socket).await.decode() {
                     c2s::StatusPacket::StatusRequest => {
-                        send(
+                        encode_and_send(
                             &mut framed_socket,
                             &s2c::StatusPacket::StatusResponse {
                                 status: Json(Status {
@@ -147,7 +147,7 @@ async fn handle_new_connection(
 
                 match next(&mut framed_socket).await.decode() {
                     c2s::StatusPacket::PingRequest { time } => {
-                        send(
+                        encode_and_send(
                             &mut framed_socket,
                             &s2c::StatusPacket::PongResponse { time },
                         )
@@ -163,7 +163,7 @@ async fn handle_new_connection(
                 };
 
                 let nonce: [u8; 16] = rand::random();
-                send(
+                encode_and_send(
                     &mut framed_socket,
                     &s2c::LoginPacket::Hello {
                         server_id: "".to_string(),
@@ -201,7 +201,7 @@ async fn handle_new_connection(
                 .unwrap();
 
                 if let Some(compression_threshold) = compression_threshold {
-                    send(
+                    encode_and_send(
                         &mut framed_socket,
                         &s2c::LoginPacket::LoginCompression {
                             compression_threshold: VarI32(compression_threshold as i32),
@@ -213,7 +213,7 @@ async fn handle_new_connection(
                         .enable_compression(compression, compression_threshold);
                 }
 
-                send(&mut framed_socket, &s2c::LoginPacket::GameProfile(user)).await;
+                encode_and_send(&mut framed_socket, &s2c::LoginPacket::GameProfile(user)).await;
 
                 let (rx_packet_tx, rx_packet_rx) = mpsc::unbounded_channel();
                 let (tx_packet_tx, mut tx_packet_rx) = mpsc::unbounded_channel();
@@ -770,7 +770,7 @@ impl Packet {
     }
 }
 
-async fn send(socket: &mut Framed<TcpStream, Codec>, packet: &impl Encode) {
+async fn encode_and_send(socket: &mut Framed<TcpStream, Codec>, packet: &impl Encode) {
     let mut data = vec![];
     packet.encode(&mut data).unwrap();
     socket.send(&data).await.unwrap();

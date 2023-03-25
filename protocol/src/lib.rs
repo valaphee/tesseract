@@ -1,4 +1,5 @@
 #![feature(array_try_from_fn)]
+#![feature(specialization)]
 
 extern crate core;
 
