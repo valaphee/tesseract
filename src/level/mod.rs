@@ -5,10 +5,12 @@ pub mod chunk;
 /// All required components to describe a level
 #[derive(Bundle)]
 pub struct LevelBundle {
-    pub name: Name,
-    pub dimension_type: DimensionType,
-    pub lookup_table: chunk::LookupTable,
+    pub level: Level,
+    pub chunks: chunk::LookupTable,
 }
 
 #[derive(Component)]
-pub struct DimensionType(pub String);
+pub struct Level {
+    pub name: String,
+    pub dimension_type: String,
+}

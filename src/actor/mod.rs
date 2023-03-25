@@ -1,10 +1,18 @@
 use bevy::{math::DVec3, prelude::*};
+use uuid::Uuid;
 
 #[derive(Bundle)]
 pub struct ActorBundle {
+    pub actor: Actor,
     pub position: Position,
     pub rotation: Rotation,
     pub head_rotation: HeadRotation,
+}
+
+#[derive(Component)]
+pub struct Actor {
+    pub id: Uuid,
+    pub type_: String,
 }
 
 /// Position of the actor in the level (Actor)

@@ -31,9 +31,11 @@ impl Plugin for PersistencePlugin {
         let spawn_levels = move |mut commands: Commands| {
             commands.spawn((
                 level::LevelBundle {
-                    name: "minecraft:overworld".into(),
-                    dimension_type: level::DimensionType("minecraft:overworld".into()),
-                    lookup_table: default(),
+                    level: level::Level {
+                        name: "minecraft:overworld".into(),
+                        dimension_type: "minecraft:overworld".into(),
+                    },
+                    chunks: default(),
                 },
                 Persistence {
                     region_storage: RegionStorage::new(path.join("overworld/region")),
@@ -56,11 +58,11 @@ fn load_chunks(
     biome_registry: Res<DataRegistry<Biome>>,
     mut commands: Commands,
     mut levels: Query<&mut Persistence>,
-    chunks: Query<(Entity, &level::chunk::Position, &Parent), Without<level::chunk::Terrain>>,
+    chunks: Query<(Entity, &level::chunk::Chunk, &Parent), Without<level::chunk::Terrain>>,
 ) {
-    for (chunk, chunk_position, level) in chunks.iter() {
+    for (chunk, chunk_base, level) in chunks.iter() {
         let region_storage = &mut levels.get_mut(level.get()).unwrap().region_storage;
-        if let Some(region_chunk_data) = region_storage.read(chunk_position.0) {
+        if let Some(region_chunk_data) = region_storage.read(chunk_base.0) {
             let region_chunk =
                 tesseract_nbt::de::from_slice::<RegionChunk>(&mut region_chunk_data.as_slice())
                     .unwrap();

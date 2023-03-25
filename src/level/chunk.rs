@@ -9,21 +9,21 @@ use crate::{actor, replication};
 /// All required components to describe a chunk
 #[derive(Bundle)]
 pub struct ChunkBundle {
-    position: Position,
+    chunk: Chunk,
     replication: replication::Replication,
 }
 
 impl ChunkBundle {
     pub fn new(position: IVec2) -> Self {
         Self {
-            position: Position(position),
+            chunk: Chunk(position),
             replication: default(),
         }
     }
 
     pub fn with_subscriber(position: IVec2, subscriber: Entity) -> Self {
         Self {
-            position: Position(position),
+            chunk: Chunk(position),
             replication: replication::Replication::with_subscriber(subscriber),
         }
     }
@@ -33,15 +33,14 @@ impl ChunkBundle {
 #[derive(Default, Component)]
 pub struct LookupTable(pub HashMap<IVec2, Entity>);
 
-/// Position of the chunk in the level (Chunk)
 #[derive(Component)]
-pub struct Position(pub IVec2);
+pub struct Chunk(pub IVec2);
 
 /// Keeps the hierarchy of actors in chunks consistent
 pub fn update_hierarchy(
     mut commands: Commands,
     mut levels: Query<&mut LookupTable>,
-    chunks: Query<(&Position, &Parent)>,
+    chunks: Query<(&Chunk, &Parent)>,
     actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
 ) {
     // early return
@@ -50,9 +49,9 @@ pub fn update_hierarchy(
             (actor_position.0[0] as i32) >> 4,
             (actor_position.0[2] as i32) >> 4,
         );
-        let level = (if let Ok((position, level)) = chunks.get(level_or_chunk.get()) {
+        let level = (if let Ok((chunk_base, level)) = chunks.get(level_or_chunk.get()) {
             // skip actors where the chunk hasn't changed
-            if position.0 == chunk_position {
+            if chunk_base.0 == chunk_position {
                 continue;
             }
 

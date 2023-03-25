@@ -62,8 +62,8 @@ fn main() {
             "generated/data/damage_type",
             "minecraft:damage_type",
         ))
-        .add_plugin(config.replication)
         .add_plugin(config.persistence)
+        .add_plugin(config.replication)
         .add_systems(PostUpdate, level::chunk::update_hierarchy)
         .run();
 }

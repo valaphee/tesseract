@@ -1,13 +1,10 @@
 use std::{
     borrow::Cow,
+    collections::{hash_map::Entry, HashMap},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 };
 
-use bevy::{
-    math::DVec3,
-    prelude::*,
-    utils::{HashSet, Uuid},
-};
+use bevy::{math::DVec3, prelude::*, utils::HashSet};
 use futures::{SinkExt, StreamExt};
 use num::BigInt;
 use rsa::{pkcs8::EncodePublicKey, rand_core::OsRng, Pkcs1v15Encrypt, RsaPrivateKey};
@@ -19,7 +16,10 @@ use tokio::{
 };
 use tokio_util::codec::Framed;
 
-use mojang_session_api::apis::{configuration::Configuration, default_api::has_joined_server};
+use mojang_session_api::{
+    apis::{configuration::Configuration, default_api::has_joined_server},
+    models::User,
+};
 use tesseract_protocol::{
     codec::{Codec, Compression},
     packet::{c2s, s2c},
@@ -30,7 +30,7 @@ use tesseract_protocol::{
     Decode, Encode,
 };
 
-use crate::{actor, actor::ActorBundle, level, registry::DataRegistry};
+use crate::{actor, actor::ActorBundle, level, registry, registry::DataRegistry};
 
 #[derive(Serialize, Deserialize)]
 pub struct ReplicationPlugin {
@@ -106,12 +106,14 @@ impl Plugin for ReplicationPlugin {
 
 #[derive(Component)]
 struct Connection {
+    user: User,
+
     rx: mpsc::UnboundedReceiver<Vec<u8>>,
     tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
 impl Connection {
-    fn send(&self, packet: s2c::GamePacket) {
+    fn send(&self, packet: &s2c::GamePacket) {
         let mut data = vec![];
         packet.encode(&mut data).unwrap();
         self.tx.send(data).unwrap();
@@ -225,12 +227,17 @@ async fn handle_new_connection(
                         .enable_compression(compression, compression_threshold);
                 }
 
-                encode_and_send(&mut framed_socket, &s2c::LoginPacket::GameProfile(user)).await;
+                encode_and_send(
+                    &mut framed_socket,
+                    &s2c::LoginPacket::GameProfile(user.clone()),
+                )
+                .await;
 
                 let (rx_packet_tx, rx_packet_rx) = mpsc::unbounded_channel();
                 let (tx_packet_tx, mut tx_packet_rx) = mpsc::unbounded_channel();
                 if new_connection_tx
                     .send(Connection {
+                        user,
                         rx: rx_packet_rx,
                         tx: tx_packet_tx,
                     })
@@ -279,15 +286,19 @@ fn load_players(
     biome_registry: Res<DataRegistry<Biome>>,
     damage_type_registry: Res<DataRegistry<DamageType>>,
     mut commands: Commands,
-    levels: Query<(Entity, &Name, &level::DimensionType)>,
+    levels: Query<(Entity, &level::Level)>,
     players: Query<(Entity, &Connection), Added<Connection>>,
 ) {
     for (player, connection) in players.iter() {
-        let (level, level_name, level_dimension_type) = levels.single();
+        let (level, level_base) = levels.single();
         commands
             .entity(player)
             .insert((
                 ActorBundle {
+                    actor: actor::Actor {
+                        id: connection.user.id,
+                        type_: "minecraft:player".into(),
+                    },
                     position: actor::Position(DVec3::new(0.0, 0.0, 0.0)),
                     rotation: actor::Rotation {
                         pitch: 0.0,
@@ -300,12 +311,12 @@ fn load_players(
             ))
             .set_parent(level);
 
-        connection.send(s2c::GamePacket::Login {
+        connection.send(&s2c::GamePacket::Login {
             player_id: player.index() as i32,
             hardcore: false,
             game_type: GameType::Creative,
             previous_game_type: 0,
-            levels: vec![level_name.to_string()],
+            levels: vec![level_base.name.to_string()],
             registry_holder: Nbt(Registries {
                 dimension_type: Cow::Borrowed(dimension_type_registry.registry()),
                 biome: Cow::Borrowed(biome_registry.registry()),
@@ -315,8 +326,8 @@ fn load_players(
                 }),
                 damage_type: Cow::Borrowed(damage_type_registry.registry()),
             }),
-            dimension_type: level_dimension_type.0.clone(),
-            dimension: level_name.to_string(),
+            dimension_type: level_base.dimension_type.clone(),
+            dimension: level_base.name.to_string(),
             seed: 0,
             max_players: VarI32(0),
             chunk_radius: VarI32(16),
@@ -327,11 +338,11 @@ fn load_players(
             is_flat: false,
             last_death_location: None,
         });
-        connection.send(s2c::game::GamePacket::SetDefaultSpawnPosition {
+        connection.send(&s2c::game::GamePacket::SetDefaultSpawnPosition {
             pos: IVec3::new(0, 200, 0),
             yaw: 0.0,
         });
-        connection.send(s2c::game::GamePacket::PlayerPosition {
+        connection.send(&s2c::game::GamePacket::PlayerPosition {
             pos: DVec3::new(0.0, 150.0, 0.0),
             yaw: 0.0,
             pitch: 0.0,
@@ -361,9 +372,6 @@ fn update_players(
                 match Packet(packet).decode() {
                     c2s::GamePacket::ClientInformation { view_distance, .. } => {
                         subscription_distance.0 = view_distance as u8 + 3;
-                        connection.send(s2c::GamePacket::SetChunkCacheRadius {
-                            radius: VarI32(view_distance as i32),
-                        });
                     }
                     c2s::GamePacket::MovePlayerPos { x, y, z, .. } => {
                         position.0.x = x;
@@ -422,12 +430,14 @@ struct Subscriptions(HashSet<IVec2>);
 
 #[allow(clippy::type_complexity)]
 fn subscribe_and_replicate_initial(
+    registries: Res<registry::Registries>,
     mut commands: Commands,
     mut levels: Query<&mut level::chunk::LookupTable>,
-    chunk_positions: Query<(&level::chunk::Position, &Parent)>,
+    chunk_positions: Query<(&level::chunk::Chunk, &Parent)>,
     mut chunks: Query<(Option<&level::chunk::Terrain>, &mut Replication)>,
     actors: Query<(
         Entity,
+        &actor::Actor,
         &actor::Position,
         &actor::Rotation,
         &actor::HeadRotation,
@@ -446,18 +456,18 @@ fn subscribe_and_replicate_initial(
     for (player, chunk, connection, subscription_distance, mut actual_subscriptions) in
         players.iter_mut()
     {
-        if let Ok((chunk_position, level)) = chunk_positions.get(chunk.get()) {
-            let x = chunk_position.0.x;
-            let z = chunk_position.0.y;
-            connection.send(s2c::GamePacket::SetChunkCacheCenter {
-                x: VarI32(chunk_position.0.x),
-                z: VarI32(chunk_position.0.y),
+        if let Ok((chunk_base, level)) = chunk_positions.get(chunk.get()) {
+            let x = chunk_base.0.x;
+            let z = chunk_base.0.y;
+            connection.send(&s2c::GamePacket::SetChunkCacheCenter {
+                x: VarI32(x),
+                z: VarI32(z),
             });
 
             let mut acquire_chunks = Vec::new();
             let mut target_subscriptions = HashSet::new();
-            if !actual_subscriptions.0.contains(&chunk_position.0) {
-                acquire_chunks.push(chunk_position.0);
+            if !actual_subscriptions.0.contains(&chunk_base.0) {
+                acquire_chunks.push(chunk_base.0);
             }
             target_subscriptions.insert(IVec2::new(x, z));
 
@@ -507,15 +517,15 @@ fn subscribe_and_replicate_initial(
                     let (_, mut replication) = chunks.get_mut(chunk).unwrap();
                     replication.subscriber.remove(&player);
 
-                    // connection: remove chunk and entities, cause: unsubscribe
-                    connection.send(s2c::GamePacket::RemoveEntities {
+                    // connection: remove chunk and actors, cause: unsubscribe
+                    connection.send(&s2c::GamePacket::RemoveEntities {
                         entity_ids: replication
                             .replicated
                             .iter()
                             .map(|actor| VarI32(actor.index() as i32))
                             .collect(),
                     });
-                    connection.send(s2c::GamePacket::ForgetLevelChunk {
+                    connection.send(&s2c::GamePacket::ForgetLevelChunk {
                         x: chunk_position.x,
                         z: chunk_position.y,
                     });
@@ -529,60 +539,30 @@ fn subscribe_and_replicate_initial(
                         replication.subscriber.insert(player);
 
                         if let Some(terrain) = terrain {
-                            // connection: add chunk and entities, cause: subscribe
-                            for (actor, actor_position, actor_rotation, actor_head_rotation) in
-                                actors.iter_many(&replication.replicated)
+                            // connection: add chunk and actors, cause: subscribe
+                            connection.send(&add_chunk_packet(chunk_position, terrain));
+                            for (
+                                actor,
+                                actor_base,
+                                actor_position,
+                                actor_rotation,
+                                actor_head_rotation,
+                            ) in actors.iter_many(&replication.replicated)
                             {
                                 // except owner
                                 if actor == player {
                                     continue;
                                 }
 
-                                connection.send(s2c::GamePacket::AddEntity {
-                                    id: VarI32(actor.index() as i32),
-                                    uuid: Uuid::new_v4(),
-                                    type_: VarI32(72),
-                                    pos: actor_position.0,
-                                    pitch: Angle(actor_rotation.pitch),
-                                    yaw: Angle(actor_rotation.yaw),
-                                    head_yaw: Angle(actor_head_rotation.head_yaw),
-                                    data: VarI32(0),
-                                    xa: 0,
-                                    ya: 0,
-                                    za: 0,
-                                });
+                                connection.send(&add_actor_packet(
+                                    &registries,
+                                    actor,
+                                    actor_base,
+                                    actor_position,
+                                    actor_rotation,
+                                    actor_head_rotation,
+                                ));
                             }
-
-                            let mut buffer = Vec::new();
-                            let mut sky_y_mask = 0i64;
-                            let mut sky_updates = Vec::new();
-                            for (i, section) in terrain.sections.iter().enumerate() {
-                                4096i16.encode(&mut buffer).unwrap();
-                                section.0.encode(&mut buffer).unwrap();
-                                section.1.encode(&mut buffer).unwrap();
-
-                                sky_y_mask |= 1 << (i + 1);
-                                sky_updates.push(vec![0xFF; 2048])
-                            }
-
-                            connection.send(s2c::GamePacket::LevelChunkWithLight {
-                                x: chunk_position.x,
-                                z: chunk_position.y,
-                                chunk_data: s2c::game::LevelChunkPacketData {
-                                    heightmaps: Nbt(serde_value::Value::Map(Default::default())),
-                                    buffer: buffer.clone(),
-                                    block_entities_data: vec![],
-                                },
-                                light_data: s2c::game::LightUpdatePacketData {
-                                    trust_edges: true,
-                                    sky_y_mask: vec![sky_y_mask],
-                                    block_y_mask: vec![0],
-                                    empty_sky_y_mask: vec![0],
-                                    empty_block_y_mask: vec![0],
-                                    sky_updates,
-                                    block_updates: vec![],
-                                },
-                            });
                         }
                     }
                 } else {
@@ -606,50 +586,18 @@ fn subscribe_and_replicate_initial(
 
 fn replicate_chunks_late(
     chunks: Query<
-        (
-            &level::chunk::Terrain,
-            &level::chunk::Position,
-            &Replication,
-        ),
+        (&level::chunk::Chunk, &level::chunk::Terrain, &Replication),
         Added<level::chunk::Terrain>,
     >,
     players: Query<&Connection>,
 ) {
     // early return
-    for (terrain, chunk_position, replication) in chunks.iter() {
-        let mut buffer = Vec::new();
-        let mut sky_y_mask = 0i64;
-        let mut sky_updates = Vec::new();
-        for (i, section) in terrain.sections.iter().enumerate() {
-            4096i16.encode(&mut buffer).unwrap();
-            section.0.encode(&mut buffer).unwrap();
-            section.1.encode(&mut buffer).unwrap();
-
-            sky_y_mask |= 1 << (i + 1);
-            sky_updates.push(vec![0xFF; 2048])
-        }
-
+    for (chunk_base, terrain, replication) in chunks.iter() {
+        let add_chunk_packet = add_chunk_packet(chunk_base.0, terrain);
         for &player in &replication.subscriber {
             // connection: add chunk, cause: subscribe (late)
             if let Ok(connection) = players.get(player) {
-                connection.send(s2c::GamePacket::LevelChunkWithLight {
-                    x: chunk_position.0.x,
-                    z: chunk_position.0.y,
-                    chunk_data: s2c::game::LevelChunkPacketData {
-                        heightmaps: Nbt(serde_value::Value::Map(Default::default())),
-                        buffer: buffer.clone(),
-                        block_entities_data: vec![],
-                    },
-                    light_data: s2c::game::LightUpdatePacketData {
-                        trust_edges: true,
-                        sky_y_mask: vec![sky_y_mask],
-                        block_y_mask: vec![0],
-                        empty_sky_y_mask: vec![0],
-                        empty_block_y_mask: vec![0],
-                        sky_updates: sky_updates.clone(),
-                        block_updates: vec![],
-                    },
-                });
+                connection.send(&add_chunk_packet);
             } else {
                 warn!("Replication requires a connection")
             }
@@ -658,8 +606,14 @@ fn replicate_chunks_late(
 }
 
 fn replicate_actors(
+    registries: Res<registry::Registries>,
     mut chunks: Query<(&Children, &mut Replication), Changed<Children>>,
-    actors: Query<(&actor::Position, &actor::Rotation, &actor::HeadRotation)>,
+    actors: Query<(
+        &actor::Actor,
+        &actor::Position,
+        &actor::Rotation,
+        &actor::HeadRotation,
+    )>,
     players: Query<&Connection>,
 ) {
     // early return
@@ -667,6 +621,8 @@ fn replicate_actors(
         return;
     }
 
+    // collect all actors for removal
+    let mut remove_actors_by_player = HashMap::<Entity, HashSet<Entity>>::new();
     for (actors, replication) in chunks.iter() {
         for &actor in replication
             .replicated
@@ -679,12 +635,11 @@ fn replicate_actors(
                     continue;
                 }
 
-                // connection: add entity, cause: despawn
-                if let Ok(connection) = players.get(player) {
-                    connection.send(s2c::GamePacket::RemoveEntities {
-                        entity_ids: vec![VarI32(actor.index() as i32)],
-                    })
+                match remove_actors_by_player.entry(player) {
+                    Entry::Occupied(entry) => entry.into_mut(),
+                    Entry::Vacant(entry) => entry.insert(HashSet::new()),
                 }
+                .insert(actor);
             }
         }
     }
@@ -694,7 +649,8 @@ fn replicate_actors(
             .iter()
             .filter(|actor| !replication.replicated.contains(actor))
         {
-            let (actor_position, actor_rotation, actor_head_rotation) = actors.get(actor).unwrap();
+            let (actor_base, actor_position, actor_rotation, actor_head_rotation) =
+                actors.get(actor).unwrap();
 
             for &player in replication.subscriber.iter() {
                 // except owner
@@ -702,22 +658,38 @@ fn replicate_actors(
                     continue;
                 }
 
-                // connection: add entity, cause: spawn
-                if let Ok(connection) = players.get(player) {
-                    connection.send(s2c::GamePacket::AddEntity {
-                        id: VarI32(actor.index() as i32),
-                        uuid: Uuid::new_v4(),
-                        type_: VarI32(72),
-                        pos: actor_position.0,
-                        pitch: Angle(actor_rotation.pitch),
-                        yaw: Angle(actor_rotation.yaw),
-                        head_yaw: Angle(actor_head_rotation.head_yaw),
-                        data: VarI32(0),
-                        xa: 0,
-                        ya: 0,
-                        za: 0,
-                    });
+                // actor as been re-added
+                if !remove_actors_by_player
+                    .get_mut(&player)
+                    .map_or(false, |actors| actors.remove(&actor))
+                {
+                    // connection: add actor, cause: spawn/subscribe
+                    // TODO: might be swapped with remove actors for more efficient memory usage
+                    if let Ok(connection) = players.get(player) {
+                        connection.send(&add_actor_packet(
+                            &registries,
+                            actor,
+                            actor_base,
+                            actor_position,
+                            actor_rotation,
+                            actor_head_rotation,
+                        ));
+                    }
                 }
+            }
+        }
+    }
+
+    for (player, actors) in remove_actors_by_player {
+        if !actors.is_empty() {
+            // connection: remove actors, cause: despawn/unsubscribe
+            if let Ok(connection) = players.get(player) {
+                connection.send(&s2c::GamePacket::RemoveEntities {
+                    entity_ids: actors
+                        .into_iter()
+                        .map(|actor| VarI32(actor.index() as i32))
+                        .collect(),
+                })
             }
         }
     }
@@ -747,14 +719,14 @@ fn replicate_actors_movement(
 
                 // connection: teleport entity, cause: movement
                 if let Ok(connection) = players.get(player) {
-                    connection.send(s2c::GamePacket::TeleportEntity {
+                    connection.send(&s2c::GamePacket::TeleportEntity {
                         id: VarI32(actor.index() as i32),
                         pos: actor_position.0,
                         pitch: Angle(actor_rotation.pitch),
                         yaw: Angle(actor_rotation.yaw),
                         on_ground: false,
                     });
-                    connection.send(s2c::GamePacket::RotateHead {
+                    connection.send(&s2c::GamePacket::RotateHead {
                         entity_id: VarI32(actor.index() as i32),
                         head_yaw: Angle(actor_rotation.yaw),
                     });
@@ -780,4 +752,70 @@ async fn encode_and_send(socket: &mut Framed<TcpStream, Codec>, packet: &impl En
 
 async fn next(socket: &mut Framed<TcpStream, Codec>) -> Packet {
     Packet(socket.next().await.unwrap().unwrap())
+}
+
+fn add_chunk_packet<'a>(position: IVec2, terrain: &level::chunk::Terrain) -> s2c::GamePacket<'a> {
+    let mut buffer = Vec::new();
+    let mut sky_y_mask = 0i64;
+    let mut sky_updates = Vec::new();
+    for (i, section) in terrain.sections.iter().enumerate() {
+        4096i16.encode(&mut buffer).unwrap();
+        section.0.encode(&mut buffer).unwrap();
+        section.1.encode(&mut buffer).unwrap();
+
+        sky_y_mask |= 1 << (i + 1);
+        sky_updates.push(vec![0xFF; 2048])
+    }
+
+    s2c::GamePacket::LevelChunkWithLight {
+        x: position.x,
+        z: position.y,
+        chunk_data: s2c::game::LevelChunkPacketData {
+            heightmaps: Nbt(serde_value::Value::Map(Default::default())),
+            buffer: buffer.clone(),
+            block_entities_data: vec![],
+        },
+        light_data: s2c::game::LightUpdatePacketData {
+            trust_edges: true,
+            sky_y_mask: vec![sky_y_mask],
+            block_y_mask: vec![0],
+            empty_sky_y_mask: vec![0],
+            empty_block_y_mask: vec![0],
+            sky_updates,
+            block_updates: vec![],
+        },
+    }
+}
+
+fn add_actor_packet<'a>(
+    registries: &registry::Registries,
+    actor: Entity,
+    actor_base: &actor::Actor,
+    position: &actor::Position,
+    rotation: &actor::Rotation,
+    head_rotation: &actor::HeadRotation,
+) -> s2c::GamePacket<'a> {
+    if actor_base.type_ == "minecraft:player" {
+        s2c::GamePacket::AddPlayer {
+            entity_id: VarI32(actor.index() as i32),
+            player_id: actor_base.id,
+            pos: position.0,
+            pitch: Angle(rotation.pitch),
+            yaw: Angle(rotation.yaw),
+        }
+    } else {
+        s2c::GamePacket::AddEntity {
+            id: VarI32(actor.index() as i32),
+            uuid: actor_base.id,
+            type_: VarI32(registries.id("minecraft:entity_type", &actor_base.type_) as i32),
+            pos: position.0,
+            pitch: Angle(rotation.pitch),
+            yaw: Angle(rotation.yaw),
+            head_yaw: Angle(head_rotation.head_yaw),
+            data: VarI32(0),
+            xa: 0,
+            ya: 0,
+            za: 0,
+        }
+    }
 }
