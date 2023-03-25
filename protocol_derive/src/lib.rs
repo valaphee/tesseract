@@ -122,7 +122,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     };
     proc_macro::TokenStream::from(quote! {
         impl Encode for #input_name {
-            fn encode<W: std::io::Write>(&self, output: &mut W) -> crate::Result<()> {
+            fn encode(&self, output: &mut impl std::io::Write) -> crate::Result<()> {
                 #body
             }
         }
@@ -196,7 +196,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         _ => unreachable!(),
     };
     proc_macro::TokenStream::from(quote! {
-        impl Decode for #input_name {
+        impl<'a> Decode<'a> for #input_name {
             fn decode(input: &mut &[u8]) -> crate::Result<Self> {
                 Ok(#body)
             }

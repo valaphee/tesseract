@@ -23,13 +23,13 @@ mod paletted_container;
 //=================================================================================== PRIMITIVE ====
 
 impl Encode for bool {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         if *self { 1u8 } else { 0u8 }.encode(output)
     }
 }
 
-impl Decode for bool {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for bool {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match u8::decode(input)? {
             0 => false,
             1 => true,
@@ -39,53 +39,53 @@ impl Decode for bool {
 }
 
 impl Encode for u8 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_u8(*self)?;
         Ok(())
     }
 }
 
-impl Decode for u8 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for u8 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_u8()?)
     }
 }
 
 impl Encode for i8 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_i8(*self)?;
         Ok(())
     }
 }
 
-impl Decode for i8 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for i8 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i8()?)
     }
 }
 
 impl Encode for u16 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_u16::<BigEndian>(*self)?;
         Ok(())
     }
 }
 
-impl Decode for u16 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for u16 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_u16::<BigEndian>()?)
     }
 }
 
 impl Encode for i16 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_i16::<BigEndian>(*self)?;
         Ok(())
     }
 }
 
-impl Decode for i16 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for i16 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i16::<BigEndian>()?)
     }
 }
@@ -104,7 +104,7 @@ impl VarI21 {
 }
 
 impl Encode for VarI21 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let mut value = self.0 as u32;
         loop {
             if value & !0b01111111 == 0 {
@@ -117,8 +117,8 @@ impl Encode for VarI21 {
     }
 }
 
-impl Decode for VarI21 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for VarI21 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
         while shift <= 21 {
@@ -134,14 +134,14 @@ impl Decode for VarI21 {
 }
 
 impl Encode for i32 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_i32::<BigEndian>(*self)?;
         Ok(())
     }
 }
 
-impl Decode for i32 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for i32 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i32::<BigEndian>()?)
     }
 }
@@ -160,7 +160,7 @@ impl VarI32 {
 }
 
 impl Encode for VarI32 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let mut value = self.0 as u32;
         loop {
             if value & !0b01111111 == 0 {
@@ -173,8 +173,8 @@ impl Encode for VarI32 {
     }
 }
 
-impl Decode for VarI32 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for VarI32 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
         while shift <= 35 {
@@ -190,27 +190,27 @@ impl Decode for VarI32 {
 }
 
 impl Encode for i64 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_i64::<BigEndian>(*self)?;
         Ok(())
     }
 }
 
-impl Decode for i64 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for i64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_i64::<BigEndian>()?)
     }
 }
 
 impl Encode for u64 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_u64::<BigEndian>(*self)?;
         Ok(())
     }
 }
 
-impl Decode for u64 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for u64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_u64::<BigEndian>()?)
     }
 }
@@ -229,7 +229,7 @@ impl VarI64 {
 }
 
 impl Encode for VarI64 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let mut value = self.0 as u64;
         loop {
             if value & !0b01111111 == 0 {
@@ -242,8 +242,8 @@ impl Encode for VarI64 {
     }
 }
 
-impl Decode for VarI64 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for VarI64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
         while shift <= 70 {
@@ -259,27 +259,27 @@ impl Decode for VarI64 {
 }
 
 impl Encode for f32 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_f32::<BigEndian>(*self)?;
         Ok(())
     }
 }
 
-impl Decode for f32 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for f32 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_f32::<BigEndian>()?)
     }
 }
 
 impl Encode for f64 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_f64::<BigEndian>(*self)?;
         Ok(())
     }
 }
 
-impl Decode for f64 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for f64 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(input.read_f64::<BigEndian>()?)
     }
 }
@@ -290,7 +290,7 @@ macro_rules! tuple {
     ($($ty:ident)*) => {
         #[allow(non_snake_case)]
         impl<$($ty: Encode,)*> Encode for ($($ty,)*) {
-            fn encode<W: Write>(&self, _output: &mut W) -> Result<()> {
+            fn encode(&self, _output: &mut impl Write) -> Result<()> {
                 let ($($ty,)*) = self;
                 $(
                     $ty.encode(_output)?;
@@ -299,8 +299,8 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($ty: Decode,)*> Decode for ($($ty,)*) {
-            fn decode(_input: &mut &[u8]) -> Result<Self> {
+        impl<'a, $($ty: Decode<'a>,)*> Decode<'a> for ($($ty,)*) {
+            fn decode(_input: &mut &'a [u8]) -> Result<Self> {
                 Ok(($($ty::decode(_input)?,)*))
             }
         }
@@ -327,7 +327,7 @@ impl<T, const N: usize> Encode for [T; N]
 where
     T: Encode,
 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         for value in self {
             value.encode(output)?;
         }
@@ -335,11 +335,11 @@ where
     }
 }
 
-impl<T, const N: usize> Decode for [T; N]
+impl<'a, T, const N: usize> Decode<'a> for [T; N]
 where
-    T: Decode,
+    T: Decode<'a>,
 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         std::array::try_from_fn(|_| Decode::decode(input))
     }
 }
@@ -349,15 +349,15 @@ where
 pub struct TrailingBytes<const N: usize>(pub Vec<u8>);
 
 impl<const N: usize> Encode for TrailingBytes<N> {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         assert!(self.0.len() <= N);
         output.write_all(&self.0)?;
         Ok(())
     }
 }
 
-impl<const N: usize> Decode for TrailingBytes<N> {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a, const N: usize> Decode<'a> for TrailingBytes<N> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         assert!(input.len() <= N);
         let value = input.to_vec();
         *input = &input[input.len()..];
@@ -371,7 +371,7 @@ impl<T> Encode for Option<T>
 where
     T: Encode,
 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             None => false.encode(output),
             Some(value) => {
@@ -382,11 +382,11 @@ where
     }
 }
 
-impl<'a, T> Decode for Option<T>
+impl<'a, T> Decode<'a> for Option<T>
 where
-    T: Decode,
+    T: Decode<'a>,
 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match bool::decode(input)? {
             true => Some(Decode::decode(input)?),
             false => None,
@@ -398,7 +398,7 @@ impl<T> Encode for Vec<T>
 where
     T: Encode,
 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         VarI32(self.len() as i32).encode(output)?;
         for item in self {
             item.encode(output)?;
@@ -407,11 +407,11 @@ where
     }
 }
 
-impl<T> Decode for Vec<T>
+impl<'a, T> Decode<'a> for Vec<T>
 where
-    T: Decode,
+    T: Decode<'a>,
 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let length = VarI32::decode(input)?.0 as usize;
         let mut value = Vec::with_capacity(length);
         for _ in 0..length {
@@ -422,7 +422,7 @@ where
 }
 
 impl Encode for String {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let bytes = self.as_bytes();
         VarI32(bytes.len() as i32).encode(output)?;
         output.write_all(bytes)?;
@@ -430,8 +430,8 @@ impl Encode for String {
     }
 }
 
-impl Decode for String {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for String {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let length = VarI32::decode(input)?.0 as usize;
         let (bytes, input_) = input.split_at(length);
         *input = input_;
@@ -440,21 +440,21 @@ impl Decode for String {
 }
 
 impl Encode for Uuid {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_u128::<BigEndian>(self.as_u128())?;
         Ok(())
     }
 }
 
-impl Decode for Uuid {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Uuid {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Uuid::from_u128(input.read_u128::<BigEndian>()?))
     }
 }
 
 // interpreted as BlockPos
 impl Encode for IVec3 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match (self.x, self.y, self.z) {
             (-0x2000000..=0x1FFFFFF, -0x800..=0x7FF, -0x2000000..=0x1FFFFFF) => {
                 ((self.x as u64) << 38 | (self.z as u64) << 12 | self.y as u64 & 0xFFF)
@@ -465,8 +465,8 @@ impl Encode for IVec3 {
     }
 }
 
-impl Decode for IVec3 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for IVec3 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let value = i64::decode(input)?;
         Ok(Self {
             x: (value >> 38) as i32,
@@ -477,15 +477,15 @@ impl Decode for IVec3 {
 }
 
 impl Encode for Vec3 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.x.encode(output)?;
         self.y.encode(output)?;
         self.z.encode(output)
     }
 }
 
-impl Decode for Vec3 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Vec3 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Vec3::new(
             Decode::decode(input)?,
             Decode::decode(input)?,
@@ -495,15 +495,15 @@ impl Decode for Vec3 {
 }
 
 impl Encode for DVec3 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.x.encode(output)?;
         self.y.encode(output)?;
         self.z.encode(output)
     }
 }
 
-impl Decode for DVec3 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for DVec3 {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(DVec3::new(
             Decode::decode(input)?,
             Decode::decode(input)?,
@@ -513,7 +513,7 @@ impl Decode for DVec3 {
 }
 
 impl Encode for Quat {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.x.encode(output)?;
         self.y.encode(output)?;
         self.z.encode(output)?;
@@ -521,8 +521,8 @@ impl Encode for Quat {
     }
 }
 
-impl Decode for Quat {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Quat {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Quat::from_xyzw(
             Decode::decode(input)?,
             Decode::decode(input)?,
@@ -536,13 +536,13 @@ impl Decode for Quat {
 pub struct Angle(pub f32);
 
 impl Encode for Angle {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         ((self.0.rem_euclid(360.0) / 360.0 * u8::MAX as f32).round() as u8).encode(output)
     }
 }
 
-impl Decode for Angle {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Angle {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Self(u8::decode(input)? as f32 / u8::MAX as f32 * 360.0))
     }
 }
@@ -571,7 +571,7 @@ pub struct AdvancementDisplayInfo {
 }
 
 impl Encode for AdvancementDisplayInfo {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.title.encode(output)?;
         self.description.encode(output)?;
         self.icon.encode(output)?;
@@ -596,8 +596,8 @@ impl Encode for AdvancementDisplayInfo {
     }
 }
 
-impl Decode for AdvancementDisplayInfo {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for AdvancementDisplayInfo {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let title = Decode::decode(input)?;
         let description = Decode::decode(input)?;
         let icon = Decode::decode(input)?;
@@ -765,7 +765,7 @@ pub enum Difficulty {
 }
 
 impl Encode for Difficulty {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             Difficulty::Peaceful => 0u8,
             Difficulty::Easy => 1u8,
@@ -776,8 +776,8 @@ impl Encode for Difficulty {
     }
 }
 
-impl Decode for Difficulty {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Difficulty {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match u8::decode(input)? % 4 {
             0 => Difficulty::Peaceful,
             1 => Difficulty::Easy,
@@ -841,7 +841,7 @@ pub enum Direction {
 }
 
 impl Encode for Direction {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             Direction::Down => 0u8,
             Direction::Up => 1u8,
@@ -854,8 +854,8 @@ impl Encode for Direction {
     }
 }
 
-impl Decode for Direction {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Direction {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match u8::decode(input)? % 6 {
             0 => Direction::Down,
             1 => Direction::Up,
@@ -908,15 +908,15 @@ pub struct ItemStack {
 }
 
 impl Encode for ItemStack {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.item.encode(output)?;
         self.count.encode(output)?;
         self.tag.encode(output)
     }
 }
 
-impl Decode for ItemStack {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for ItemStack {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(ItemStack {
             item: Decode::decode(input)?,
             count: Decode::decode(input)?,
@@ -933,16 +933,16 @@ impl<T> Encode for Json<T>
 where
     T: Serialize,
 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         serde_json::to_string(&self.0)?.encode(output)
     }
 }
 
-impl<T> Decode for Json<T>
+impl<'a, T> Decode<'a> for Json<T>
 where
     T: DeserializeOwned,
 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let value = String::decode(input)?;
         Ok(Json(serde_json::from_str(value.as_str())?))
     }
@@ -1010,7 +1010,7 @@ pub struct MapPatch {
 }
 
 impl Encode for Option<MapPatch> {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             None => 0u8.encode(output),
             Some(value) => {
@@ -1024,8 +1024,8 @@ impl Encode for Option<MapPatch> {
     }
 }
 
-impl Decode for Option<MapPatch> {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Option<MapPatch> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let width = Decode::decode(input)?;
         Ok(if width != 0 {
             Some(MapPatch {
@@ -1063,17 +1063,17 @@ impl<T> Encode for Nbt<T>
 where
     T: Serialize,
 {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         output.write_all(&tesseract_nbt::ser::to_vec(&self.0)?)?;
         Ok(())
     }
 }
 
-impl<T> Decode for Nbt<T>
+impl<'a, T> Decode<'a> for Nbt<T>
 where
     T: DeserializeOwned,
 {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Nbt(tesseract_nbt::de::from_slice(input)?))
     }
 }
@@ -1175,7 +1175,7 @@ impl Recipe {
 }
 
 impl Encode for Recipe {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.type_().to_string().encode(output)?;
         match self {
             Recipe::Shaped {
@@ -1255,8 +1255,8 @@ impl Encode for Recipe {
     }
 }
 
-impl Decode for Recipe {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Recipe {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match String::decode(input)?.as_str() {
             "minecraft:crafting_shaped" => {
                 let id = Decode::decode(input)?;
@@ -1406,7 +1406,7 @@ pub enum Sound {
 }
 
 impl Encode for Sound {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             Sound::Id(id) => VarI32(id + 1).encode(output),
             Sound::Name(name) => {
@@ -1417,8 +1417,8 @@ impl Encode for Sound {
     }
 }
 
-impl Decode for Sound {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for Sound {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let id = VarI32::decode(input)?;
         Ok(if id.0 == 0 {
             Sound::Name(Decode::decode(input)?)
@@ -1475,15 +1475,15 @@ pub struct StatusPlayersSample {
 }
 
 impl Encode for User {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.id.encode(output)?;
         self.name.encode(output)?;
         self.properties.encode(output)
     }
 }
 
-impl Decode for User {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for User {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(User {
             id: Decode::decode(input)?,
             name: Decode::decode(input)?,
@@ -1493,15 +1493,15 @@ impl Decode for User {
 }
 
 impl Encode for UserProperty {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         self.name.encode(output)?;
         self.value.encode(output)?;
         self.signature.encode(output)
     }
 }
 
-impl Decode for UserProperty {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for UserProperty {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(UserProperty {
             name: Decode::decode(input)?,
             value: Decode::decode(input)?,

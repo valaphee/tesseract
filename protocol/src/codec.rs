@@ -1,10 +1,11 @@
-use std::{io::Read, marker::PhantomData};
+use std::io::Read;
 
 use aes::{
     cipher::{inout::InOutBuf, BlockDecryptMut, BlockEncryptMut, KeyIvInit},
     Aes128,
 };
 use bytes::{Buf, BufMut, BytesMut};
+use cfb8::{Decryptor, Encryptor};
 use flate2::read::{ZlibDecoder, ZlibEncoder};
 pub use flate2::Compression;
 use tokio_util::codec::{Decoder, Encoder};
@@ -14,31 +15,17 @@ use crate::{
     Decode, Encode, Error, Result,
 };
 
-pub struct Codec<I, O> {
-    encryptor: Option<Encryptor>,
-    decryptor: Option<Decryptor>,
+#[derive(Default)]
+pub struct Codec {
+    encryptor: Option<Encryptor<Aes128>>,
+    decryptor: Option<Decryptor<Aes128>>,
     decrypted_bytes: usize,
 
     compression: Compression,
     compression_threshold: Option<u16>,
-
-    _phantom: PhantomData<(I, O)>,
 }
 
-impl<I, O> Codec<I, O> {
-    pub fn cast<I2, O2>(self) -> Codec<I2, O2> {
-        Codec {
-            encryptor: self.encryptor,
-            decryptor: self.decryptor,
-            decrypted_bytes: self.decrypted_bytes,
-
-            compression: self.compression,
-            compression_threshold: self.compression_threshold,
-
-            _phantom: Default::default(),
-        }
-    }
-
+impl Codec {
     pub fn enable_encryption(&mut self, key: &[u8]) {
         self.encryptor = Some(Encryptor::new_from_slices(key, key).unwrap());
         self.decryptor = Some(Decryptor::new_from_slices(key, key).unwrap());
@@ -52,32 +39,14 @@ impl<I, O> Codec<I, O> {
     }
 }
 
-impl<I, O> Default for Codec<I, O> {
-    fn default() -> Self {
-        Self {
-            encryptor: Default::default(),
-            decryptor: Default::default(),
-            decrypted_bytes: 0,
-
-            compression: Default::default(),
-            compression_threshold: Default::default(),
-
-            _phantom: Default::default(),
-        }
-    }
-}
-
-impl<I, O> Encoder<I> for Codec<I, O>
-where
-    I: Encode,
-{
+impl Encoder<&[u8]> for Codec {
     type Error = Error;
 
-    fn encode(&mut self, item: I, dst: &mut BytesMut) -> Result<()> {
+    fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<()> {
         let data_length_offset = dst.len();
         dst.put_bytes(0, 3);
         let data_offset = dst.len();
-        item.encode(&mut dst.writer())?;
+        dst.put_slice(item);
         let mut data_length = dst.len() - data_offset;
 
         if let Some(compression_threshold) = self.compression_threshold {
@@ -124,11 +93,8 @@ where
     }
 }
 
-impl<I, O> Decoder for Codec<I, O>
-where
-    O: Decode,
-{
-    type Item = O;
+impl Decoder for Codec {
+    type Item = Vec<u8>;
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
@@ -148,24 +114,21 @@ where
                 if data.len() >= data_length.0 as usize {
                     data = &data[..data_length.0 as usize];
 
-                    let mut decompressed_data;
-                    if self.compression_threshold.is_some() {
+                    let data = if self.compression_threshold.is_some() {
                         let decompressed_data_length = VarI32::decode(&mut data)?;
                         if decompressed_data_length.0 != 0 {
-                            decompressed_data =
+                            let mut decompressed_data =
                                 Vec::with_capacity(decompressed_data_length.0 as usize);
                             ZlibDecoder::new(data)
                                 .read_to_end(&mut decompressed_data)
                                 .unwrap();
-                            data = &decompressed_data;
+                            decompressed_data
+                        } else {
+                            data.to_vec()
                         }
-                    }
-                    let packet = O::decode(&mut data)?;
-
-                    // Check if there are bytes left
-                    if !data.is_empty() {
-                        // FIXME return Err(Error::RemainingBytes(data.len()));
-                    }
+                    } else {
+                        data.to_vec()
+                    };
 
                     // Advance, and correct decrypted bytes
                     src.advance(data_length.len() + data_length.0 as usize);
@@ -173,7 +136,7 @@ where
                         self.decrypted_bytes = src.len()
                     }
 
-                    Ok(Some(packet))
+                    Ok(Some(data))
                 } else {
                     Ok(None)
                 }
@@ -188,6 +151,3 @@ where
         }
     }
 }
-
-type Encryptor = cfb8::Encryptor<Aes128>;
-type Decryptor = cfb8::Decryptor<Aes128>;

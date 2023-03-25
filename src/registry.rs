@@ -17,12 +17,18 @@ pub struct Registries {
 impl Registries {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self {
-            registries: serde_json::from_reader::<_, HashMap<String, RegistryReport>>(File::open(path).unwrap()).unwrap()
+            registries: serde_json::from_reader::<_, HashMap<String, RegistryReport>>(
+                File::open(path).unwrap(),
+            )
+            .unwrap(),
         }
     }
 
     pub fn id(&self, type_: &str, value: &str) -> u32 {
-        self.registries.get(type_).and_then(|registry| registry.entries.get(value).map(|entry| entry.protocol_id)).unwrap_or(0)
+        self.registries
+            .get(type_)
+            .and_then(|registry| registry.entries.get(value).map(|entry| entry.protocol_id))
+            .unwrap_or(0)
     }
 }
 
@@ -30,7 +36,7 @@ impl Registries {
 struct RegistryReport {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     default: Option<String>,
-    entries: HashMap<String, RegistryEntryReport>
+    entries: HashMap<String, RegistryEntryReport>,
 }
 
 #[derive(Serialize, Deserialize)]

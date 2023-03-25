@@ -32,7 +32,7 @@ fn main() {
         )))
         .add_plugins(MinimalPlugins)
         .insert_resource(registry::Registries::new(
-            "generated/reports/registries.json"
+            "generated/reports/registries.json",
         ))
         .insert_resource(registry::BlockStateRegistry::new(
             "generated/reports/blocks.json",

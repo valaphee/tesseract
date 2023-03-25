@@ -1,5 +1,4 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
     fs::File,
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
@@ -31,7 +30,8 @@ impl RegionStorage {
         if !path.exists() {
             None
         } else {
-            Region::new(path).read(((position.x & 0x1F) as u32 | ((position.y & 0x1F) as u32) << 5) as usize)
+            Region::new(path)
+                .read(((position.x & 0x1F) as u32 | ((position.y & 0x1F) as u32) << 5) as usize)
         }
     }
 }

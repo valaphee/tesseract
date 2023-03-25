@@ -111,7 +111,7 @@ impl PalettedContainer {
 }
 
 impl Encode for PalettedContainer {
-    fn encode<W: Write>(&self, output: &mut W) -> crate::Result<()> {
+    fn encode(&self, output: &mut impl Write) -> crate::Result<()> {
         match self {
             PalettedContainer::SingleValue { value, .. } => {
                 0u8.encode(output)?;

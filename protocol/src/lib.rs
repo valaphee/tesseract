@@ -32,9 +32,9 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait Encode {
-    fn encode<W: std::io::Write>(&self, output: &mut W) -> Result<()>;
+    fn encode(&self, output: &mut impl std::io::Write) -> Result<()>;
 }
 
-pub trait Decode: Sized {
-    fn decode(input: &mut &[u8]) -> Result<Self>;
+pub trait Decode<'a>: Sized {
+    fn decode(input: &mut &'a [u8]) -> Result<Self>;
 }

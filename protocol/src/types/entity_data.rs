@@ -12,7 +12,7 @@ use crate::{
 pub struct EntityData(HashMap<u8, EntityDataValue>);
 
 impl Encode for EntityData {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         for (&index, value) in &self.0 {
             index.encode(output)?;
             value.encode(output)?;
@@ -21,8 +21,8 @@ impl Encode for EntityData {
     }
 }
 
-impl Decode for EntityData {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for EntityData {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut fields = HashMap::new();
         loop {
             let index = u8::decode(input)?;

@@ -560,7 +560,7 @@ pub enum AnimatePacketAction {
 }
 
 impl Encode for AnimatePacketAction {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             Self::SwingMainHand => 0u8,
             Self::WakeUp => 1u8,
@@ -572,8 +572,8 @@ impl Encode for AnimatePacketAction {
     }
 }
 
-impl Decode for AnimatePacketAction {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for AnimatePacketAction {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match u8::decode(input)? {
             0 => Self::SwingMainHand,
             1 => Self::WakeUp,
@@ -631,7 +631,7 @@ pub enum CommandsPacketNodeStub {
 }
 
 impl Encode for CommandsPacketEntry {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let mut flags = match &self.stub {
             CommandsPacketNodeStub::Root => 0i8,
             CommandsPacketNodeStub::Literal { .. } => 1i8,
@@ -675,8 +675,8 @@ impl Encode for CommandsPacketEntry {
     }
 }
 
-impl Decode for CommandsPacketEntry {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for CommandsPacketEntry {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         let children = Decode::decode(input)?;
         let redirect_node = if flags & (1 << 3) != 0 {
@@ -767,7 +767,7 @@ pub struct CommandsPacketArgumentTypeNumber<T> {
 }
 
 impl<T: Encode> Encode for CommandsPacketArgumentTypeNumber<T> {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         (if self.min.is_some() { 1i8 << 0 } else { 0 }
             | if self.max.is_some() { 1i8 << 1 } else { 0 })
         .encode(output)?;
@@ -781,8 +781,8 @@ impl<T: Encode> Encode for CommandsPacketArgumentTypeNumber<T> {
     }
 }
 
-impl<T: Decode> Decode for CommandsPacketArgumentTypeNumber<T> {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a, T: Decode<'a>> Decode<'a> for CommandsPacketArgumentTypeNumber<T> {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         let min = if flags & (1 << 0) != 0 {
             Some(Decode::decode(input)?)
@@ -829,7 +829,7 @@ pub enum GameEventPacketEvent {
 }
 
 impl Encode for GameEventPacketEvent {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {
             Self::NoRespawnBlockAvailable => 0u8,
             Self::StartRaining => 1u8,
@@ -848,8 +848,8 @@ impl Encode for GameEventPacketEvent {
     }
 }
 
-impl Decode for GameEventPacketEvent {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for GameEventPacketEvent {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(match u8::decode(input)? {
             0 => Self::NoRespawnBlockAvailable,
             1 => Self::StartRaining,
@@ -905,7 +905,7 @@ pub struct PlayerAbilitiesPacket {
 }
 
 impl Encode for PlayerAbilitiesPacket {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let mut flags = 0i8;
         if self.invulnerable {
             flags |= 1 << 0;
@@ -925,8 +925,8 @@ impl Encode for PlayerAbilitiesPacket {
     }
 }
 
-impl Decode for PlayerAbilitiesPacket {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for PlayerAbilitiesPacket {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         let flying_speed = Decode::decode(input)?;
         let walking_speed = Decode::decode(input)?;
@@ -958,7 +958,7 @@ pub struct PlayerInfoUpdatePacketEntry {
 }
 
 impl Encode for PlayerInfoUpdatePacket {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let first_entry = self.entries.first().unwrap();
         let add_player = first_entry.profile.is_some();
         let initialize_chat = first_entry.chat_session.is_some();
@@ -1013,8 +1013,8 @@ impl Encode for PlayerInfoUpdatePacket {
     }
 }
 
-impl Decode for PlayerInfoUpdatePacket {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for PlayerInfoUpdatePacket {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let actions = i8::decode(input)?;
         let add_player = actions & (1 << 0) != 0;
         let initialize_chat = actions & (1 << 1) != 0;
@@ -1084,7 +1084,7 @@ pub struct SectionBlocksUpdatePacket {
 }
 
 impl Encode for SectionBlocksUpdatePacket {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match (self.section_pos.x, self.section_pos.y, self.section_pos.z) {
             (-0x200000..=0x1FFFFF, -0x80000..=0x7FFFF, -0x200000..=0x1FFFFF) => {
                 ((self.section_pos.x as i64) << 42
@@ -1100,8 +1100,8 @@ impl Encode for SectionBlocksUpdatePacket {
     }
 }
 
-impl Decode for SectionBlocksUpdatePacket {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for SectionBlocksUpdatePacket {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         Ok(Self {
             section_pos: {
                 let value = i64::decode(input)?;
@@ -1126,7 +1126,7 @@ pub struct SectionBlocksUpdatePacketPositionAndState {
 }
 
 impl Encode for SectionBlocksUpdatePacketPositionAndState {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         match (self.block_state, self.x, self.y, self.z) {
             (0x0..=0x1FFFFFFFFFFFF, 0x0..=0xF, 0x0..=0xF, 0x0..=0xF) => VarI64(
                 (self.block_state) << 12 | (((self.x as i64) << 8) | (self.z << 4 | self.y) as i64),
@@ -1137,8 +1137,8 @@ impl Encode for SectionBlocksUpdatePacketPositionAndState {
     }
 }
 
-impl Decode for SectionBlocksUpdatePacketPositionAndState {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for SectionBlocksUpdatePacketPositionAndState {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let value = VarI64::decode(input)?.0;
         Ok(Self {
             x: (value >> 8) as u8 & 0xF,
@@ -1191,7 +1191,7 @@ pub enum RecipePacket {
 pub struct SetEquipmentPacketSlots(HashMap<EquipmentSlot, Option<ItemStack>>);
 
 impl Encode for SetEquipmentPacketSlots {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         if !self.0.is_empty() {
             for (&equipment_slot, item) in self.0.iter().take(self.0.len() - 1) {
                 (u8::from(equipment_slot) | 0x80).encode(output)?;
@@ -1205,8 +1205,8 @@ impl Encode for SetEquipmentPacketSlots {
     }
 }
 
-impl Decode for SetEquipmentPacketSlots {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for SetEquipmentPacketSlots {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let mut slots = HashMap::new();
         while {
             let equipment_slot_and_next_bit = u8::decode(input)?;
@@ -1281,7 +1281,7 @@ pub struct StopSoundPacket {
 }
 
 impl Encode for StopSoundPacket {
-    fn encode<W: Write>(&self, output: &mut W) -> Result<()> {
+    fn encode(&self, output: &mut impl Write) -> Result<()> {
         let mut flags = 0i8;
         if self.source.is_some() {
             flags |= 1 << 0;
@@ -1300,8 +1300,8 @@ impl Encode for StopSoundPacket {
     }
 }
 
-impl Decode for StopSoundPacket {
-    fn decode(input: &mut &[u8]) -> Result<Self> {
+impl<'a> Decode<'a> for StopSoundPacket {
+    fn decode(input: &mut &'a [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         Ok(Self {
             source: if flags & 1 << 0 != 0 {
