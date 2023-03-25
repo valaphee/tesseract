@@ -1,6 +1,9 @@
 use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, GenericParam, LifetimeDef, parse_quote, Lifetime};
+use syn::{
+    parse_macro_input, parse_quote, spanned::Spanned, Data, DeriveInput, Fields, GenericParam,
+    Lifetime, LifetimeDef,
+};
 
 #[proc_macro_derive(Encode)]
 pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -146,7 +149,8 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         lifetime.lifetime.clone()
     } else {
         let lifetime: Lifetime = parse_quote!('a);
-        input.generics
+        input
+            .generics
             .params
             .push(GenericParam::Lifetime(LifetimeDef::new(lifetime.clone())));
         lifetime

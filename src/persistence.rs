@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use tesseract_protocol::types::{
     BitStorage, DimensionType, MonsterSpawnLightLevel, PalettedContainer,
@@ -9,6 +10,7 @@ use tesseract_savegame::{chunk::Chunk as RegionChunk, region::RegionStorage};
 
 use crate::{level, registry::BlockStateRegistry};
 
+#[derive(Serialize, Deserialize)]
 pub struct PersistencePlugin {
     path: PathBuf,
 }
@@ -54,7 +56,7 @@ impl Plugin for PersistencePlugin {
                     lookup_table: default(),
                 },
                 Persistence {
-                    region_storage: RegionStorage::new(path.join("Neue Welt2/region")),
+                    region_storage: RegionStorage::new(path.join("overworld/region")),
                 },
             ));
         };

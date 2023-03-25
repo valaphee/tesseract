@@ -9,7 +9,6 @@ description = "Minecraft's Protocol"
 
 [dependencies]
 aes = "0.8.2"
-anyhow = "1.0.69"
 byteorder = "1.4.3"
 bytes = "1.4.0"
 cfb8 = "0.8.1"

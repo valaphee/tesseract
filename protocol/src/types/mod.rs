@@ -290,18 +290,18 @@ macro_rules! tuple {
     ($($ty:ident)*) => {
         #[allow(non_snake_case)]
         impl<$($ty: Encode,)*> Encode for ($($ty,)*) {
-            fn encode(&self, output: &mut impl Write) -> Result<()> {
+            fn encode(&self, _output: &mut impl Write) -> Result<()> {
                 let ($($ty,)*) = self;
                 $(
-                    $ty.encode(output)?;
+                    $ty.encode(_output)?;
                 )*
                 Ok(())
             }
         }
 
         impl<'a, $($ty: Decode<'a>,)*> Decode<'a> for ($($ty,)*) {
-            fn decode(input: &mut &'a [u8]) -> Result<Self> {
-                Ok(($($ty::decode(input)?,)*))
+            fn decode(_input: &mut &'a [u8]) -> Result<Self> {
+                Ok(($($ty::decode(_input)?,)*))
             }
         }
     }
@@ -428,7 +428,7 @@ trait VecDecode<T> {
     fn decode_special(input: &mut &[u8], length: usize) -> Result<Vec<T>>;
 }
 
-impl<T : Encode + VecEncode<T>> Encode for Vec<T> {
+impl<T: Encode + VecEncode<T>> Encode for Vec<T> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         VarI32(self.len() as i32).encode(output)?;
         T::encode_special(self, output)?;

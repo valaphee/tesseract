@@ -8,7 +8,6 @@ repository = "https://github.com/valaphee/tesseract.git"
 description = "Minecraft's Protocol"
 
 [dependencies]
-anyhow = "1.0.69"
 futures = "0.3.26"
 serde = "1.0.152"
 serde_json = "1.0.93"
