@@ -17,11 +17,14 @@ All this enables great flexibility, with superior performance.
 ## Current Status
 
 - persistence
-  - one level
-  - synchronous chunk loading (block states, biomes)
+    - multiple levels
+    - chunk loading (block states, biomes)
+    - player loading (position, rotation)
+- procedural
 - replication
-  - encryption
-  - compression
-  - online mode
-  - replicating chunks (early, late)
-  - replicating actors (early, late, across chunks)
+    - encryption
+    - compression
+    - online mode
+    - replicating players (WIP)
+    - replicating chunks (early, late)
+    - replicating actors (early, late, across chunks)

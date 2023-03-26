@@ -1,10 +1,10 @@
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 };
 
-use bevy::{math::DVec3, prelude::*, utils::HashSet};
+use bevy::prelude::*;
 use futures::{SinkExt, StreamExt};
 use num::BigInt;
 use rsa::{pkcs8::EncodePublicKey, rand_core::OsRng, Pkcs1v15Encrypt, RsaPrivateKey};
@@ -30,7 +30,7 @@ use tesseract_protocol::{
     Decode, Encode,
 };
 
-use crate::{actor, actor::ActorBundle, level, registry, registry::DataRegistry};
+use crate::{actor, level, registry};
 
 #[derive(Serialize, Deserialize)]
 pub struct ReplicationPlugin {
@@ -94,19 +94,19 @@ impl Plugin for ReplicationPlugin {
         };
 
         app.add_systems(PostStartup, listen)
-            .add_systems(PreUpdate, spawn_player)
-            .add_systems(PreUpdate, load_players)
-            .add_systems(PreUpdate, update_players)
-            .add_systems(PostUpdate, subscribe_and_replicate_initial)
-            .add_systems(PostUpdate, replicate_chunks_late)
-            .add_systems(PostUpdate, replicate_actors)
-            .add_systems(PostUpdate, replicate_actors_movement);
+            .add_systems(First, spawn_player)
+            .add_systems(First, update_players)
+            .add_systems(Last, replicate_initial)
+            .add_systems(Last, subscribe_and_replicate_chunks)
+            .add_systems(Last, replicate_chunks_late)
+            .add_systems(Last, replicate_actors)
+            .add_systems(Last, replicate_actors_delta);
     }
 }
 
 #[derive(Component)]
-struct Connection {
-    user: User,
+pub struct Connection {
+    pub user: User,
 
     rx: mpsc::UnboundedReceiver<Vec<u8>>,
     tx: mpsc::UnboundedSender<Vec<u8>>,
@@ -127,6 +127,8 @@ async fn handle_new_connection(
     compression_threshold: Option<u16>,
     new_connection_tx: mpsc::UnboundedSender<Connection>,
 ) {
+    socket.set_nodelay(true).unwrap();
+
     let mut framed_socket = Framed::new(socket, Codec::default());
 
     match next(&mut framed_socket).await.decode() {
@@ -277,40 +279,37 @@ struct NewConnectionRx(mpsc::UnboundedReceiver<Connection>);
 
 fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnectionRx>) {
     while let Ok(connection) = new_connection_rx.0.try_recv() {
-        commands.spawn(connection);
+        info!(
+            "Player {} (UUID: {}) connected",
+            connection.user.name, connection.user.id
+        );
+        commands.spawn((
+            connection,
+            SubscriptionDistance::default(),
+            Subscriptions::default(),
+        ));
     }
 }
 
-fn load_players(
-    dimension_type_registry: Res<DataRegistry<DimensionType>>,
-    biome_registry: Res<DataRegistry<Biome>>,
-    damage_type_registry: Res<DataRegistry<DamageType>>,
-    mut commands: Commands,
-    levels: Query<(Entity, &level::Level)>,
-    players: Query<(Entity, &Connection), Added<Connection>>,
+fn replicate_initial(
+    dimension_type_registry: Res<registry::DataRegistry<DimensionType>>,
+    biome_registry: Res<registry::DataRegistry<Biome>>,
+    damage_type_registry: Res<registry::DataRegistry<DamageType>>,
+    levels: Query<&level::Level>,
+    chunks: Query<&Parent>,
+    players: Query<
+        (
+            Entity,
+            &Connection,
+            &actor::Position,
+            &actor::Rotation,
+            &Parent,
+        ),
+        Added<Connection>,
+    >,
 ) {
-    for (player, connection) in players.iter() {
-        let (level, level_base) = levels.single();
-        commands
-            .entity(player)
-            .insert((
-                ActorBundle {
-                    actor: actor::Actor {
-                        id: connection.user.id,
-                        type_: "minecraft:player".into(),
-                    },
-                    position: actor::Position(DVec3::new(0.0, 0.0, 0.0)),
-                    rotation: actor::Rotation {
-                        pitch: 0.0,
-                        yaw: 0.0,
-                    },
-                    head_rotation: actor::HeadRotation { head_yaw: 0.0 },
-                },
-                SubscriptionDistance::default(),
-                Subscriptions::default(),
-            ))
-            .set_parent(level);
-
+    for (player, connection, actor_position, actor_rotation, chunk) in players.iter() {
+        let level_base = levels.get(chunks.get(chunk.get()).unwrap().get()).unwrap();
         connection.send(&s2c::GamePacket::Login {
             player_id: player.index() as i32,
             hardcore: false,
@@ -339,13 +338,14 @@ fn load_players(
             last_death_location: None,
         });
         connection.send(&s2c::game::GamePacket::SetDefaultSpawnPosition {
-            pos: IVec3::new(0, 200, 0),
-            yaw: 0.0,
+            pos: default(),
+            yaw: default(),
         });
+
         connection.send(&s2c::game::GamePacket::PlayerPosition {
-            pos: DVec3::new(0.0, 150.0, 0.0),
-            yaw: 0.0,
-            pitch: 0.0,
+            pos: actor_position.0,
+            yaw: actor_rotation.yaw,
+            pitch: actor_rotation.pitch,
             relative_arguments: 0,
             id: VarI32(0),
         });
@@ -371,12 +371,17 @@ fn update_players(
             while let Ok(packet) = connection.rx.try_recv() {
                 match Packet(packet).decode() {
                     c2s::GamePacket::ClientInformation { view_distance, .. } => {
-                        subscription_distance.0 = view_distance as u8 + 3;
+                        let new_subscription_distance = view_distance as u8 + 3;
+                        if subscription_distance.0 != new_subscription_distance {
+                            subscription_distance.0 = new_subscription_distance;
+                        }
                     }
                     c2s::GamePacket::MovePlayerPos { x, y, z, .. } => {
-                        position.0.x = x;
-                        position.0.y = y;
-                        position.0.z = z;
+                        if position.0.x != x || position.0.y != y || position.0.z != z {
+                            position.0.x = x;
+                            position.0.y = y;
+                            position.0.z = z;
+                        }
                     }
                     c2s::GamePacket::MovePlayerPosRot {
                         x,
@@ -386,15 +391,21 @@ fn update_players(
                         yaw,
                         ..
                     } => {
-                        position.0.x = x;
-                        position.0.y = y;
-                        position.0.z = z;
-                        rotation.pitch = pitch;
-                        rotation.yaw = yaw;
+                        if position.0.x != x || position.0.y != y || position.0.z != z {
+                            position.0.x = x;
+                            position.0.y = y;
+                            position.0.z = z;
+                        }
+                        if rotation.pitch != pitch || rotation.yaw != yaw {
+                            rotation.pitch = pitch;
+                            rotation.yaw = yaw;
+                        }
                     }
                     c2s::GamePacket::MovePlayerRot { pitch, yaw, .. } => {
-                        rotation.pitch = pitch;
-                        rotation.yaw = yaw;
+                        if rotation.pitch != pitch || rotation.yaw != yaw {
+                            rotation.pitch = pitch;
+                            rotation.yaw = yaw;
+                        }
                     }
                     _ => {}
                 }
@@ -402,6 +413,8 @@ fn update_players(
         }
     }
 }
+
+//=========================================================================== CHUNK REPLICATION ====
 
 #[derive(Default, Component)]
 pub struct Replication {
@@ -429,7 +442,7 @@ struct SubscriptionDistance(pub u8);
 struct Subscriptions(HashSet<IVec2>);
 
 #[allow(clippy::type_complexity)]
-fn subscribe_and_replicate_initial(
+fn subscribe_and_replicate_chunks(
     registries: Res<registry::Registries>,
     mut commands: Commands,
     mut levels: Query<&mut level::chunk::LookupTable>,
@@ -457,6 +470,11 @@ fn subscribe_and_replicate_initial(
         players.iter_mut()
     {
         if let Ok((chunk_base, level)) = chunk_positions.get(chunk.get()) {
+            let subscription_distance = subscription_distance.0 as i32;
+            if subscription_distance == 0 {
+                continue;
+            }
+
             let x = chunk_base.0.x;
             let z = chunk_base.0.y;
             connection.send(&s2c::GamePacket::SetChunkCacheCenter {
@@ -472,7 +490,6 @@ fn subscribe_and_replicate_initial(
             target_subscriptions.insert(IVec2::new(x, z));
 
             // square radius
-            let subscription_distance = subscription_distance.0 as i32;
             for r in 1..subscription_distance {
                 for n in -r..r {
                     // north
@@ -514,6 +531,8 @@ fn subscribe_and_replicate_initial(
                 .filter(|&chunk_position| !target_subscriptions.contains(chunk_position))
             {
                 if let Some(&chunk) = chunk_lut.0.get(chunk_position) {
+                    trace!("Release chunk: {:?}", chunk_position);
+
                     let (_, mut replication) = chunks.get_mut(chunk).unwrap();
                     replication.subscriber.remove(&player);
 
@@ -529,6 +548,8 @@ fn subscribe_and_replicate_initial(
                         x: chunk_position.x,
                         z: chunk_position.y,
                     });
+                } else {
+                    trace!("Release chunk: {:?} (not spawned)", chunk_position);
                 }
             }
 
@@ -536,6 +557,8 @@ fn subscribe_and_replicate_initial(
             for chunk_position in acquire_chunks {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     if let Ok((terrain, mut replication)) = chunks.get_mut(chunk) {
+                        trace!("Acquire chunk: {:?}", chunk_position);
+
                         replication.subscriber.insert(player);
 
                         if let Some(terrain) = terrain {
@@ -564,8 +587,12 @@ fn subscribe_and_replicate_initial(
                                 ));
                             }
                         }
+                    } else {
+                        trace!("Acquire chunk: {:?} (not initialized)", chunk_position);
                     }
                 } else {
+                    trace!("Acquire chunk: {:?} (not spawned)", chunk_position);
+
                     chunk_lut.0.insert(
                         chunk_position,
                         commands
@@ -599,11 +626,13 @@ fn replicate_chunks_late(
             if let Ok(connection) = players.get(player) {
                 connection.send(&add_chunk_packet);
             } else {
-                warn!("Replication requires a connection")
+                debug!("Replication requires a connection")
             }
         }
     }
 }
+
+//=========================================================================== ACTOR REPLICATION ====
 
 fn replicate_actors(
     registries: Res<registry::Registries>,
@@ -651,6 +680,14 @@ fn replicate_actors(
         {
             let (actor_base, actor_position, actor_rotation, actor_head_rotation) =
                 actors.get(actor).unwrap();
+            let add_actor_packet = add_actor_packet(
+                &registries,
+                actor,
+                actor_base,
+                actor_position,
+                actor_rotation,
+                actor_head_rotation,
+            );
 
             for &player in replication.subscriber.iter() {
                 // except owner
@@ -664,16 +701,8 @@ fn replicate_actors(
                     .map_or(false, |actors| actors.remove(&actor))
                 {
                     // connection: add actor, cause: spawn/subscribe
-                    // TODO: might be swapped with remove actors for more efficient memory usage
                     if let Ok(connection) = players.get(player) {
-                        connection.send(&add_actor_packet(
-                            &registries,
-                            actor,
-                            actor_base,
-                            actor_position,
-                            actor_rotation,
-                            actor_head_rotation,
-                        ));
+                        connection.send(&add_actor_packet);
                     }
                 }
             }
@@ -701,7 +730,7 @@ fn replicate_actors(
 }
 
 #[allow(clippy::type_complexity)]
-fn replicate_actors_movement(
+fn replicate_actors_delta(
     chunks: Query<&Replication>,
     actors: Query<
         (Entity, &Parent, &actor::Position, &actor::Rotation),
@@ -711,6 +740,18 @@ fn replicate_actors_movement(
 ) {
     for (actor, chunk, actor_position, actor_rotation) in actors.iter() {
         if let Ok(replication) = chunks.get(chunk.get()) {
+            let update_position_rotation_packet = s2c::GamePacket::TeleportEntity {
+                id: VarI32(actor.index() as i32),
+                pos: actor_position.0,
+                pitch: Angle(actor_rotation.pitch),
+                yaw: Angle(actor_rotation.yaw),
+                on_ground: false,
+            };
+            let update_head_rotation_packet = s2c::GamePacket::RotateHead {
+                entity_id: VarI32(actor.index() as i32),
+                head_yaw: Angle(actor_rotation.yaw),
+            };
+
             for &player in replication.subscriber.iter() {
                 // except owner
                 if actor == player {
@@ -719,22 +760,15 @@ fn replicate_actors_movement(
 
                 // connection: teleport entity, cause: movement
                 if let Ok(connection) = players.get(player) {
-                    connection.send(&s2c::GamePacket::TeleportEntity {
-                        id: VarI32(actor.index() as i32),
-                        pos: actor_position.0,
-                        pitch: Angle(actor_rotation.pitch),
-                        yaw: Angle(actor_rotation.yaw),
-                        on_ground: false,
-                    });
-                    connection.send(&s2c::GamePacket::RotateHead {
-                        entity_id: VarI32(actor.index() as i32),
-                        head_yaw: Angle(actor_rotation.yaw),
-                    });
+                    connection.send(&update_position_rotation_packet);
+                    connection.send(&update_head_rotation_packet);
                 }
             }
         }
     }
 }
+
+//====================================================================================== HELPER ====
 
 struct Packet(Vec<u8>);
 

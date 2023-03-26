@@ -29,14 +29,17 @@ impl ChunkBundle {
     }
 }
 
-/// Chunk by position (Level)
+/// Chunk by position look-up table (Level)
 #[derive(Default, Component)]
 pub struct LookupTable(pub HashMap<IVec2, Entity>);
 
+/// Required properties (Chunk)
 #[derive(Component)]
 pub struct Chunk(pub IVec2);
 
 /// Keeps the hierarchy of actors in chunks consistent
+/// - if chunk has changed, place actor into new chunk
+/// - if new chunk does not exist, create new chunk
 pub fn update_hierarchy(
     mut commands: Commands,
     mut levels: Query<&mut LookupTable>,
@@ -73,7 +76,7 @@ pub fn update_hierarchy(
                 chunk_lut.0.insert(chunk_position, chunk);
             }
         } else {
-            warn!("Parent of actor is neither a level nor a chunk")
+            debug!("Parent of actor is neither a level nor a chunk")
         }
     }
 }

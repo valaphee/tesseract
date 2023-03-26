@@ -1,15 +1,16 @@
-use std::path::PathBuf;
+use std::{
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
-use bevy::prelude::*;
+use bevy::{math::DVec3, prelude::*};
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
 use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
-use tesseract_savegame::{chunk::Chunk as RegionChunk, region::RegionStorage};
 
-use crate::{
-    level,
-    registry::{BlockStateRegistry, DataRegistry},
-};
+use crate::{actor, level, registry, replication};
 
 #[derive(Serialize, Deserialize)]
 pub struct PersistencePlugin {
@@ -38,24 +39,76 @@ impl Plugin for PersistencePlugin {
                     chunks: default(),
                 },
                 Persistence {
-                    region_storage: RegionStorage::new(path.join("overworld/region")),
+                    region_storage: tesseract_savegame::region::RegionStorage::new(
+                        path.join("overworld/region"),
+                    ),
                 },
             ));
         };
 
         app.add_systems(PreStartup, spawn_levels)
+            .add_systems(PreUpdate, load_players)
             .add_systems(PreUpdate, load_chunks);
     }
 }
 
 #[derive(Component)]
 struct Persistence {
-    region_storage: RegionStorage,
+    region_storage: tesseract_savegame::region::RegionStorage,
 }
 
+/// Loads savegame data for newly connected players
+fn load_players(
+    mut commands: Commands,
+    levels: Query<(Entity, &level::Level)>,
+    players: Query<(Entity, &replication::Connection), Added<replication::Connection>>,
+) {
+    for (player, connection) in players.iter() {
+        let savegame_player_path =
+            format!("levels/overworld/playerdata/{}.dat", connection.user.id);
+        let savegame_player_path = Path::new(&savegame_player_path);
+        if savegame_player_path.exists() {
+            let savegame_player = {
+                let mut data = vec![];
+                GzDecoder::new(File::open(savegame_player_path).unwrap())
+                    .read_to_end(&mut data)
+                    .unwrap();
+                tesseract_nbt::de::from_slice::<tesseract_savegame::entity::Player>(
+                    &mut data.as_slice(),
+                )
+                .unwrap()
+            };
+
+            let (level, _) = levels
+                .iter()
+                .find(|(_, level_base)| level_base.name == savegame_player.level)
+                .unwrap();
+
+            commands
+                .entity(player)
+                .insert((actor::ActorBundle {
+                    actor: actor::Actor {
+                        id: connection.user.id,
+                        type_: "minecraft:player".into(),
+                    },
+                    position: actor::Position(DVec3::from_array(savegame_player.entity.position)),
+                    rotation: actor::Rotation {
+                        pitch: savegame_player.entity.rotation[1],
+                        yaw: savegame_player.entity.rotation[0],
+                    },
+                    head_rotation: actor::HeadRotation {
+                        head_yaw: savegame_player.entity.rotation[0],
+                    },
+                },))
+                .set_parent(level);
+        }
+    }
+}
+
+/// Loads savegame chunks for newly spawned chunks
 fn load_chunks(
-    block_state_registry: Res<BlockStateRegistry>,
-    biome_registry: Res<DataRegistry<Biome>>,
+    block_state_registry: Res<registry::BlockStateRegistry>,
+    biome_registry: Res<registry::DataRegistry<Biome>>,
     mut commands: Commands,
     mut levels: Query<&mut Persistence>,
     chunks: Query<(Entity, &level::chunk::Chunk, &Parent), Without<level::chunk::Terrain>>,
@@ -63,10 +116,11 @@ fn load_chunks(
     for (chunk, chunk_base, level) in chunks.iter() {
         let region_storage = &mut levels.get_mut(level.get()).unwrap().region_storage;
         if let Some(region_chunk_data) = region_storage.read(chunk_base.0) {
-            let region_chunk =
-                tesseract_nbt::de::from_slice::<RegionChunk>(&mut region_chunk_data.as_slice())
-                    .unwrap();
-            let sections = region_chunk
+            let savegame_chunk = tesseract_nbt::de::from_slice::<tesseract_savegame::chunk::Chunk>(
+                &mut region_chunk_data.as_slice(),
+            )
+            .unwrap();
+            let sections = savegame_chunk
                 .sections
                 .into_iter()
                 .map(|region_chunk_section| {

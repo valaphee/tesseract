@@ -9,6 +9,7 @@ pub struct LevelBundle {
     pub chunks: chunk::LookupTable,
 }
 
+/// Required properties (Level)
 #[derive(Component)]
 pub struct Level {
     pub name: String,

@@ -17,6 +17,7 @@ use tesseract_protocol::{
     codec::{Codec, Compression},
     packet::{c2s, s2c},
     types::Intention,
+    Decode, Encode,
 };
 
 #[tokio::main]
@@ -34,21 +35,17 @@ async fn main() {
 
 async fn handle_new_connection(socket: TcpStream) {
     socket.set_nodelay(true).unwrap();
-    let mut framed_socket = Framed::new(
-        socket,
-        Codec::<s2c::HandshakePacket, c2s::HandshakePacket>::default(),
-    );
+
+    let mut framed_socket = Framed::new(socket, Codec::default());
 
     let client_socket = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 25565))
         .await
         .unwrap();
     client_socket.set_nodelay(true).unwrap();
-    let mut framed_client_socket = Framed::new(
-        client_socket,
-        Codec::<c2s::HandshakePacket, s2c::HandshakePacket>::default(),
-    );
 
-    match framed_socket.next().await.unwrap().unwrap() {
+    let mut framed_client_socket = Framed::new(client_socket, Codec::default());
+
+    match next(&mut framed_socket).await.decode() {
         c2s::HandshakePacket::Intention {
             protocol_version,
             host_name,
@@ -56,73 +53,65 @@ async fn handle_new_connection(socket: TcpStream) {
             intention,
         } => match intention {
             Intention::Status => {
-                framed_client_socket
-                    .send(c2s::HandshakePacket::Intention {
+                encode_and_send(
+                    &mut framed_socket,
+                    &c2s::HandshakePacket::Intention {
                         protocol_version,
                         host_name,
                         port,
                         intention: Intention::Status,
-                    })
-                    .await
-                    .unwrap();
+                    },
+                )
+                .await;
 
-                let mut framed_socket = framed_socket
-                    .map_codec(|codec| codec.cast::<s2c::StatusPacket, c2s::StatusPacket>());
-                let mut framed_client_socket = framed_client_socket
-                    .map_codec(|codec| codec.cast::<c2s::StatusPacket, s2c::StatusPacket>());
-
-                let packet = framed_socket.next().await.unwrap().unwrap();
+                let packet = next(&mut framed_socket).await.decode();
                 if matches!(packet, c2s::StatusPacket::StatusRequest { .. }) {
-                    framed_client_socket.send(packet).await.unwrap();
+                    encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
                     unimplemented!()
                 }
 
-                let packet = framed_client_socket.next().await.unwrap().unwrap();
+                let packet = next(&mut framed_client_socket).await.decode();
                 if matches!(packet, s2c::StatusPacket::StatusResponse { .. }) {
-                    framed_socket.send(packet).await.unwrap();
+                    encode_and_send(&mut framed_socket, &packet).await;
                 } else {
                     unimplemented!()
                 }
 
-                let packet = framed_socket.next().await.unwrap().unwrap();
+                let packet = next(&mut framed_socket).await.decode();
                 if matches!(packet, c2s::StatusPacket::PingRequest { .. }) {
-                    framed_client_socket.send(packet).await.unwrap();
+                    encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
                     unimplemented!()
                 }
 
-                let packet = framed_client_socket.next().await.unwrap().unwrap();
+                let packet = next(&mut framed_client_socket).await.decode();
                 if matches!(packet, s2c::StatusPacket::PongResponse { .. }) {
-                    framed_socket.send(packet).await.unwrap();
+                    encode_and_send(&mut framed_socket, &packet).await;
                 } else {
                     unimplemented!()
                 }
             }
             Intention::Login => {
-                framed_client_socket
-                    .send(c2s::HandshakePacket::Intention {
+                encode_and_send(
+                    &mut framed_client_socket,
+                    &c2s::HandshakePacket::Intention {
                         protocol_version,
                         host_name,
                         port,
                         intention: Intention::Login,
-                    })
-                    .await
-                    .unwrap();
+                    },
+                )
+                .await;
 
-                let mut framed_socket = framed_socket
-                    .map_codec(|codec| codec.cast::<s2c::LoginPacket, c2s::LoginPacket>());
-                let mut framed_client_socket = framed_client_socket
-                    .map_codec(|codec| codec.cast::<c2s::LoginPacket, s2c::LoginPacket>());
-
-                let packet = framed_socket.next().await.unwrap().unwrap();
+                let packet = next(&mut framed_socket).await.decode();
                 if matches!(packet, c2s::LoginPacket::Hello { .. }) {
-                    framed_client_socket.send(packet).await.unwrap();
+                    encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
                     unimplemented!()
                 }
 
-                match framed_client_socket.next().await.unwrap().unwrap() {
+                match next(&mut framed_client_socket).await.decode() {
                     s2c::LoginPacket::Hello {
                         server_id,
                         public_key,
@@ -151,21 +140,22 @@ async fn handle_new_connection(socket: TcpStream) {
                         .unwrap();
 
                         let public_key = RsaPublicKey::from_public_key_der(&public_key).unwrap();
-                        framed_client_socket
-                            .send(c2s::LoginPacket::Key {
+                        encode_and_send(
+                            &mut framed_client_socket,
+                            &c2s::LoginPacket::Key {
                                 key: public_key
                                     .encrypt(&mut rng, Pkcs1v15Encrypt::default(), &key)
                                     .unwrap(),
                                 nonce: public_key
                                     .encrypt(&mut rng, Pkcs1v15Encrypt::default(), &nonce)
                                     .unwrap(),
-                            })
-                            .await
-                            .unwrap();
+                            },
+                        )
+                        .await;
                         framed_client_socket.codec_mut().enable_encryption(&key);
 
                         loop {
-                            match framed_client_socket.next().await.unwrap().unwrap() {
+                            match next(&mut framed_client_socket).await.decode() {
                                 s2c::LoginPacket::LoginCompression {
                                     compression_threshold,
                                 } => {
@@ -173,12 +163,13 @@ async fn handle_new_connection(socket: TcpStream) {
                                         Compression::default(),
                                         compression_threshold.0 as u16,
                                     );
-                                    framed_socket
-                                        .send(s2c::LoginPacket::LoginCompression {
+                                    encode_and_send(
+                                        &mut framed_socket,
+                                        &s2c::LoginPacket::LoginCompression {
                                             compression_threshold,
-                                        })
-                                        .await
-                                        .unwrap();
+                                        },
+                                    )
+                                    .await;
                                     framed_socket.codec_mut().enable_compression(
                                         Compression::default(),
                                         compression_threshold.0 as u16,
@@ -186,7 +177,7 @@ async fn handle_new_connection(socket: TcpStream) {
                                 }
                                 packet => {
                                     if matches!(packet, s2c::LoginPacket::GameProfile(..)) {
-                                        framed_socket.send(packet).await.unwrap();
+                                        encode_and_send(&mut framed_socket, &packet).await;
                                         break;
                                     } else {
                                         unimplemented!()
@@ -194,35 +185,21 @@ async fn handle_new_connection(socket: TcpStream) {
                                 }
                             }
                         }
-                        let mut framed_socket = framed_socket
-                            .map_codec(|codec| codec.cast::<s2c::GamePacket, c2s::GamePacket>());
-                        let mut framed_client_socket = framed_client_socket
-                            .map_codec(|codec| codec.cast::<c2s::GamePacket, s2c::GamePacket>());
                         tokio::spawn(async move {
                             loop {
                                 tokio::select! {
-                                    packet = framed_socket.next() => {
-                                        if let Some(packet) = packet {
-                                            let packet = packet.unwrap();
-                                            println!("Recv: {:?}", &packet);
-                                            framed_client_socket.send(packet).await.unwrap();
-                                        } else {
-                                            break;
-                                        }
+                                    packet = next(&mut framed_socket) => {
+                                        let packet = packet.decode::<c2s::GamePacket>();
+                                        println!("Recv: {:?}", packet);
+                                        encode_and_send(&mut framed_client_socket, &packet).await;
                                     }
-                                    packet = framed_client_socket.next() => {
-                                        if let Some(packet) = packet {
-                                            let packet = packet.unwrap();
-                                            println!("Send: {:?}", &packet);
-                                            framed_socket.send(packet).await.unwrap();
-                                        } else {
-                                            break;
-                                        }
+                                    packet = next(&mut framed_client_socket) => {
+                                        let packet = packet.decode::<s2c::GamePacket>();
+                                        println!("Send: {:?}", packet);
+                                        encode_and_send(&mut framed_client_socket, &packet).await;
                                     }
                                 }
                             }
-                            framed_socket.close().await.unwrap();
-                            framed_client_socket.close().await.unwrap();
                         });
                     }
                     _ => unimplemented!(),
@@ -231,4 +208,22 @@ async fn handle_new_connection(socket: TcpStream) {
             _ => unimplemented!(),
         },
     }
+}
+
+struct Packet(Vec<u8>);
+
+impl Packet {
+    fn decode<'a, T: Decode<'a>>(&'a self) -> T {
+        T::decode(&mut self.0.as_slice()).unwrap()
+    }
+}
+
+async fn encode_and_send(socket: &mut Framed<TcpStream, Codec>, packet: &impl Encode) {
+    let mut data = vec![];
+    packet.encode(&mut data).unwrap();
+    socket.send(&data).await.unwrap();
+}
+
+async fn next(socket: &mut Framed<TcpStream, Codec>) -> Packet {
+    Packet(socket.next().await.unwrap().unwrap())
 }

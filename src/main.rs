@@ -19,7 +19,7 @@ fn main() {
     let (non_blocking_file_appender, _guard) =
         tracing_appender::non_blocking(tracing_appender::rolling::daily("logs", "tesseract.log"));
     tracing_subscriber::registry()
-        .with(EnvFilter::try_new("debug").unwrap())
+        .with(EnvFilter::try_new("info,tesseract=trace").unwrap())
         .with(
             tracing_subscriber::fmt::Layer::new()
                 .with_ansi(false)

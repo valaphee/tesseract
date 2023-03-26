@@ -1,6 +1,7 @@
 use bevy::{math::DVec3, prelude::*};
 use uuid::Uuid;
 
+/// All required components to describe an actor
 #[derive(Bundle)]
 pub struct ActorBundle {
     pub actor: Actor,
@@ -9,6 +10,7 @@ pub struct ActorBundle {
     pub head_rotation: HeadRotation,
 }
 
+/// Required properties (Actor)
 #[derive(Component)]
 pub struct Actor {
     pub id: Uuid,

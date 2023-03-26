@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub mod chunk;
+pub mod entity;
 pub mod region;
 
 #[derive(Serialize, Deserialize)]
