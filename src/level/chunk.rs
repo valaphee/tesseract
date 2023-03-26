@@ -76,7 +76,10 @@ pub fn update_hierarchy(
                 chunk_lut.0.insert(chunk_position, chunk);
             }
         } else {
-            debug!("Parent of actor is neither a level nor a chunk")
+            warn!(
+                "Parent ({:?}) of {:?} is neither a level nor a chunk",
+                level, actor
+            );
         }
     }
 }

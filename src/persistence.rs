@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
 
-use crate::{actor, level, registry, replication};
+use crate::{actor, level, level::AgeAndTime, registry, replication, Load};
 
 #[derive(Serialize, Deserialize)]
 pub struct PersistencePlugin(HashMap<String, PersistencePluginLevel>);
@@ -37,13 +37,28 @@ impl Plugin for PersistencePlugin {
         let levels = self.0.clone();
         let spawn_levels = move |mut commands: Commands| {
             for (level_name, level) in levels.iter() {
+                let savegame_level = {
+                    let mut data = vec![];
+                    GzDecoder::new(File::open(level.path.join("level.dat")).unwrap())
+                        .read_to_end(&mut data)
+                        .unwrap();
+                    tesseract_nbt::de::from_slice::<tesseract_savegame::level::Level>(
+                        &mut data.as_slice(),
+                    )
+                    .unwrap()
+                }
+                .data;
+
                 commands.spawn((
                     level::LevelBundle {
                         level: level::Level {
                             name: level_name.clone(),
                             dimension_type: level_name.clone(),
                         },
-                        age_and_time: default(),
+                        age_and_time: AgeAndTime {
+                            age: savegame_level.time as u64,
+                            time: savegame_level.day_time as u64,
+                        },
                         chunks: default(),
                     },
                     Persistence {
@@ -56,8 +71,8 @@ impl Plugin for PersistencePlugin {
         };
 
         app.add_systems(PreStartup, spawn_levels)
-            .add_systems(PreUpdate, load_players)
-            .add_systems(PreUpdate, load_chunks);
+            .add_systems(Load, load_players)
+            .add_systems(Load, load_chunks);
     }
 }
 
@@ -74,7 +89,7 @@ fn load_players(
 ) {
     for (player, connection) in players.iter() {
         let savegame_player_path =
-            format!("levels/overworld/playerdata/{}.dat", connection.user.id);
+            format!("levels/overworld/playerdata/{}.dat", connection.user().id);
         let savegame_player_path = Path::new(&savegame_player_path);
         if savegame_player_path.exists() {
             let savegame_player = {
@@ -88,28 +103,35 @@ fn load_players(
                 .unwrap()
             };
 
-            let (level, _) = levels
+            if let Some((level, _)) = levels
                 .iter()
                 .find(|(_, level_base)| level_base.name == savegame_player.level)
-                .unwrap();
-
-            commands
-                .entity(player)
-                .insert(actor::ActorBundle {
-                    actor: actor::Actor {
-                        id: connection.user.id,
-                        type_: "minecraft:player".into(),
-                    },
-                    position: actor::Position(DVec3::from_array(savegame_player.entity.position)),
-                    rotation: actor::Rotation {
-                        pitch: savegame_player.entity.rotation[1],
-                        yaw: savegame_player.entity.rotation[0],
-                    },
-                    head_rotation: actor::HeadRotation {
-                        head_yaw: savegame_player.entity.rotation[0],
-                    },
-                })
-                .set_parent(level);
+            {
+                commands
+                    .entity(player)
+                    .insert(actor::ActorBundle {
+                        actor: actor::Actor {
+                            id: connection.user().id,
+                            type_: "minecraft:player".into(),
+                        },
+                        position: actor::Position(DVec3::from_array(
+                            savegame_player.entity.position,
+                        )),
+                        rotation: actor::Rotation {
+                            pitch: savegame_player.entity.rotation[1],
+                            yaw: savegame_player.entity.rotation[0],
+                        },
+                        head_rotation: actor::HeadRotation {
+                            head_yaw: savegame_player.entity.rotation[0],
+                        },
+                    })
+                    .set_parent(level);
+            } else {
+                warn!(
+                    "Level ({:?}) for {:?} does not exist",
+                    savegame_player.level, player
+                );
+            }
         }
     }
 }
@@ -120,7 +142,7 @@ fn load_chunks(
     biome_registry: Res<registry::DataRegistry<Biome>>,
     mut commands: Commands,
     mut levels: Query<&mut Persistence>,
-    chunks: Query<(Entity, &level::chunk::Chunk, &Parent), Without<level::chunk::Terrain>>,
+    chunks: Query<(Entity, &level::chunk::Chunk, &Parent), Added<level::chunk::Chunk>>,
 ) {
     for (chunk, chunk_base, level) in chunks.iter() {
         let region_storage = &mut levels.get_mut(level.get()).unwrap().region_storage;

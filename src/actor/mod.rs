@@ -1,6 +1,8 @@
 use bevy::{math::DVec3, prelude::*};
 use uuid::Uuid;
 
+use crate::{level, replication};
+
 /// All required components to describe an actor
 #[derive(Bundle)]
 pub struct ActorBundle {
@@ -32,4 +34,32 @@ pub struct Rotation {
 #[derive(Component)]
 pub struct HeadRotation {
     pub head_yaw: f32,
+}
+
+#[allow(clippy::type_complexity)]
+pub fn initialize_players(
+    mut commands: Commands,
+    levels: Query<Entity, With<level::Level>>,
+    players: Query<
+        (Entity, &replication::Connection),
+        (Added<replication::Connection>, Without<Actor>),
+    >,
+) {
+    for (player, connection) in players.iter() {
+        commands
+            .entity(player)
+            .insert(ActorBundle {
+                actor: Actor {
+                    id: connection.user().id,
+                    type_: "minecraft:player".into(),
+                },
+                position: Position(DVec3::new(0.0, 127.0, 0.0)),
+                rotation: Rotation {
+                    pitch: 0.0,
+                    yaw: 0.0,
+                },
+                head_rotation: HeadRotation { head_yaw: 0.0 },
+            })
+            .set_parent(levels.single());
+    }
 }

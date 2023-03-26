@@ -2,11 +2,13 @@ use std::{
     borrow::Cow,
     collections::{hash_map::Entry, HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    time::{Duration, Instant},
 };
 
 use bevy::prelude::*;
 use futures::{SinkExt, StreamExt};
 use num::BigInt;
+use rand::{thread_rng, RngCore};
 use rsa::{pkcs8::EncodePublicKey, rand_core::OsRng, Pkcs1v15Encrypt, RsaPrivateKey};
 use serde::{Deserialize, Serialize};
 use sha1::{digest::Update, Digest, Sha1};
@@ -30,7 +32,7 @@ use tesseract_protocol::{
     Decode, Encode,
 };
 
-use crate::{actor, level, registry};
+use crate::{actor, level, registry, PreLoad, Save};
 
 #[derive(Serialize, Deserialize)]
 pub struct ReplicationPlugin {
@@ -94,23 +96,27 @@ impl Plugin for ReplicationPlugin {
         };
 
         app.add_systems(PostStartup, listen)
-            .add_systems(First, spawn_player)
-            .add_systems(First, update_players)
-            .add_systems(Last, replicate_initial)
-            .add_systems(Last, subscribe_and_replicate_chunks)
-            .add_systems(Last, cleanup_chunks)
-            .add_systems(Last, replicate_chunks_late)
-            .add_systems(Last, replicate_actors)
-            .add_systems(Last, replicate_actors_delta);
+            .add_systems(PreLoad, spawn_player)
+            .add_systems(PreLoad, update_players)
+            .add_systems(Save, replicate_initial)
+            .add_systems(Save, subscribe_and_replicate_chunks)
+            .add_systems(Save, cleanup_chunks)
+            .add_systems(Save, replicate_chunks_late)
+            .add_systems(Save, replicate_actors)
+            .add_systems(Save, replicate_actors_delta);
     }
 }
 
 #[derive(Component)]
 pub struct Connection {
-    pub user: User,
+    user: User,
 
     rx: mpsc::UnboundedReceiver<Vec<u8>>,
     tx: mpsc::UnboundedSender<Vec<u8>>,
+
+    keep_alive: Instant,
+    keep_alive_id: Option<i64>,
+    latency: u32,
 }
 
 impl Connection {
@@ -118,6 +124,14 @@ impl Connection {
         let mut data = vec![];
         packet.encode(&mut data).unwrap();
         self.tx.send(data).unwrap();
+    }
+
+    pub fn user(&self) -> &User {
+        &self.user
+    }
+
+    pub fn latency(&self) -> u32 {
+        self.latency
     }
 }
 
@@ -243,6 +257,9 @@ async fn handle_new_connection(
                         user,
                         rx: rx_packet_rx,
                         tx: tx_packet_tx,
+                        keep_alive: Instant::now(),
+                        keep_alive_id: None,
+                        latency: 0,
                     })
                     .is_ok()
                 {}
@@ -313,7 +330,8 @@ fn replicate_initial(
     >,
 ) {
     for (player, connection, actor_position, actor_rotation, chunk) in players.iter() {
-        let (level_base, level_age_and_time) = levels.get(chunks.get(chunk.get()).unwrap().get()).unwrap();
+        let (level_base, level_age_and_time) =
+            levels.get(chunks.get(chunk.get()).unwrap().get()).unwrap();
         connection.send(&s2c::GamePacket::Login {
             player_id: player.index() as i32,
             hardcore: false,
@@ -372,13 +390,26 @@ fn update_players(
     for (player, mut connection, mut position, mut rotation, mut subscription_distance) in
         players.iter_mut()
     {
+        if connection.keep_alive.elapsed() >= Duration::from_secs(15) {
+            if connection.keep_alive_id.is_none() {
+                let keep_alive_id = thread_rng().next_u64() as i64;
+                connection.keep_alive = Instant::now();
+                connection.keep_alive_id = Some(keep_alive_id);
+
+                connection.send(&s2c::GamePacket::KeepAlive { id: keep_alive_id });
+            } else {
+                connection.rx.close();
+            }
+        }
+
         if connection.tx.is_closed() {
             info!(
                 "Player {} (UUID: {}) disconnected",
                 connection.user.name, connection.user.id
             );
 
-            commands.entity(player)
+            commands
+                .entity(player)
                 .remove::<Connection>()
                 .remove::<SubscriptionDistance>();
 
@@ -391,6 +422,20 @@ fn update_players(
                         let new_subscription_distance = view_distance as u8 + 3;
                         if subscription_distance.0 != new_subscription_distance {
                             subscription_distance.0 = new_subscription_distance;
+                        }
+                    }
+                    c2s::GamePacket::KeepAlive { id } => {
+                        if let Some(current_id) = connection.keep_alive_id {
+                            if current_id == id {
+                                connection.keep_alive_id = None;
+                                connection.latency = if connection.latency != 0 {
+                                    (connection.latency * 3
+                                        + connection.keep_alive.elapsed().as_millis() as u32)
+                                        / 4
+                                } else {
+                                    connection.latency
+                                };
+                            }
                         }
                     }
                     c2s::GamePacket::MovePlayerPos { x, y, z, .. } => {
@@ -463,14 +508,7 @@ fn cleanup_chunks(
     levels: Query<&level::chunk::LookupTable>,
     chunks: Query<&Parent>,
     mut subscription_chunks: Query<&mut Replication>,
-    players: Query<
-        (
-            Entity,
-            &Parent,
-            &Subscriptions,
-        ),
-        Without<Connection>
-    >
+    players: Query<(Entity, &Parent, &Subscriptions), Without<Connection>>,
 ) {
     for (player, chunk, subscriptions) in players.iter() {
         if let Ok(level) = chunks.get(chunk.get()) {

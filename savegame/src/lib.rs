@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod chunk;
 pub mod entity;
+pub mod level;
 pub mod region;
 
 #[derive(Serialize, Deserialize)]
