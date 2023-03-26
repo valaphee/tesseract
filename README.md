@@ -18,8 +18,8 @@ All this enables great flexibility, with superior performance.
 
 - persistence
     - multiple levels
-    - chunk loading (block states, biomes)
     - player loading (position, rotation)
+    - chunk loading (block states, biomes)
 - procedural
 - replication
     - encryption

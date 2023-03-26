@@ -1,3 +1,5 @@
+#![feature(result_flattening)]
+
 use std::net::{Ipv4Addr, SocketAddrV4};
 
 use futures::{SinkExt, StreamExt};
@@ -33,7 +35,7 @@ async fn main() {
     }
 }
 
-async fn handle_new_connection(socket: TcpStream) {
+async fn handle_new_connection(socket: TcpStream) -> tesseract_protocol::Result<()> {
     socket.set_nodelay(true).unwrap();
 
     let mut framed_socket = Framed::new(socket, Codec::default());
@@ -45,7 +47,7 @@ async fn handle_new_connection(socket: TcpStream) {
 
     let mut framed_client_socket = Framed::new(client_socket, Codec::default());
 
-    match next(&mut framed_socket).await.decode() {
+    match next(&mut framed_socket).await?.decode()? {
         c2s::HandshakePacket::Intention {
             protocol_version,
             host_name,
@@ -64,32 +66,32 @@ async fn handle_new_connection(socket: TcpStream) {
                 )
                 .await;
 
-                let packet = next(&mut framed_socket).await.decode();
+                let packet = next(&mut framed_socket).await?.decode()?;
                 if matches!(packet, c2s::StatusPacket::StatusRequest { .. }) {
                     encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
-                    unimplemented!()
+                    return Err(tesseract_protocol::Error::UnexpectedPacket);
                 }
 
-                let packet = next(&mut framed_client_socket).await.decode();
+                let packet = next(&mut framed_client_socket).await?.decode()?;
                 if matches!(packet, s2c::StatusPacket::StatusResponse { .. }) {
                     encode_and_send(&mut framed_socket, &packet).await;
                 } else {
-                    unimplemented!()
+                    return Err(tesseract_protocol::Error::UnexpectedPacket);
                 }
 
-                let packet = next(&mut framed_socket).await.decode();
+                let packet = next(&mut framed_socket).await?.decode()?;
                 if matches!(packet, c2s::StatusPacket::PingRequest { .. }) {
                     encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
-                    unimplemented!()
+                    return Err(tesseract_protocol::Error::UnexpectedPacket);
                 }
 
-                let packet = next(&mut framed_client_socket).await.decode();
+                let packet = next(&mut framed_client_socket).await?.decode()?;
                 if matches!(packet, s2c::StatusPacket::PongResponse { .. }) {
                     encode_and_send(&mut framed_socket, &packet).await;
                 } else {
-                    unimplemented!()
+                    return Err(tesseract_protocol::Error::UnexpectedPacket);
                 }
             }
             Intention::Login => {
@@ -104,14 +106,14 @@ async fn handle_new_connection(socket: TcpStream) {
                 )
                 .await;
 
-                let packet = next(&mut framed_socket).await.decode();
+                let packet = next(&mut framed_socket).await?.decode()?;
                 if matches!(packet, c2s::LoginPacket::Hello { .. }) {
                     encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
-                    unimplemented!()
+                    return Err(tesseract_protocol::Error::UnexpectedPacket);
                 }
 
-                match next(&mut framed_client_socket).await.decode() {
+                match next(&mut framed_client_socket).await?.decode()? {
                     s2c::LoginPacket::Hello {
                         server_id,
                         public_key,
@@ -155,7 +157,7 @@ async fn handle_new_connection(socket: TcpStream) {
                         framed_client_socket.codec_mut().enable_encryption(&key);
 
                         loop {
-                            match next(&mut framed_client_socket).await.decode() {
+                            match next(&mut framed_client_socket).await?.decode()? {
                                 s2c::LoginPacket::LoginCompression {
                                     compression_threshold,
                                 } => {
@@ -180,7 +182,7 @@ async fn handle_new_connection(socket: TcpStream) {
                                         encode_and_send(&mut framed_socket, &packet).await;
                                         break;
                                     } else {
-                                        unimplemented!()
+                                        return Err(tesseract_protocol::Error::UnexpectedPacket);
                                     }
                                 }
                             }
@@ -189,12 +191,14 @@ async fn handle_new_connection(socket: TcpStream) {
                             loop {
                                 tokio::select! {
                                     packet = next(&mut framed_socket) => {
-                                        let packet = packet.decode::<c2s::GamePacket>();
+                                        let packet = packet.unwrap();
+                                        let packet = packet.decode::<c2s::GamePacket>().unwrap();
                                         println!("Recv: {:?}", packet);
                                         encode_and_send(&mut framed_client_socket, &packet).await;
                                     }
                                     packet = next(&mut framed_client_socket) => {
-                                        let packet = packet.decode::<s2c::GamePacket>();
+                                        let packet = packet.unwrap();
+                                        let packet = packet.decode::<s2c::GamePacket>().unwrap();
                                         println!("Send: {:?}", packet);
                                         encode_and_send(&mut framed_client_socket, &packet).await;
                                     }
@@ -202,19 +206,21 @@ async fn handle_new_connection(socket: TcpStream) {
                             }
                         });
                     }
-                    _ => unimplemented!(),
+                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
                 };
             }
-            _ => unimplemented!(),
+            _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
         },
     }
+
+    Ok(())
 }
 
 struct Packet(Vec<u8>);
 
 impl Packet {
-    fn decode<'a, T: Decode<'a>>(&'a self) -> T {
-        T::decode(&mut self.0.as_slice()).unwrap()
+    fn decode<'a, T: Decode<'a>>(&'a self) -> tesseract_protocol::Result<T> {
+        T::decode(&mut self.0.as_slice())
     }
 }
 
@@ -224,6 +230,11 @@ async fn encode_and_send(socket: &mut Framed<TcpStream, Codec>, packet: &impl En
     socket.send(&data).await.unwrap();
 }
 
-async fn next(socket: &mut Framed<TcpStream, Codec>) -> Packet {
-    Packet(socket.next().await.unwrap().unwrap())
+async fn next(socket: &mut Framed<TcpStream, Codec>) -> tesseract_protocol::Result<Packet> {
+    socket
+        .next()
+        .await
+        .ok_or(tesseract_protocol::Error::UnexpectedEnd)
+        .flatten()
+        .map(Packet)
 }

@@ -1,3 +1,5 @@
+#![feature(result_flattening)]
+
 use std::{fs::File, path::Path, time::Duration};
 
 use bevy::{app::ScheduleRunnerSettings, prelude::*};
@@ -64,6 +66,7 @@ fn main() {
         ))
         .add_plugin(config.persistence)
         .add_plugin(config.replication)
+        .add_systems(PostUpdate, level::update_time)
         .add_systems(PostUpdate, level::chunk::update_hierarchy)
         .run();
 }

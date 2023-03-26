@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
@@ -13,37 +14,45 @@ use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
 use crate::{actor, level, registry, replication};
 
 #[derive(Serialize, Deserialize)]
-pub struct PersistencePlugin {
+pub struct PersistencePlugin(HashMap<String, PersistencePluginLevel>);
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PersistencePluginLevel {
     path: PathBuf,
 }
 
 impl Default for PersistencePlugin {
     fn default() -> Self {
-        Self {
-            path: "levels".into(),
-        }
+        Self(HashMap::from([(
+            "minecraft:overworld".into(),
+            PersistencePluginLevel {
+                path: "levels/overworld".into(),
+            },
+        )]))
     }
 }
 
 impl Plugin for PersistencePlugin {
     fn build(&self, app: &mut App) {
-        let path = self.path.clone();
-
+        let levels = self.0.clone();
         let spawn_levels = move |mut commands: Commands| {
-            commands.spawn((
-                level::LevelBundle {
-                    level: level::Level {
-                        name: "minecraft:overworld".into(),
-                        dimension_type: "minecraft:overworld".into(),
+            for (level_name, level) in levels.iter() {
+                commands.spawn((
+                    level::LevelBundle {
+                        level: level::Level {
+                            name: level_name.clone(),
+                            dimension_type: level_name.clone(),
+                        },
+                        age_and_time: default(),
+                        chunks: default(),
                     },
-                    chunks: default(),
-                },
-                Persistence {
-                    region_storage: tesseract_savegame::region::RegionStorage::new(
-                        path.join("overworld/region"),
-                    ),
-                },
-            ));
+                    Persistence {
+                        region_storage: tesseract_savegame::region::RegionStorage::new(
+                            level.path.join("region"),
+                        ),
+                    },
+                ));
+            }
         };
 
         app.add_systems(PreStartup, spawn_levels)
@@ -86,7 +95,7 @@ fn load_players(
 
             commands
                 .entity(player)
-                .insert((actor::ActorBundle {
+                .insert(actor::ActorBundle {
                     actor: actor::Actor {
                         id: connection.user.id,
                         type_: "minecraft:player".into(),
@@ -99,7 +108,7 @@ fn load_players(
                     head_rotation: actor::HeadRotation {
                         head_yaw: savegame_player.entity.rotation[0],
                     },
-                },))
+                })
                 .set_parent(level);
         }
     }

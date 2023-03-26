@@ -98,6 +98,7 @@ impl Plugin for ReplicationPlugin {
             .add_systems(First, update_players)
             .add_systems(Last, replicate_initial)
             .add_systems(Last, subscribe_and_replicate_chunks)
+            .add_systems(Last, cleanup_chunks)
             .add_systems(Last, replicate_chunks_late)
             .add_systems(Last, replicate_actors)
             .add_systems(Last, replicate_actors_delta);
@@ -126,15 +127,15 @@ async fn handle_new_connection(
     compression: Compression,
     compression_threshold: Option<u16>,
     new_connection_tx: mpsc::UnboundedSender<Connection>,
-) {
+) -> tesseract_protocol::Result<()> {
     socket.set_nodelay(true).unwrap();
 
     let mut framed_socket = Framed::new(socket, Codec::default());
 
-    match next(&mut framed_socket).await.decode() {
+    match next(&mut framed_socket).await?.decode()? {
         c2s::HandshakePacket::Intention { intention, .. } => match intention {
             Intention::Status => {
-                match next(&mut framed_socket).await.decode() {
+                match next(&mut framed_socket).await?.decode()? {
                     c2s::StatusPacket::StatusRequest => {
                         encode_and_send(
                             &mut framed_socket,
@@ -158,10 +159,10 @@ async fn handle_new_connection(
                         )
                         .await;
                     }
-                    _ => unimplemented!(),
+                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
                 }
 
-                match next(&mut framed_socket).await.decode() {
+                match next(&mut framed_socket).await?.decode()? {
                     c2s::StatusPacket::PingRequest { time } => {
                         encode_and_send(
                             &mut framed_socket,
@@ -169,13 +170,13 @@ async fn handle_new_connection(
                         )
                         .await;
                     }
-                    _ => unimplemented!(),
+                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
                 };
             }
             Intention::Login => {
-                let name = match next(&mut framed_socket).await.decode() {
+                let name = match next(&mut framed_socket).await?.decode()? {
                     c2s::LoginPacket::Hello { name, .. } => name,
-                    _ => unimplemented!(),
+                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
                 };
 
                 let nonce: [u8; 16] = rand::random();
@@ -188,7 +189,7 @@ async fn handle_new_connection(
                     },
                 )
                 .await;
-                let key = match next(&mut framed_socket).await.decode() {
+                let key = match next(&mut framed_socket).await?.decode()? {
                     c2s::LoginPacket::Key { key, nonce } => {
                         private_key
                             .decrypt(Pkcs1v15Encrypt::default(), &nonce)
@@ -197,7 +198,7 @@ async fn handle_new_connection(
                             .decrypt(Pkcs1v15Encrypt::default(), &key)
                             .unwrap()
                     }
-                    _ => unimplemented!(),
+                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
                 };
                 framed_socket.codec_mut().enable_encryption(&key);
 
@@ -269,9 +270,11 @@ async fn handle_new_connection(
                     tx_packet_rx.close()
                 });
             }
-            _ => unimplemented!(),
+            _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
         },
     }
+
+    Ok(())
 }
 
 #[derive(Resource)]
@@ -283,6 +286,7 @@ fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnect
             "Player {} (UUID: {}) connected",
             connection.user.name, connection.user.id
         );
+
         commands.spawn((
             connection,
             SubscriptionDistance::default(),
@@ -295,7 +299,7 @@ fn replicate_initial(
     dimension_type_registry: Res<registry::DataRegistry<DimensionType>>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
     damage_type_registry: Res<registry::DataRegistry<DamageType>>,
-    levels: Query<&level::Level>,
+    levels: Query<(&level::Level, &level::AgeAndTime)>,
     chunks: Query<&Parent>,
     players: Query<
         (
@@ -309,7 +313,7 @@ fn replicate_initial(
     >,
 ) {
     for (player, connection, actor_position, actor_rotation, chunk) in players.iter() {
-        let level_base = levels.get(chunks.get(chunk.get()).unwrap().get()).unwrap();
+        let (level_base, level_age_and_time) = levels.get(chunks.get(chunk.get()).unwrap().get()).unwrap();
         connection.send(&s2c::GamePacket::Login {
             player_id: player.index() as i32,
             hardcore: false,
@@ -337,12 +341,15 @@ fn replicate_initial(
             is_flat: false,
             last_death_location: None,
         });
-        connection.send(&s2c::game::GamePacket::SetDefaultSpawnPosition {
+        connection.send(&s2c::GamePacket::SetDefaultSpawnPosition {
             pos: default(),
             yaw: default(),
         });
-
-        connection.send(&s2c::game::GamePacket::PlayerPosition {
+        connection.send(&s2c::GamePacket::SetTime {
+            game_time: level_age_and_time.age as i64,
+            day_time: level_age_and_time.time as i64,
+        });
+        connection.send(&s2c::GamePacket::PlayerPosition {
             pos: actor_position.0,
             yaw: actor_rotation.yaw,
             pitch: actor_rotation.pitch,
@@ -366,10 +373,20 @@ fn update_players(
         players.iter_mut()
     {
         if connection.tx.is_closed() {
-            commands.entity(player).remove::<Connection>();
+            info!(
+                "Player {} (UUID: {}) disconnected",
+                connection.user.name, connection.user.id
+            );
+
+            commands.entity(player)
+                .remove::<Connection>()
+                .remove::<SubscriptionDistance>();
+
+            // remove all subscriptions
+            subscription_distance.0 = 0;
         } else {
             while let Ok(packet) = connection.rx.try_recv() {
-                match Packet(packet).decode() {
+                match Packet(packet).decode().unwrap() {
                     c2s::GamePacket::ClientInformation { view_distance, .. } => {
                         let new_subscription_distance = view_distance as u8 + 3;
                         if subscription_distance.0 != new_subscription_distance {
@@ -441,13 +458,46 @@ struct SubscriptionDistance(pub u8);
 #[derive(Default, Component)]
 struct Subscriptions(HashSet<IVec2>);
 
+fn cleanup_chunks(
+    mut commands: Commands,
+    levels: Query<&level::chunk::LookupTable>,
+    chunks: Query<&Parent>,
+    mut subscription_chunks: Query<&mut Replication>,
+    players: Query<
+        (
+            Entity,
+            &Parent,
+            &Subscriptions,
+        ),
+        Without<Connection>
+    >
+) {
+    for (player, chunk, subscriptions) in players.iter() {
+        if let Ok(level) = chunks.get(chunk.get()) {
+            commands.entity(player).remove::<Subscriptions>();
+
+            let chunk_lut = levels.get(level.get()).unwrap();
+            for chunk_position in subscriptions.0.iter() {
+                if let Some(&chunk) = chunk_lut.0.get(chunk_position) {
+                    trace!("Release chunk: {:?}", chunk_position);
+
+                    let mut replication = subscription_chunks.get_mut(chunk).unwrap();
+                    replication.subscriber.remove(&player);
+                } else {
+                    trace!("Release chunk: {:?} (not spawned)", chunk_position);
+                }
+            }
+        }
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn subscribe_and_replicate_chunks(
     registries: Res<registry::Registries>,
     mut commands: Commands,
     mut levels: Query<&mut level::chunk::LookupTable>,
-    chunk_positions: Query<(&level::chunk::Chunk, &Parent)>,
-    mut chunks: Query<(Option<&level::chunk::Terrain>, &mut Replication)>,
+    chunks: Query<(&level::chunk::Chunk, &Parent)>,
+    mut subscription_chunks: Query<(Option<&level::chunk::Terrain>, &mut Replication)>,
     actors: Query<(
         Entity,
         &actor::Actor,
@@ -469,7 +519,7 @@ fn subscribe_and_replicate_chunks(
     for (player, chunk, connection, subscription_distance, mut actual_subscriptions) in
         players.iter_mut()
     {
-        if let Ok((chunk_base, level)) = chunk_positions.get(chunk.get()) {
+        if let Ok((chunk_base, level)) = chunks.get(chunk.get()) {
             let subscription_distance = subscription_distance.0 as i32;
             if subscription_distance == 0 {
                 continue;
@@ -533,7 +583,7 @@ fn subscribe_and_replicate_chunks(
                 if let Some(&chunk) = chunk_lut.0.get(chunk_position) {
                     trace!("Release chunk: {:?}", chunk_position);
 
-                    let (_, mut replication) = chunks.get_mut(chunk).unwrap();
+                    let (_, mut replication) = subscription_chunks.get_mut(chunk).unwrap();
                     replication.subscriber.remove(&player);
 
                     // connection: remove chunk and actors, cause: unsubscribe
@@ -556,7 +606,7 @@ fn subscribe_and_replicate_chunks(
             // acquire chunks
             for chunk_position in acquire_chunks {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
-                    if let Ok((terrain, mut replication)) = chunks.get_mut(chunk) {
+                    if let Ok((terrain, mut replication)) = subscription_chunks.get_mut(chunk) {
                         trace!("Acquire chunk: {:?}", chunk_position);
 
                         replication.subscriber.insert(player);
@@ -773,8 +823,8 @@ fn replicate_actors_delta(
 struct Packet(Vec<u8>);
 
 impl Packet {
-    fn decode<'a, T: Decode<'a>>(&'a self) -> T {
-        T::decode(&mut self.0.as_slice()).unwrap()
+    fn decode<'a, T: Decode<'a>>(&'a self) -> tesseract_protocol::Result<T> {
+        T::decode(&mut self.0.as_slice())
     }
 }
 
@@ -784,8 +834,13 @@ async fn encode_and_send(socket: &mut Framed<TcpStream, Codec>, packet: &impl En
     socket.send(&data).await.unwrap();
 }
 
-async fn next(socket: &mut Framed<TcpStream, Codec>) -> Packet {
-    Packet(socket.next().await.unwrap().unwrap())
+async fn next(socket: &mut Framed<TcpStream, Codec>) -> tesseract_protocol::Result<Packet> {
+    socket
+        .next()
+        .await
+        .ok_or(tesseract_protocol::Error::UnexpectedEnd)
+        .flatten()
+        .map(Packet)
 }
 
 fn add_chunk_packet<'a>(position: IVec2, terrain: &level::chunk::Terrain) -> s2c::GamePacket<'a> {

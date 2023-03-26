@@ -28,6 +28,11 @@ pub enum Error {
     UnknownVariant(i32),
     #[error("Remaining bytes: {0}")]
     RemainingBytes(usize),
+
+    #[error("Unexpected end")]
+    UnexpectedEnd,
+    #[error("Unexpected packet")]
+    UnexpectedPacket,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
