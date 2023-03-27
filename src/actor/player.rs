@@ -1,6 +1,6 @@
-use bevy::{math::DVec3, prelude::*};
+use bevy::prelude::*;
 
-use crate::{actor, level, replication};
+use crate::{actor, level};
 
 #[derive(Bundle)]
 pub struct PlayerBundle {
@@ -18,32 +18,6 @@ pub enum Interaction {
     BlockBreak(IVec3),
 }
 
-#[allow(clippy::type_complexity)]
-pub fn initialize(
-    mut commands: Commands,
-    levels: Query<Entity, With<level::Level>>,
-    players: Query<
-        (Entity, &replication::Connection),
-        (Added<replication::Connection>, Without<actor::Actor>),
-    >,
-) {
-    for (player, connection) in players.iter() {
-        commands
-            .entity(player)
-            .insert((PlayerBundle {
-                actor: actor::Actor {
-                    id: connection.user().id,
-                    type_: "minecraft:player".into(),
-                },
-                position: actor::Position(DVec3::new(0.0, 127.0, 0.0)),
-                rotation: default(),
-                head_rotation: default(),
-                interaction: default(),
-            },))
-            .set_parent(levels.single());
-    }
-}
-
 pub fn update_interactions(
     levels: Query<&level::chunk::LookupTable>,
     mut chunks: Query<(&level::chunk::Chunk, &mut level::chunk::Terrain, &Parent)>,
@@ -58,7 +32,13 @@ pub fn update_interactions(
                     let terrain = if chunk_base.0 == chunk_position {
                         Some(terrain)
                     } else {
-                        levels.get(level.get()).ok().and_then(|chunk_lut| chunk_lut.0.get(&chunk_position).and_then(|chunk| chunks.get_component_mut::<level::chunk::Terrain>(*chunk).ok()))
+                        levels.get(level.get()).ok().and_then(|chunk_lut| {
+                            chunk_lut.0.get(&chunk_position).and_then(|chunk| {
+                                chunks
+                                    .get_component_mut::<level::chunk::Terrain>(*chunk)
+                                    .ok()
+                            })
+                        })
                     };
 
                     if let Some(mut terrain) = terrain {

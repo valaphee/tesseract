@@ -10,7 +10,6 @@ use futures::{SinkExt, StreamExt};
 use num::BigInt;
 use rand::{thread_rng, RngCore};
 use rsa::{pkcs8::EncodePublicKey, rand_core::OsRng, Pkcs1v15Encrypt, RsaPrivateKey};
-use serde::{Deserialize, Serialize};
 use sha1::{digest::Update, Digest, Sha1};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -34,12 +33,11 @@ use tesseract_protocol::{
 
 use crate::{actor, level, registry, PreLoad, Save};
 
-#[derive(Serialize, Deserialize)]
 pub struct ReplicationPlugin {
-    address: SocketAddr,
+    pub address: SocketAddr,
 
-    compression: u8,
-    compression_threshold: i16,
+    pub compression: Compression,
+    pub compression_threshold: Option<u16>,
 }
 
 impl Default for ReplicationPlugin {
@@ -47,8 +45,8 @@ impl Default for ReplicationPlugin {
         Self {
             address: SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 25565).into(),
 
-            compression: Compression::default().level() as u8,
-            compression_threshold: 256,
+            compression: Compression::default(),
+            compression_threshold: Some(256),
         }
     }
 }
@@ -57,12 +55,8 @@ impl Plugin for ReplicationPlugin {
     fn build(&self, app: &mut App) {
         let address = self.address;
 
-        let compression = Compression::new(self.compression as u32);
-        let compression_threshold = if self.compression_threshold < 0 {
-            None
-        } else {
-            Some(self.compression_threshold as u16)
-        };
+        let compression = self.compression;
+        let compression_threshold = self.compression_threshold;
 
         let listen = move |mut commands: Commands| {
             let (new_connection_tx, new_connection_rx) = mpsc::unbounded_channel();

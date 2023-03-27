@@ -7,29 +7,16 @@ use std::{
 
 use bevy::{math::DVec3, prelude::*};
 use flate2::read::GzDecoder;
-use serde::{Deserialize, Serialize};
 
 use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
 
 use crate::{actor, level, level::AgeAndTime, registry, replication, Load};
 
-#[derive(Serialize, Deserialize)]
-pub struct PersistencePlugin(HashMap<String, PersistencePluginLevel>);
+pub struct PersistencePlugin(pub HashMap<String, PersistencePluginLevel>);
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct PersistencePluginLevel {
-    path: PathBuf,
-}
-
-impl Default for PersistencePlugin {
-    fn default() -> Self {
-        Self(HashMap::from([(
-            "minecraft:overworld".into(),
-            PersistencePluginLevel {
-                path: "levels/overworld".into(),
-            },
-        )]))
-    }
+    pub path: PathBuf,
 }
 
 impl Plugin for PersistencePlugin {
