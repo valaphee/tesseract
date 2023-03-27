@@ -140,7 +140,7 @@ impl BitStorage {
         let bit_index = self.bit_index(index, cell_index);
         let cell = &mut self.data[cell_index as usize];
         let old_value = (*cell >> bit_index) as u32 & self.mask;
-        *cell = *cell & !(self.mask as u64 >> bit_index) | (value as u64) << bit_index;
+        *cell = *cell & !((self.mask as u64) << bit_index) | (value as u64) << bit_index;
         old_value
     }
 
@@ -150,7 +150,7 @@ impl BitStorage {
         let cell_index = self.cell_index(index);
         let bit_index = self.bit_index(index, cell_index);
         let cell = &mut self.data[cell_index as usize];
-        *cell = *cell & !(self.mask as u64 >> bit_index) | (value as u64) << bit_index;
+        *cell = *cell & !((self.mask as u64) << bit_index) | (value as u64) << bit_index;
     }
 
     pub fn get(&self, index: u32) -> u32 {
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn set_and_get() {
         for bits in 1..32 {
-            let mut bit_storage = BitStorage::new(256, bits);
+            let mut bit_storage = BitStorage::new(16 * 16 * 16, bits);
             let mut rng = StdRng::seed_from_u64(0);
             for i in 0..bit_storage.size {
                 bit_storage.set(i, rng.gen_range(0..1 << bits));

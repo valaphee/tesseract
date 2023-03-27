@@ -49,8 +49,8 @@ pub fn update_hierarchy(
     // early return
     for (actor, actor_position, level_or_chunk) in actors.iter() {
         let chunk_position = IVec2::new(
-            (actor_position.0[0] as i32) >> 4,
-            (actor_position.0[2] as i32) >> 4,
+            (actor_position.0.x as i32) >> 4,
+            (actor_position.0.z as i32) >> 4,
         );
         let level = (if let Ok((chunk_base, level)) = chunks.get(level_or_chunk.get()) {
             // skip actors where the chunk hasn't changed
@@ -86,9 +86,31 @@ pub fn update_hierarchy(
 
 /// Terrain (Chunk)
 #[derive(Component)]
-pub struct Terrain {
-    pub sections: Vec<(
-        PalettedContainer<4096, 4, 8, 15>,
-        PalettedContainer<64, 3, 3, 6>,
-    )>,
+pub struct Terrain(pub Vec<TerrainSection>);
+
+pub struct TerrainSection {
+    pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
+    pub biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
+
+    pub block_state_updates: Vec<u16>,
+}
+
+impl Terrain {
+    pub fn block_state(&self, position: IVec3) -> u32 {
+        let section = &self.0[(position.y >> 4) as usize];
+        let index = (position.y as u16 & 0xF) << 8
+            | (position.z as u16 & 0xF) << 4
+            | (position.x as u16 & 0xF);
+        section.block_states.get(index as u32)
+    }
+
+    pub fn set_block_state(&mut self, position: IVec3, value: u32) {
+        let section = &mut self.0[(position.y >> 4) as usize];
+        let index = (position.y as u16 & 0xF) << 8
+            | (position.z as u16 & 0xF) << 4
+            | (position.x as u16 & 0xF);
+        if section.block_states.get_and_set(index as u32, value) != value {
+            section.block_state_updates.push(index);
+        }
+    }
 }

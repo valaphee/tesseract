@@ -24,7 +24,7 @@ use mojang_session_api::{
 };
 use tesseract_protocol::{
     codec::{Codec, Compression},
-    packet::{c2s, s2c},
+    packet::{c2s, c2s::game::PlayerActionPacketAction, s2c},
     types::{
         Angle, Biome, Component as ChatComponent, DamageType, DimensionType, GameType, Intention,
         Json, Nbt, Registries, Registry, Status, StatusPlayers, StatusVersion, VarI32,
@@ -102,6 +102,7 @@ impl Plugin for ReplicationPlugin {
             .add_systems(Save, subscribe_and_replicate_chunks)
             .add_systems(Save, cleanup_chunks)
             .add_systems(Save, replicate_chunks_late)
+            .add_systems(Save, replicate_chunks_delta)
             .add_systems(Save, replicate_actors)
             .add_systems(Save, replicate_actors_delta);
     }
@@ -122,8 +123,9 @@ pub struct Connection {
 impl Connection {
     fn send(&self, packet: &s2c::GamePacket) {
         let mut data = vec![];
-        packet.encode(&mut data).unwrap();
-        self.tx.send(data).unwrap();
+        if packet.encode(&mut data).is_ok() {
+            let _ = self.tx.send(data);
+        }
     }
 
     pub fn user(&self) -> &User {
@@ -252,39 +254,38 @@ async fn handle_new_connection(
 
                 let (rx_packet_tx, rx_packet_rx) = mpsc::unbounded_channel();
                 let (tx_packet_tx, mut tx_packet_rx) = mpsc::unbounded_channel();
-                if new_connection_tx
-                    .send(Connection {
-                        user,
-                        rx: rx_packet_rx,
-                        tx: tx_packet_tx,
-                        keep_alive: Instant::now(),
-                        keep_alive_id: None,
-                        latency: 0,
-                    })
-                    .is_ok()
-                {}
+                let _ = new_connection_tx.send(Connection {
+                    user,
+                    rx: rx_packet_rx,
+                    tx: tx_packet_tx,
+                    keep_alive: Instant::now(),
+                    keep_alive_id: None,
+                    latency: 0,
+                });
 
                 tokio::spawn(async move {
                     loop {
                         tokio::select! {
                             packet = framed_socket.next() => {
-                                if let Some(packet) = packet {
-                                    rx_packet_tx.send(packet.unwrap()).unwrap();
+                                if let Some(Ok(packet)) = packet {
+                                    let _ = rx_packet_tx.send(packet);
                                 } else {
                                     break;
                                 }
                             }
                             packet = tx_packet_rx.recv() => {
                                 if let Some(packet) = packet {
-                                    framed_socket.send(&packet).await.unwrap();
+                                    if framed_socket.send(&packet).await.is_err() {
+                                        break;
+                                    }
                                 } else {
                                     break;
                                 }
                             }
                         }
                     }
-                    framed_socket.close().await.unwrap();
-                    tx_packet_rx.close()
+                    tx_packet_rx.close();
+                    let _ = framed_socket.close().await;
                 });
             }
             _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
@@ -382,13 +383,20 @@ fn update_players(
     mut players: Query<(
         Entity,
         &mut Connection,
+        &mut SubscriptionDistance,
         &mut actor::Position,
         &mut actor::Rotation,
-        &mut SubscriptionDistance,
+        &mut actor::player::Interaction,
     )>,
 ) {
-    for (player, mut connection, mut position, mut rotation, mut subscription_distance) in
-        players.iter_mut()
+    for (
+        player,
+        mut connection,
+        mut subscription_distance,
+        mut position,
+        mut rotation,
+        mut interaction,
+    ) in players.iter_mut()
     {
         if connection.keep_alive.elapsed() >= Duration::from_secs(15) {
             if connection.keep_alive_id.is_none() {
@@ -469,6 +477,12 @@ fn update_players(
                             rotation.yaw = yaw;
                         }
                     }
+                    c2s::GamePacket::PlayerAction { action, pos, .. } => match action {
+                        PlayerActionPacketAction::StartDestroyBlock => {
+                            *interaction = actor::player::Interaction::BlockBreak(pos);
+                        }
+                        _ => {}
+                    },
                     _ => {}
                 }
             }
@@ -706,15 +720,71 @@ fn replicate_chunks_late(
     >,
     players: Query<&Connection>,
 ) {
-    // early return
     for (chunk_base, terrain, replication) in chunks.iter() {
         let add_chunk_packet = add_chunk_packet(chunk_base.0, terrain);
         for &player in &replication.subscriber {
             // connection: add chunk, cause: subscribe (late)
             if let Ok(connection) = players.get(player) {
                 connection.send(&add_chunk_packet);
-            } else {
-                debug!("Replication requires a connection")
+            }
+        }
+    }
+}
+
+fn replicate_chunks_delta(
+    mut chunks: Query<
+        (
+            &level::chunk::Chunk,
+            &mut level::chunk::Terrain,
+            &Replication,
+        ),
+        Changed<level::chunk::Terrain>,
+    >,
+    players: Query<&Connection>,
+) {
+    for (chunk_base, mut terrain, replication) in chunks.iter_mut() {
+        let mut update_chunk_packets = vec![];
+        let mut cleanup_sections = vec![];
+        for (section_y, section) in terrain.0.iter().enumerate() {
+            if section.block_state_updates.is_empty() {
+                continue;
+            }
+
+            update_chunk_packets.push(s2c::GamePacket::SectionBlocksUpdate(
+                s2c::game::SectionBlocksUpdatePacket {
+                    section_pos: IVec3::new(chunk_base.0.x, section_y as i32, chunk_base.0.y),
+                    suppress_light_updates: true,
+                    position_and_states: section
+                        .block_state_updates
+                        .iter()
+                        .map(|block_state_update| {
+                            s2c::game::SectionBlocksUpdatePacketPositionAndState {
+                                x: *block_state_update as u8 & 0xF,
+                                y: (*block_state_update >> 8) as u8,
+                                z: *block_state_update as u8 >> 4 & 0xF,
+                                block_state: section.block_states.get(*block_state_update as u32)
+                                    as i64,
+                            }
+                        })
+                        .collect(),
+                },
+            ));
+
+            // cleanup later to not trigger change detection unnecessarily
+            cleanup_sections.push(section_y);
+        }
+        if update_chunk_packets.is_empty() {
+            continue;
+        }
+        for section_y in cleanup_sections {
+            terrain.0[section_y].block_state_updates.clear()
+        }
+
+        for &player in &replication.subscriber {
+            if let Ok(connection) = players.get(player) {
+                for chunk_update_packet in &update_chunk_packets {
+                    connection.send(chunk_update_packet);
+                }
             }
         }
     }
@@ -885,10 +955,10 @@ fn add_chunk_packet<'a>(position: IVec2, terrain: &level::chunk::Terrain) -> s2c
     let mut buffer = Vec::new();
     let mut sky_y_mask = 0i64;
     let mut sky_updates = Vec::new();
-    for (i, section) in terrain.sections.iter().enumerate() {
+    for (i, section) in terrain.0.iter().enumerate() {
         4096i16.encode(&mut buffer).unwrap();
-        section.0.encode(&mut buffer).unwrap();
-        section.1.encode(&mut buffer).unwrap();
+        section.block_states.encode(&mut buffer).unwrap();
+        section.biomes.encode(&mut buffer).unwrap();
 
         sky_y_mask |= 1 << (i + 1);
         sky_updates.push(vec![0xFF; 2048])

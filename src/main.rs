@@ -20,6 +20,11 @@ mod persistence;
 mod registry;
 mod replication;
 
+#[cfg(feature = "tracing")]
+#[global_allocator]
+static GLOBAL: tracing_tracy::client::ProfiledAllocator<std::alloc::System> =
+    tracing_tracy::client::ProfiledAllocator::new(std::alloc::System, 0);
+
 fn main() {
     // initialize logging
     let (non_blocking_file_appender, _guard) =
@@ -28,10 +33,10 @@ fn main() {
         .with(tracing_subscriber::EnvFilter::try_new("info,tesseract=debug").unwrap());
 
     #[cfg(feature = "tracing")]
-    let registry = registry
-        .with(tracing_tracy::TracyLayer::new());
+    let registry = registry.with(tracing_tracy::TracyLayer::new());
 
-    registry.with(
+    registry
+        .with(
             tracing_subscriber::fmt::Layer::new()
                 .with_ansi(false)
                 .with_writer(non_blocking_file_appender),
@@ -79,7 +84,8 @@ fn main() {
     .init_schedule(Save)
     .add_plugin(config.persistence)
     .add_plugin(config.replication)
-    .add_systems(PostLoad, actor::initialize_players)
+    .add_systems(PostLoad, actor::player::initialize)
+    .add_systems(PreUpdate, actor::player::update_interactions)
     .add_systems(PostUpdate, level::update_time)
     .add_systems(PostUpdate, level::chunk::update_hierarchy);
 

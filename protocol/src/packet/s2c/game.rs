@@ -1078,9 +1078,9 @@ pub struct PlayerLookAtPacketAtEntity {
 
 #[derive(Clone, Debug)]
 pub struct SectionBlocksUpdatePacket {
-    section_pos: IVec3,
-    suppress_light_updates: bool,
-    position_and_states: Vec<SectionBlocksUpdatePacketPositionAndState>,
+    pub section_pos: IVec3,
+    pub suppress_light_updates: bool,
+    pub position_and_states: Vec<SectionBlocksUpdatePacketPositionAndState>,
 }
 
 impl Encode for SectionBlocksUpdatePacket {
@@ -1119,10 +1119,10 @@ impl<'a> Decode<'a> for SectionBlocksUpdatePacket {
 
 #[derive(Clone, Debug)]
 pub struct SectionBlocksUpdatePacketPositionAndState {
-    x: u8,
-    y: u8,
-    z: u8,
-    block_state: i64,
+    pub x: u8,
+    pub y: u8,
+    pub z: u8,
+    pub block_state: i64,
 }
 
 impl Encode for SectionBlocksUpdatePacketPositionAndState {

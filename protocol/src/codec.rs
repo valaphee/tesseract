@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use aes::{
-    cipher::{inout::InOutBuf, BlockDecryptMut, BlockEncryptMut, KeyIvInit},
+    cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit},
     Aes128,
 };
 use bytes::{Buf, BufMut, BytesMut};
@@ -82,11 +82,8 @@ impl Encoder<&[u8]> for Codec {
 
         // Encrypt written bytes
         if let Some(encryptor) = &mut self.encryptor {
-            encryptor.encrypt_blocks_inout_mut(
-                InOutBuf::from(&mut dst[data_length_offset..])
-                    .into_chunks()
-                    .0,
-            );
+            encryptor
+                .encrypt_blocks_mut(unsafe { std::mem::transmute(&mut dst[data_length_offset..]) });
         }
 
         Ok(())
@@ -100,11 +97,9 @@ impl Decoder for Codec {
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
         // Decrypt all not yet decrypted bytes
         if let Some(decryptor) = &mut self.decryptor {
-            decryptor.decrypt_blocks_inout_mut(
-                InOutBuf::from(&mut src[self.decrypted_bytes..])
-                    .into_chunks()
-                    .0,
-            );
+            decryptor.decrypt_blocks_mut(unsafe {
+                std::mem::transmute(&mut src[self.decrypted_bytes..])
+            });
             self.decrypted_bytes = src.len();
         }
 
