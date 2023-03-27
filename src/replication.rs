@@ -471,12 +471,38 @@ fn update_players(
                             rotation.yaw = yaw;
                         }
                     }
-                    c2s::GamePacket::PlayerAction { action, pos, .. } => match action {
-                        PlayerActionPacketAction::StartDestroyBlock => {
-                            *interaction = actor::player::Interaction::BlockBreak(pos);
+                    c2s::GamePacket::PlayerAction {
+                        action,
+                        pos,
+                        sequence,
+                        ..
+                    } => {
+                        connection.send(&s2c::GamePacket::BlockChangedAck { sequence });
+
+                        match action {
+                            PlayerActionPacketAction::StartDestroyBlock => {
+                                *interaction = actor::player::Interaction::BlockBreak(pos);
+                            }
+                            PlayerActionPacketAction::AbortDestroyBlock => {
+                                *interaction = actor::player::Interaction::None;
+                            }
+                            _ => {}
                         }
-                        _ => {}
-                    },
+                    }
+                    c2s::GamePacket::UseItemOn {
+                        block_pos,
+                        direction,
+                        sequence,
+                        ..
+                    } => {
+                        connection.send(&s2c::GamePacket::BlockChangedAck { sequence });
+
+                        *interaction =
+                            actor::player::Interaction::BlockPlace(block_pos + direction.vector());
+                    }
+                    c2s::GamePacket::UseItem { sequence, .. } => {
+                        connection.send(&s2c::GamePacket::BlockChangedAck { sequence });
+                    }
                     _ => {}
                 }
             }
@@ -738,44 +764,44 @@ fn replicate_chunks_delta(
 ) {
     for (chunk_base, mut terrain, replication) in chunks.iter_mut() {
         let mut update_chunk_packets = vec![];
-        let mut cleanup_sections = vec![];
-        for (section_y, section) in terrain.sections.iter().enumerate() {
-            if section.block_state_updates.is_empty() {
-                continue;
+        {
+            let y_offset = terrain.y_offset as i32;
+            for (section_y, section) in terrain.sections.iter_mut().enumerate() {
+                if section.block_state_changes.is_empty() {
+                    continue;
+                }
+
+                update_chunk_packets.push(s2c::GamePacket::SectionBlocksUpdate(
+                    s2c::game::SectionBlocksUpdatePacket {
+                        section_pos: IVec3::new(
+                            chunk_base.0.x,
+                            section_y as i32 - y_offset,
+                            chunk_base.0.y,
+                        ),
+                        suppress_light_updates: true,
+                        position_and_states: section
+                            .block_state_changes
+                            .iter()
+                            .map(|block_state_update| {
+                                s2c::game::SectionBlocksUpdatePacketPositionAndState {
+                                    x: *block_state_update as u8 & 0xF,
+                                    y: (*block_state_update >> 8) as u8,
+                                    z: *block_state_update as u8 >> 4 & 0xF,
+                                    block_state: section
+                                        .block_states
+                                        .get(*block_state_update as u32)
+                                        as i64,
+                                }
+                            })
+                            .collect(),
+                    },
+                ));
+
+                section.block_state_changes.clear();
             }
-
-            update_chunk_packets.push(s2c::GamePacket::SectionBlocksUpdate(
-                s2c::game::SectionBlocksUpdatePacket {
-                    section_pos: IVec3::new(
-                        chunk_base.0.x,
-                        section_y as i32 - terrain.y_offset as i32,
-                        chunk_base.0.y,
-                    ),
-                    suppress_light_updates: true,
-                    position_and_states: section
-                        .block_state_updates
-                        .iter()
-                        .map(|block_state_update| {
-                            s2c::game::SectionBlocksUpdatePacketPositionAndState {
-                                x: *block_state_update as u8 & 0xF,
-                                y: (*block_state_update >> 8) as u8,
-                                z: *block_state_update as u8 >> 4 & 0xF,
-                                block_state: section.block_states.get(*block_state_update as u32)
-                                    as i64,
-                            }
-                        })
-                        .collect(),
-                },
-            ));
-
-            // cleanup later to not trigger change detection unnecessarily
-            cleanup_sections.push(section_y);
         }
         if update_chunk_packets.is_empty() {
             continue;
-        }
-        for section_y in cleanup_sections {
-            terrain.sections[section_y].block_state_updates.clear()
         }
 
         for &player in &replication.subscriber {

@@ -188,7 +188,7 @@ fn load_chunks(
                             biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()),
                         )
                     },
-                    block_state_updates: vec![],
+                    block_state_changes: default(),
                 })
                 .collect::<Vec<_>>();
 

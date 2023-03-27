@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -95,21 +95,34 @@ pub struct TerrainSection {
     pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
     pub biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
 
-    pub block_state_updates: Vec<u16>,
+    // used by replication
+    pub block_state_changes: HashSet<u16>,
 }
 
 impl Terrain {
-    pub fn block_state(&self, x: u8, y: i16, z: u8) -> u32 {
-        let section = &self.sections[(((y >> 4) + self.y_offset as i16) as u16) as usize];
+    pub fn get(&self, x: u8, y: i16, z: u8) -> u32 {
+        let section_y = ((y >> 4) + self.y_offset as i16) as usize;
+        // x,z are wrapping
+        if section_y >= self.sections.len() {
+            return 0;
+        }
+
+        let section = &self.sections[section_y];
         let index = (y as u16 & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
         section.block_states.get(index as u32)
     }
 
-    pub fn set_block_state(&mut self, x: u8, y: i16, z: u8, value: u32) {
-        let section = &mut self.sections[(((y >> 4) + self.y_offset as i16) as u16) as usize];
+    pub fn set(&mut self, x: u8, y: i16, z: u8, value: u32) {
+        let section_y = ((y >> 4) + self.y_offset as i16) as usize;
+        // x,z are wrapping
+        if section_y >= self.sections.len() {
+            return;
+        }
+
+        let section = &mut self.sections[section_y];
         let index = (y as u16 & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
         if section.block_states.get_and_set(index as u32, value) != value {
-            section.block_state_updates.push(index);
+            section.block_state_changes.insert(index);
         }
     }
 }

@@ -16,6 +16,7 @@ pub enum Interaction {
     #[default]
     None,
     BlockBreak(IVec3),
+    BlockPlace(IVec3),
 }
 
 pub fn update_interactions(
@@ -29,6 +30,7 @@ pub fn update_interactions(
             Interaction::BlockBreak(position) => {
                 if let Ok((chunk_base, terrain, level)) = chunks.get_mut(chunk.get()) {
                     let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
+                    // shortcut if position is in actor's chunk
                     let terrain = if chunk_base.0 == chunk_position {
                         Some(terrain)
                     } else {
@@ -42,12 +44,30 @@ pub fn update_interactions(
                     };
 
                     if let Some(mut terrain) = terrain {
-                        terrain.set_block_state(
-                            position.x as u8,
-                            position.y as i16,
-                            position.z as u8,
-                            0,
-                        );
+                        terrain.set(position.x as u8, position.y as i16, position.z as u8, 0);
+                    }
+                }
+
+                *interaction = Interaction::None;
+            }
+            Interaction::BlockPlace(position) => {
+                if let Ok((chunk_base, terrain, level)) = chunks.get_mut(chunk.get()) {
+                    let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
+                    // shortcut if position is in actor's chunk
+                    let terrain = if chunk_base.0 == chunk_position {
+                        Some(terrain)
+                    } else {
+                        levels.get(level.get()).ok().and_then(|chunk_lut| {
+                            chunk_lut.0.get(&chunk_position).and_then(|chunk| {
+                                chunks
+                                    .get_component_mut::<level::chunk::Terrain>(*chunk)
+                                    .ok()
+                            })
+                        })
+                    };
+
+                    if let Some(mut terrain) = terrain {
+                        terrain.set(position.x as u8, position.y as i16, position.z as u8, 95);
                     }
                 }
 

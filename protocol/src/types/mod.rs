@@ -877,6 +877,19 @@ pub enum Direction {
     West,
 }
 
+impl Direction {
+    pub fn vector(&self) -> IVec3 {
+        match self {
+            Direction::Down => IVec3::NEG_Y,
+            Direction::Up => IVec3::Y,
+            Direction::North => IVec3::NEG_Z,
+            Direction::South => IVec3::Z,
+            Direction::East => IVec3::NEG_X,
+            Direction::West => IVec3::X,
+        }
+    }
+}
+
 impl Encode for Direction {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         match self {

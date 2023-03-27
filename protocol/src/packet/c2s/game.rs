@@ -240,7 +240,7 @@ pub enum GamePacket {
     UseItemOn {
         hand: Hand,
         block_pos: IVec3,
-        direction: VarI32,
+        direction: Direction,
         pos_x: f32,
         pos_y: f32,
         pos_z: f32,

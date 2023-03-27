@@ -15,7 +15,7 @@ fn main() {
     let mut app = App::new();
     // required
     app.insert_resource(ScheduleRunnerSettings::run_loop(Duration::from_secs_f64(
-        1.0 / 20.0,
+        1.0 / 10.0,
     )))
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
@@ -44,8 +44,8 @@ fn main() {
     .add_plugin(replication::ReplicationPlugin::default())
     .add_systems(PostUpdate, level::chunk::update_hierarchy)
     // gameplay
-    .add_systems(PreUpdate, actor::player::update_interactions)
-    .add_systems(PostUpdate, level::update_time)
+    .add_systems(Update, actor::player::update_interactions)
+    .add_systems(Update, level::update_time)
     // custom
     .add_systems(PreStartup, spawn_level)
     .add_systems(PostLoad, spawn_players)
@@ -114,7 +114,7 @@ fn spawn_chunks(
                         biomes: PalettedContainer::SingleValue(
                             biome_registry.id("minecraft:plains"),
                         ),
-                        block_state_updates: vec![],
+                        block_state_changes: default(),
                     })
                 }
                 sections
@@ -127,17 +127,17 @@ fn spawn_chunks(
         let grass_block_id = block_state_registry.id("minecraft:grass_block");
         for x in 0..16 {
             for z in 0..16 {
-                terrain.set_block_state(x, 0, z, bedrock_id);
+                terrain.set(x, 0, z, bedrock_id);
                 for y in 1..4 {
-                    terrain.set_block_state(x, y, z, dirt_id);
+                    terrain.set(x, y, z, dirt_id);
                 }
-                terrain.set_block_state(x, 4, z, grass_block_id);
+                terrain.set(x, 4, z, grass_block_id);
             }
         }
-
         for section in &mut terrain.sections {
-            section.block_state_updates.clear();
+            section.block_state_changes.clear();
         }
+
         commands.entity(chunk).insert(terrain);
     }
 }
