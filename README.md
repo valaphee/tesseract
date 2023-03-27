@@ -15,16 +15,16 @@ has to be its own entity, only if the behavior is different "special stone")
 All this enables great flexibility, with superior performance.
 
 ## Current Status
-
 - persistence
     - multiple levels
     - player loading (position, rotation)
     - chunk loading (block states, biomes)
-- procedural
 - replication
     - encryption
     - compression
     - online mode
-    - replicating players (WIP)
-    - replicating chunks (early, late)
-    - replicating actors (early, late, across chunks)
+    - replicating chunks (delta, early, late)
+    - replicating actors (delta, early, late, across chunks)
+- gameplay
+  - world interaction / manipulation
+  - time and weather

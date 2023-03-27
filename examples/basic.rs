@@ -7,12 +7,13 @@ use bevy::{
     prelude::*,
 };
 
-use tesseract::*;
+use tesseract_base::*;
 use tesseract_protocol::types::{Biome, DamageType, DimensionType, PalettedContainer};
 
 fn main() {
     // create and run app
     let mut app = App::new();
+    // required
     app.insert_resource(ScheduleRunnerSettings::run_loop(Duration::from_secs_f64(
         1.0 / 20.0,
     )))
@@ -41,14 +42,16 @@ fn main() {
     .init_schedule(PostLoad)
     .init_schedule(Save)
     .add_plugin(replication::ReplicationPlugin::default())
+    .add_systems(PostUpdate, level::chunk::update_hierarchy)
+    // gameplay
     .add_systems(PreUpdate, actor::player::update_interactions)
     .add_systems(PostUpdate, level::update_time)
-    .add_systems(PostUpdate, level::chunk::update_hierarchy)
     // custom
     .add_systems(PreStartup, spawn_level)
     .add_systems(PostLoad, spawn_players)
     .add_systems(PostLoad, spawn_chunks);
 
+    // required
     let mut order = app.world.resource_mut::<MainScheduleOrder>();
     order.insert_after(First, PreLoad);
     order.insert_after(PreLoad, Load);
@@ -86,7 +89,7 @@ pub fn spawn_players(
                     id: connection.user().id,
                     type_: "minecraft:player".into(),
                 },
-                position: actor::Position(DVec3::new(0.0, 5.0, 0.0)),
+                position: actor::Position(DVec3::new(0.0, 6.0, 0.0)),
                 rotation: default(),
                 head_rotation: default(),
                 interaction: default(),
