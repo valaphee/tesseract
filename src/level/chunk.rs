@@ -86,7 +86,10 @@ pub fn update_hierarchy(
 
 /// Terrain (Chunk)
 #[derive(Component)]
-pub struct Terrain(pub Vec<TerrainSection>);
+pub struct Terrain {
+    pub sections: Vec<TerrainSection>,
+    pub y_offset: u8,
+}
 
 pub struct TerrainSection {
     pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
@@ -96,19 +99,15 @@ pub struct TerrainSection {
 }
 
 impl Terrain {
-    pub fn block_state(&self, position: IVec3) -> u32 {
-        let section = &self.0[(position.y >> 4) as usize];
-        let index = (position.y as u16 & 0xF) << 8
-            | (position.z as u16 & 0xF) << 4
-            | (position.x as u16 & 0xF);
+    pub fn block_state(&self, x: u8, y: i16, z: u8) -> u32 {
+        let section = &self.sections[(((y >> 4) + self.y_offset as i16) as u16) as usize];
+        let index = (y as u16 & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
         section.block_states.get(index as u32)
     }
 
-    pub fn set_block_state(&mut self, position: IVec3, value: u32) {
-        let section = &mut self.0[(position.y >> 4) as usize];
-        let index = (position.y as u16 & 0xF) << 8
-            | (position.z as u16 & 0xF) << 4
-            | (position.x as u16 & 0xF);
+    pub fn set_block_state(&mut self, x: u8, y: i16, z: u8, value: u32) {
+        let section = &mut self.sections[(((y >> 4) + self.y_offset as i16) as u16) as usize];
+        let index = (y as u16 & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
         if section.block_states.get_and_set(index as u32, value) != value {
             section.block_state_updates.push(index);
         }

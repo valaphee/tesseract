@@ -1088,8 +1088,8 @@ impl Encode for SectionBlocksUpdatePacket {
         match (self.section_pos.x, self.section_pos.y, self.section_pos.z) {
             (-0x200000..=0x1FFFFF, -0x80000..=0x7FFFF, -0x200000..=0x1FFFFF) => {
                 ((self.section_pos.x as i64) << 42
-                    | (self.section_pos.z as i64) << 20
-                    | (self.section_pos.y as i64))
+                    | ((self.section_pos.z & 0x3FFFFF) as i64) << 20
+                    | ((self.section_pos.y & 0xFFFFF) as i64))
                     .encode(output)?
             }
             _ => unimplemented!(),

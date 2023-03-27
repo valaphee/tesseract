@@ -53,20 +53,21 @@ pub fn update_interactions(
         #[allow(clippy::single_match)]
         match *interaction {
             Interaction::BlockBreak(position) => {
-                if let Ok((chunk_base, mut terrain, level)) = chunks.get_mut(chunk.get()) {
+                if let Ok((chunk_base, terrain, level)) = chunks.get_mut(chunk.get()) {
                     let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
-                    if chunk_base.0 == chunk_position {
-                        terrain.set_block_state(position, 0);
-                    } else if let Ok(chunk_lut) = levels.get(level.get()) {
-                        if let Some(mut terrain) =
-                            chunk_lut.0.get(&chunk_position).and_then(|chunk| {
-                                chunks
-                                    .get_component_mut::<level::chunk::Terrain>(*chunk)
-                                    .ok()
-                            })
-                        {
-                            terrain.set_block_state(position, 0);
-                        }
+                    let terrain = if chunk_base.0 == chunk_position {
+                        Some(terrain)
+                    } else {
+                        levels.get(level.get()).ok().and_then(|chunk_lut| chunk_lut.0.get(&chunk_position).and_then(|chunk| chunks.get_component_mut::<level::chunk::Terrain>(*chunk).ok()))
+                    };
+
+                    if let Some(mut terrain) = terrain {
+                        terrain.set_block_state(
+                            position.x as u8,
+                            position.y as i16,
+                            position.z as u8,
+                            0,
+                        );
                     }
                 }
 

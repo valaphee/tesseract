@@ -205,9 +205,10 @@ fn load_chunks(
                 })
                 .collect::<Vec<_>>();
 
-            commands
-                .entity(chunk)
-                .insert(level::chunk::Terrain(sections));
+            commands.entity(chunk).insert(level::chunk::Terrain {
+                sections,
+                y_offset: 4,
+            });
         }
     }
 }

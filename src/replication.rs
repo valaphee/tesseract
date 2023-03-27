@@ -745,14 +745,18 @@ fn replicate_chunks_delta(
     for (chunk_base, mut terrain, replication) in chunks.iter_mut() {
         let mut update_chunk_packets = vec![];
         let mut cleanup_sections = vec![];
-        for (section_y, section) in terrain.0.iter().enumerate() {
+        for (section_y, section) in terrain.sections.iter().enumerate() {
             if section.block_state_updates.is_empty() {
                 continue;
             }
 
             update_chunk_packets.push(s2c::GamePacket::SectionBlocksUpdate(
                 s2c::game::SectionBlocksUpdatePacket {
-                    section_pos: IVec3::new(chunk_base.0.x, section_y as i32, chunk_base.0.y),
+                    section_pos: IVec3::new(
+                        chunk_base.0.x,
+                        section_y as i32 - terrain.y_offset as i32,
+                        chunk_base.0.y,
+                    ),
                     suppress_light_updates: true,
                     position_and_states: section
                         .block_state_updates
@@ -777,7 +781,7 @@ fn replicate_chunks_delta(
             continue;
         }
         for section_y in cleanup_sections {
-            terrain.0[section_y].block_state_updates.clear()
+            terrain.sections[section_y].block_state_updates.clear()
         }
 
         for &player in &replication.subscriber {
@@ -955,7 +959,7 @@ fn add_chunk_packet<'a>(position: IVec2, terrain: &level::chunk::Terrain) -> s2c
     let mut buffer = Vec::new();
     let mut sky_y_mask = 0i64;
     let mut sky_updates = Vec::new();
-    for (i, section) in terrain.0.iter().enumerate() {
+    for (i, section) in terrain.sections.iter().enumerate() {
         4096i16.encode(&mut buffer).unwrap();
         section.block_states.encode(&mut buffer).unwrap();
         section.biomes.encode(&mut buffer).unwrap();
