@@ -15,7 +15,7 @@ use crate::{
     Decode, Encode, Error, Result,
 };
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum GamePacket<'a> {
     BundleDelimiter,
     AddEntity {
@@ -585,7 +585,7 @@ impl<'a> Decode<'a> for AnimatePacketAction {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum BossEventPacketOperation {
     Add {
         name: Json<Component>,
@@ -708,7 +708,7 @@ impl<'a> Decode<'a> for CommandsPacketEntry {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum CommandsPacketArgumentType {
     Bool,
     Float(CommandsPacketArgumentTypeNumber<f32>),
@@ -798,14 +798,14 @@ impl<'a, T: Decode<'a>> Decode<'a> for CommandsPacketArgumentTypeNumber<T> {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum CommandsPacketArgumentTypeString {
     SingleWord,
     QuotablePhrase,
     GreedyPhrase,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum CustomChatCompletionsPacketAction {
     Add,
     Remove,
@@ -868,14 +868,14 @@ impl<'a> Decode<'a> for GameEventPacketEvent {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct LevelChunkPacketData {
     pub heightmaps: Nbt<serde_value::Value>,
     pub buffer: Vec<u8>,
     pub block_entities_data: Vec<LevelChunkPacketDataBlockEntity>,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct LevelChunkPacketDataBlockEntity {
     pub xz: i8,
     pub y: i16,
@@ -883,7 +883,7 @@ pub struct LevelChunkPacketDataBlockEntity {
     pub data: Nbt<serde_value::Value>,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct LightUpdatePacketData {
     pub trust_edges: bool,
     pub sky_y_mask: Vec<i64>,
@@ -1070,7 +1070,7 @@ impl<'a> Decode<'a> for PlayerInfoUpdatePacket {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct PlayerLookAtPacketAtEntity {
     pub entity: VarI32,
     pub to_anchor: Anchor,
@@ -1149,7 +1149,7 @@ impl<'a> Decode<'a> for SectionBlocksUpdatePacketPositionAndState {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum RecipePacket {
     Init {
         crafting_recipe_book_open: bool,
@@ -1220,7 +1220,7 @@ impl<'a> Decode<'a> for SetEquipmentPacketSlots {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum SetObjectivePacketMethod {
     Add {
         display_name: Json<Component>,
@@ -1233,7 +1233,7 @@ pub enum SetObjectivePacketMethod {
     },
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum SetPlayerTeamPacketMethod {
     Add {
         display_name: Json<Component>,
@@ -1263,7 +1263,7 @@ pub enum SetPlayerTeamPacketMethod {
     },
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum SetScorePacketMethod {
     Change {
         objective_name: String,

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum Component {
     Literal(String),
@@ -29,7 +29,7 @@ pub enum Component {
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum ComponentContents {
     Literal {

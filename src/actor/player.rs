@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use tesseract_protocol::types::ItemStack;
+
 use crate::{actor, level};
 
 #[derive(Bundle)]
@@ -9,6 +11,7 @@ pub struct PlayerBundle {
     pub rotation: actor::Rotation,
     pub head_rotation: actor::HeadRotation,
     pub interaction: Interaction,
+    pub inventory: Inventory,
 }
 
 #[derive(Component, Default)]
@@ -84,4 +87,10 @@ pub fn update_interactions(
             _ => {}
         }
     }
+}
+
+#[derive(Component)]
+pub struct Inventory {
+    pub content: Vec<Option<ItemStack>>,
+    pub hotbar_slot: u8,
 }

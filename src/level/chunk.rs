@@ -10,6 +10,7 @@ use crate::{actor, replication};
 #[derive(Bundle)]
 pub struct ChunkBundle {
     base: Base,
+    queued_updates: QueuedUpdates,
     replication: replication::Replication,
 }
 
@@ -17,6 +18,7 @@ impl ChunkBundle {
     pub fn new(position: IVec2) -> Self {
         Self {
             base: Base(position),
+            queued_updates: Default::default(),
             replication: default(),
         }
     }
@@ -24,13 +26,14 @@ impl ChunkBundle {
     pub fn with_subscriber(position: IVec2, subscriber: Entity) -> Self {
         Self {
             base: Base(position),
+            queued_updates: Default::default(),
             replication: replication::Replication::with_subscriber(subscriber),
         }
     }
 }
 
 /// Chunk by position look-up table (Level)
-#[derive(Default, Component)]
+#[derive(Component, Default)]
 pub struct LookupTable(pub HashMap<IVec2, Entity>);
 
 /// Required properties (Chunk)
@@ -130,5 +133,23 @@ impl Data {
 
 //====================================================================================== UPDATE ====
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct QueuedUpdates(pub HashSet<u16>);
+
+pub fn queue_updates(
+    mut chunks: Query<
+        (&Data, &mut QueuedUpdates),
+        Changed<Data>,
+    >,
+) {
+    for (chunk_data, mut chunk_queued_updates) in chunks.iter_mut() {
+        chunk_queued_updates.0.clear();
+        for (section_y, section) in chunk_data.sections.iter().enumerate() {
+            for &block_state_change in &section.block_state_changes {
+                chunk_queued_updates
+                    .0
+                    .insert(block_state_change | (section_y as u16) << 12);
+            }
+        }
+    }
+}

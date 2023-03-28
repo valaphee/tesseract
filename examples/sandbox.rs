@@ -1,4 +1,6 @@
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashMap;
+use std::fs::File;
+use std::time::Duration;
 
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, math::DVec3, prelude::*};
 
@@ -34,6 +36,7 @@ fn main() {
     ))
     .add_plugin(replication::ReplicationPlugin::default())
     .add_systems(PostUpdate, level::chunk::update_hierarchy)
+    .add_systems(PostUpdate, level::chunk::queue_updates)
     // gameplay
     .add_systems(Update, actor::player::update_interactions)
     .add_systems(Update, level::update_time)
@@ -42,21 +45,12 @@ fn main() {
     .add_systems(
         First,
         (spawn_players, spawn_chunks).after(replication::UpdateFlush),
-    )
-    .add_systems(Update, update_fluids)
-    .add_systems(PostUpdate, queue_updates);
+    );
 
     app.run();
 }
 
-fn spawn_level(block_state_registry: Res<registry::BlockStateRegistry>, mut commands: Commands) {
-    commands.spawn((
-        block::Base {
-            id: block_state_registry.id("minecraft:water[level=15]"),
-        },
-        Fluid,
-    ));
-
+fn spawn_level(mut commands: Commands) {
     commands.spawn(level::LevelBundle {
         base: level::Base {
             name: "minecraft:overworld".into(),
@@ -88,6 +82,10 @@ pub fn spawn_players(
                 rotation: default(),
                 head_rotation: default(),
                 interaction: default(),
+                inventory: actor::player::Inventory {
+                    content: vec![None; 46],
+                    hotbar_slot: 0,
+                }
             },))
             .set_parent(levels.single());
     }
@@ -98,7 +96,6 @@ fn spawn_chunks(
     biome_registry: Res<registry::DataRegistry<Biome>>,
     mut commands: Commands,
     chunks: Query<Entity, Added<level::chunk::Base>>,
-    blocks: Query<Entity, With<block::Base>>,
 ) {
     if chunks.is_empty() {
         return;
@@ -108,7 +105,6 @@ fn spawn_chunks(
     let bedrock_id = block_state_registry.id("minecraft:bedrock") | 1 << 31;
     let dirt_id = block_state_registry.id("minecraft:dirt") | 1 << 31;
     let grass_block_id = block_state_registry.id("minecraft:grass_block") | 1 << 31;
-    let water_block_id = blocks.single().index();
     for chunk in chunks.iter() {
         let mut chunk_data = level::chunk::Data {
             sections: {
@@ -139,56 +135,9 @@ fn spawn_chunks(
         for section in &mut chunk_data.sections {
             section.block_state_changes.clear();
         }
-        chunk_data.set(8, 6, 8, water_block_id);
 
         commands
             .entity(chunk)
-            .insert((chunk_data, level::chunk::QueuedUpdates(HashSet::default())));
-    }
-}
-
-#[derive(Component)]
-struct Fluid;
-
-fn update_fluids(
-    mut chunks: Query<(&mut level::chunk::Data, &level::chunk::QueuedUpdates)>,
-    blocks: Query<&Fluid>,
-) {
-    for (mut chunk_data, chunk_queued_updates) in chunks.iter_mut() {
-        if chunk_queued_updates.0.is_empty() {
-            continue;
-        }
-
-        for &queued_update in &chunk_queued_updates.0 {
-            let y = queued_update >> 8;
-            if y == 0 {
-                continue;
-            }
-
-            let x = queued_update as u8 & 0xF;
-            let z = queued_update as u8 >> 4 & 0xF;
-            let value = chunk_data.get(x, y, z);
-            if let Ok(_fluid) = blocks.get(Entity::from_raw(value)) {
-                chunk_data.set(x, y - 1, z, value);
-            }
-        }
-    }
-}
-
-fn queue_updates(
-    mut chunks: Query<
-        (&level::chunk::Data, &mut level::chunk::QueuedUpdates),
-        Changed<level::chunk::Data>,
-    >,
-) {
-    for (chunk_data, mut chunk_queued_updates) in chunks.iter_mut() {
-        chunk_queued_updates.0.clear();
-        for (section_y, section) in chunk_data.sections.iter().enumerate() {
-            for &block_state_change in &section.block_state_changes {
-                chunk_queued_updates
-                    .0
-                    .insert(block_state_change | (section_y as u16) << 12);
-            }
-        }
+            .insert(chunk_data);
     }
 }

@@ -3,7 +3,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum HandshakePacket {
     Intention {
         protocol_version: VarI32,

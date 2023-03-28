@@ -5,7 +5,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum LoginPacket {
     Hello {
         name: String,

@@ -324,6 +324,7 @@ fn update_players(
         &mut actor::Position,
         &mut actor::Rotation,
         &mut actor::player::Interaction,
+        &mut actor::player::Inventory,
     )>,
 ) {
     for (
@@ -333,6 +334,7 @@ fn update_players(
         mut position,
         mut rotation,
         mut interaction,
+        mut inventory,
     ) in players.iter_mut()
     {
         if connection.keep_alive.elapsed() >= Duration::from_secs(15) {
@@ -435,6 +437,12 @@ fn update_players(
                             }
                             _ => {}
                         }
+                    }
+                    c2s::GamePacket::SetCarriedItem { slot } => {
+                        inventory.hotbar_slot = slot as u8;
+                    }
+                    c2s::GamePacket::SetCreativeModeSlot { slot_num, item_stack } => {
+                        inventory.content.insert(slot_num as usize, item_stack);
                     }
                     c2s::GamePacket::UseItemOn {
                         block_pos,

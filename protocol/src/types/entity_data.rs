@@ -35,7 +35,7 @@ impl<'a> Decode<'a> for EntityData {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum EntityDataValue {
     Byte(u8),
     Int(VarI32),

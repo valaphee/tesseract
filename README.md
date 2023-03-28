@@ -14,13 +14,13 @@ affect the broader gameplay.
 
 It's also notable that Tesseract uses a different terminology compared to most projects:
 
-| Minecraft    | Tesseract    |                                                                |
-|--------------|--------------|----------------------------------------------------------------|
-| World        | Level Entity | Every level is represented as an entity                        |
-| Chunk        | Chunk Entity | Every chunk is represented as an entity                        |
-| Entity       | Actor Entity | Actors are entities like everything else, but not the only one |
-| Block        | Block Entity | Every block variant is represented as an entity                |
-| Block Entity | Block Entity | Every block entity is represented as an entity                 |
+| Minecraft    | Tesseract             |                                                                |
+|--------------|-----------------------|----------------------------------------------------------------|
+| World        | Level Entity          | Every level is represented as an entity                        |
+| Chunk        | Chunk Entity          | Every chunk is represented as an entity                        |
+| Entity       | Actor Entity          | Actors are entities like everything else, but not the only one |
+| Block        | (Entity-driven) Block | Every block variant can be represented as an entity            |
+| Block Entity | Entity-driven Block   | Every block entity is represented as an entity                 |
 
 ## Current Status
 

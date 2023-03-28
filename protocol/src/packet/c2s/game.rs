@@ -9,7 +9,7 @@ use crate::{
     Decode, Encode,
 };
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum GamePacket {
     AcceptTeleportation {
         id: VarI32,
@@ -253,20 +253,20 @@ pub enum GamePacket {
     },
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum ClientCommandPacketAction {
     PerformRespawn,
     RequestStats,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum InteractPacketAction {
     Interact { hand: Hand },
     Attack,
     InteractAt { x: f32, y: f32, z: f32, hand: Hand },
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum PlayerActionPacketAction {
     StartDestroyBlock,
     AbortDestroyBlock,
@@ -277,7 +277,7 @@ pub enum PlayerActionPacketAction {
     SwapItemWithOffhand,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum PlayerCommandPacketAction {
     PressShiftKey,
     ReleaseShiftKey,
@@ -290,7 +290,7 @@ pub enum PlayerCommandPacketAction {
     StartFallFlying,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum ResourcePackPacket {
     SuccessfullyLoaded,
     Declined,
@@ -298,7 +298,7 @@ pub enum ResourcePackPacket {
     Accepted,
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub enum SeenAdvancementsPacket {
     OpenedTab { tab: String },
     ClosedScreen,

@@ -10,7 +10,7 @@ use flate2::read::GzDecoder;
 
 use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
 
-use crate::{actor, level, level::AgeAndTime, registry, replication};
+use crate::{actor, level, registry, replication};
 
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UpdateFlush;
@@ -45,7 +45,7 @@ impl Plugin for PersistencePlugin {
                             name: level_name.clone().into(),
                             dimension_type: level_name.clone().into(),
                         },
-                        age_and_time: AgeAndTime {
+                        age_and_time: level::AgeAndTime {
                             age: savegame_level.time as u64,
                             time: savegame_level.day_time as u64,
                         },
@@ -120,6 +120,10 @@ fn load_players(
                             head_yaw: savegame_player.entity.rotation[0],
                         },
                         interaction: default(),
+                        inventory: actor::player::Inventory {
+                            content: vec![None; 46],
+                            hotbar_slot: 0,
+                        }
                     })
                     .set_parent(level);
             } else {

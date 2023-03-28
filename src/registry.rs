@@ -60,18 +60,20 @@ impl BlockStateRegistry {
                 if block_state_report.default {
                     id_by_name.insert(name.clone(), block_state_report.id);
                 }
-                id_by_name.insert(
-                    format!(
-                        "{name}[{}]",
-                        block_state_report
-                            .properties
-                            .iter()
-                            .map(|(key, value)| format!("{key}={value}"))
-                            .collect::<Vec<_>>()
-                            .join(",")
-                    ),
-                    block_state_report.id,
-                );
+                if !block_state_report.properties.is_empty() {
+                    id_by_name.insert(
+                        format!(
+                            "{name}[{}]",
+                            block_state_report
+                                .properties
+                                .iter()
+                                .map(|(key, value)| format!("{key}={value}"))
+                                .collect::<Vec<_>>()
+                                .join(",")
+                        ),
+                        block_state_report.id,
+                    );
+                }
             }
         }
         Self { id_by_name }
