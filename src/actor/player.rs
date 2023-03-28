@@ -4,7 +4,7 @@ use crate::{actor, level};
 
 #[derive(Bundle)]
 pub struct PlayerBundle {
-    pub actor: actor::Actor,
+    pub base: actor::Base,
     pub position: actor::Position,
     pub rotation: actor::Rotation,
     pub head_rotation: actor::HeadRotation,
@@ -21,53 +21,49 @@ pub enum Interaction {
 
 pub fn update_interactions(
     levels: Query<&level::chunk::LookupTable>,
-    mut chunks: Query<(&level::chunk::Chunk, &mut level::chunk::Terrain, &Parent)>,
+    mut chunks: Query<(&level::chunk::Base, &mut level::chunk::Data, &Parent)>,
     mut players: Query<(&mut Interaction, &Parent), Changed<Interaction>>,
 ) {
     for (mut interaction, chunk) in players.iter_mut() {
         #[allow(clippy::single_match)]
         match *interaction {
             Interaction::BlockBreak(position) => {
-                if let Ok((chunk_base, terrain, level)) = chunks.get_mut(chunk.get()) {
+                if let Ok((chunk_base, chunk_data, level)) = chunks.get_mut(chunk.get()) {
                     let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
                     // shortcut if position is in actor's chunk
-                    let terrain = if chunk_base.0 == chunk_position {
-                        Some(terrain)
+                    let chunk_data = if chunk_base.0 == chunk_position {
+                        Some(chunk_data)
                     } else {
                         levels.get(level.get()).ok().and_then(|chunk_lut| {
                             chunk_lut.0.get(&chunk_position).and_then(|chunk| {
-                                chunks
-                                    .get_component_mut::<level::chunk::Terrain>(*chunk)
-                                    .ok()
+                                chunks.get_component_mut::<level::chunk::Data>(*chunk).ok()
                             })
                         })
                     };
 
-                    if let Some(mut terrain) = terrain {
-                        terrain.set(position.x as u8, position.y as i16, position.z as u8, 0);
+                    if let Some(mut chunk_data) = chunk_data {
+                        chunk_data.set(position.x as u8, position.y as i16, position.z as u8, 0);
                     }
                 }
 
                 *interaction = Interaction::None;
             }
             Interaction::BlockPlace(position) => {
-                if let Ok((chunk_base, terrain, level)) = chunks.get_mut(chunk.get()) {
+                if let Ok((chunk_base, chunk_data, level)) = chunks.get_mut(chunk.get()) {
                     let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
                     // shortcut if position is in actor's chunk
-                    let terrain = if chunk_base.0 == chunk_position {
-                        Some(terrain)
+                    let chunk_data = if chunk_base.0 == chunk_position {
+                        Some(chunk_data)
                     } else {
                         levels.get(level.get()).ok().and_then(|chunk_lut| {
                             chunk_lut.0.get(&chunk_position).and_then(|chunk| {
-                                chunks
-                                    .get_component_mut::<level::chunk::Terrain>(*chunk)
-                                    .ok()
+                                chunks.get_component_mut::<level::chunk::Data>(*chunk).ok()
                             })
                         })
                     };
 
-                    if let Some(mut terrain) = terrain {
-                        terrain.set(position.x as u8, position.y as i16, position.z as u8, 95);
+                    if let Some(mut chunk_data) = chunk_data {
+                        chunk_data.set(position.x as u8, position.y as i16, position.z as u8, 95);
                     }
                 }
 

@@ -9,21 +9,21 @@ use crate::{actor, replication};
 /// All required components to describe a chunk
 #[derive(Bundle)]
 pub struct ChunkBundle {
-    chunk: Chunk,
+    base: Base,
     replication: replication::Replication,
 }
 
 impl ChunkBundle {
     pub fn new(position: IVec2) -> Self {
         Self {
-            chunk: Chunk(position),
+            base: Base(position),
             replication: default(),
         }
     }
 
     pub fn with_subscriber(position: IVec2, subscriber: Entity) -> Self {
         Self {
-            chunk: Chunk(position),
+            base: Base(position),
             replication: replication::Replication::with_subscriber(subscriber),
         }
     }
@@ -35,7 +35,7 @@ pub struct LookupTable(pub HashMap<IVec2, Entity>);
 
 /// Required properties (Chunk)
 #[derive(Component)]
-pub struct Chunk(pub IVec2);
+pub struct Base(pub IVec2);
 
 /// Keeps the hierarchy of actors in chunks consistent
 /// - if chunk has changed, place actor into new chunk
@@ -43,7 +43,7 @@ pub struct Chunk(pub IVec2);
 pub fn update_hierarchy(
     mut commands: Commands,
     mut levels: Query<&mut LookupTable>,
-    chunks: Query<(&Chunk, &Parent)>,
+    chunks: Query<(&Base, &Parent)>,
     actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
 ) {
     // early return
@@ -84,22 +84,23 @@ pub fn update_hierarchy(
     }
 }
 
-/// Terrain (Chunk)
+//======================================================================================== DATA ====
+
+/// Data (part of Chunk)
 #[derive(Component)]
-pub struct Terrain {
-    pub sections: Vec<TerrainSection>,
+pub struct Data {
+    pub sections: Vec<DataSection>,
     pub y_offset: u8,
 }
 
-pub struct TerrainSection {
+pub struct DataSection {
     pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
     pub biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
 
-    // used by replication
     pub block_state_changes: HashSet<u16>,
 }
 
-impl Terrain {
+impl Data {
     pub fn get(&self, x: u8, y: i16, z: u8) -> u32 {
         let section_y = ((y >> 4) + self.y_offset as i16) as usize;
         // x,z are wrapping
@@ -126,3 +127,10 @@ impl Terrain {
         }
     }
 }
+
+//====================================================================================== UPDATE ====
+
+#[derive(Component)]
+pub struct QueuedUpdates(pub HashSet<u16>);
+
+fn queue_updates() {}

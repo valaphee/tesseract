@@ -41,15 +41,23 @@ fn main() {
     .add_systems(PreStartup, spawn_level)
     .add_systems(
         First,
-        (spawn_players, spawn_chunks).after(replication::ClientUpdateFlush),
-    );
+        (spawn_players, spawn_chunks).after(replication::UpdateFlush),
+    )
+    .add_systems(Update, update_fluids);
 
     app.run();
 }
 
-fn spawn_level(mut commands: Commands) {
+fn spawn_level(block_state_registry: Res<registry::BlockStateRegistry>, mut commands: Commands) {
+    commands.spawn((
+        block::Base {
+            id: block_state_registry.id("minecraft:water[level=15]"),
+        },
+        Fluid,
+    ));
+
     commands.spawn(level::LevelBundle {
-        level: level::Level {
+        base: level::Base {
             name: "minecraft:overworld".into(),
             dimension_type: "minecraft:overworld".into(),
         },
@@ -61,17 +69,17 @@ fn spawn_level(mut commands: Commands) {
 #[allow(clippy::type_complexity)]
 pub fn spawn_players(
     mut commands: Commands,
-    levels: Query<Entity, With<level::Level>>,
+    levels: Query<Entity, With<level::Base>>,
     players: Query<
         (Entity, &replication::Connection),
-        (Added<replication::Connection>, Without<actor::Actor>),
+        (Added<replication::Connection>, Without<actor::Base>),
     >,
 ) {
     for (player, connection) in players.iter() {
         commands
             .entity(player)
             .insert((actor::player::PlayerBundle {
-                actor: actor::Actor {
+                base: actor::Base {
                     id: connection.user().id,
                     type_: "minecraft:player".into(),
                 },
@@ -88,15 +96,25 @@ fn spawn_chunks(
     block_state_registry: Res<registry::BlockStateRegistry>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
     mut commands: Commands,
-    chunks: Query<Entity, Added<level::chunk::Chunk>>,
+    chunks: Query<Entity, Added<level::chunk::Base>>,
+    blocks: Query<Entity, With<block::Base>>,
 ) {
+    if chunks.is_empty() {
+        return;
+    }
+
+    let air_id = block_state_registry.id("minecraft:air") | 1 << 31;
+    let bedrock_id = block_state_registry.id("minecraft:bedrock") | 1 << 31;
+    let dirt_id = block_state_registry.id("minecraft:dirt") | 1 << 31;
+    let grass_block_id = block_state_registry.id("minecraft:grass_block") | 1 << 31;
+    let water_block_id = blocks.single().index();
     for chunk in chunks.iter() {
-        let mut terrain = level::chunk::Terrain {
+        let mut chunk_data = level::chunk::Data {
             sections: {
                 let mut sections = vec![];
                 for _ in 0..24 {
-                    sections.push(level::chunk::TerrainSection {
-                        block_states: PalettedContainer::SingleValue(0),
+                    sections.push(level::chunk::DataSection {
+                        block_states: PalettedContainer::SingleValue(air_id),
                         biomes: PalettedContainer::SingleValue(
                             biome_registry.id("minecraft:plains"),
                         ),
@@ -108,22 +126,30 @@ fn spawn_chunks(
             y_offset: 4,
         };
 
-        let bedrock_id = block_state_registry.id("minecraft:bedrock");
-        let dirt_id = block_state_registry.id("minecraft:dirt");
-        let grass_block_id = block_state_registry.id("minecraft:grass_block");
         for x in 0..16 {
             for z in 0..16 {
-                terrain.set(x, 0, z, bedrock_id);
+                chunk_data.set(x, 0, z, bedrock_id);
                 for y in 1..4 {
-                    terrain.set(x, y, z, dirt_id);
+                    chunk_data.set(x, y, z, dirt_id);
                 }
-                terrain.set(x, 4, z, grass_block_id);
+                chunk_data.set(x, 4, z, grass_block_id);
             }
         }
-        for section in &mut terrain.sections {
+        chunk_data.set(8, 6, 8, water_block_id);
+        for section in &mut chunk_data.sections {
             section.block_state_changes.clear();
         }
 
-        commands.entity(chunk).insert(terrain);
+        commands.entity(chunk).insert(chunk_data);
     }
+}
+
+#[derive(Component)]
+struct Fluid;
+
+fn update_fluids(
+    chunks: Query<&level::chunk::Data, Changed<level::chunk::Data>>,
+    blocks: Query<&Fluid>,
+) {
+    for chunk_data in chunks.iter() {}
 }

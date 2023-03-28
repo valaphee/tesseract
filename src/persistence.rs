@@ -10,12 +10,10 @@ use flate2::read::GzDecoder;
 
 use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
 
-use crate::{
-    actor, level, level::AgeAndTime, registry, replication, replication::ClientUpdateFlush,
-};
+use crate::{actor, level, level::AgeAndTime, registry, replication};
 
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PersistenceLoadFlush;
+pub struct UpdateFlush;
 
 pub struct PersistencePlugin(pub HashMap<String, PersistencePluginLevel>);
 
@@ -43,9 +41,9 @@ impl Plugin for PersistencePlugin {
 
                 commands.spawn((
                     level::LevelBundle {
-                        level: level::Level {
-                            name: level_name.clone(),
-                            dimension_type: level_name.clone(),
+                        base: level::Base {
+                            name: level_name.clone().into(),
+                            dimension_type: level_name.clone().into(),
                         },
                         age_and_time: AgeAndTime {
                             age: savegame_level.time as u64,
@@ -63,15 +61,12 @@ impl Plugin for PersistencePlugin {
         };
 
         app.add_systems(PreStartup, spawn_levels)
-            .add_systems(
-                First,
-                (load_players, load_chunks).before(PersistenceLoadFlush),
-            )
+            .add_systems(First, (load_players, load_chunks).before(UpdateFlush))
             .add_systems(
                 First,
                 apply_system_buffers
-                    .in_set(PersistenceLoadFlush)
-                    .after(ClientUpdateFlush),
+                    .in_set(UpdateFlush)
+                    .after(replication::UpdateFlush),
             );
     }
 }
@@ -84,7 +79,7 @@ struct Persistence {
 /// Loads savegame data for newly connected players
 fn load_players(
     mut commands: Commands,
-    levels: Query<(Entity, &level::Level)>,
+    levels: Query<(Entity, &level::Base)>,
     players: Query<(Entity, &replication::Connection), Added<replication::Connection>>,
 ) {
     for (player, connection) in players.iter() {
@@ -110,7 +105,7 @@ fn load_players(
                 commands
                     .entity(player)
                     .insert(actor::player::PlayerBundle {
-                        actor: actor::Actor {
+                        base: actor::Base {
                             id: connection.user().id,
                             type_: "minecraft:player".into(),
                         },
@@ -143,7 +138,7 @@ fn load_chunks(
     biome_registry: Res<registry::DataRegistry<Biome>>,
     mut commands: Commands,
     mut levels: Query<&mut Persistence>,
-    chunks: Query<(Entity, &level::chunk::Chunk, &Parent), Added<level::chunk::Chunk>>,
+    chunks: Query<(Entity, &level::chunk::Base, &Parent), Added<level::chunk::Base>>,
 ) {
     for (chunk, chunk_base, level) in chunks.iter() {
         let region_storage = &mut levels.get_mut(level.get()).unwrap().region_storage;
@@ -155,7 +150,7 @@ fn load_chunks(
             let sections = savegame_chunk
                 .sections
                 .into_iter()
-                .map(|region_chunk_section| level::chunk::TerrainSection {
+                .map(|region_chunk_section| level::chunk::DataSection {
                     block_states: if let Some(data) = region_chunk_section.block_states.data {
                         if region_chunk_section.block_states.palette.is_empty() {
                             PalettedContainer::Global(BitStorage::from_data(16 * 16 * 16, data))
@@ -205,7 +200,7 @@ fn load_chunks(
                 })
                 .collect::<Vec<_>>();
 
-            commands.entity(chunk).insert(level::chunk::Terrain {
+            commands.entity(chunk).insert(level::chunk::Data {
                 sections,
                 y_offset: 4,
             });

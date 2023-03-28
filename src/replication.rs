@@ -26,15 +26,16 @@ use tesseract_protocol::{
     packet::{c2s, c2s::game::PlayerActionPacketAction, s2c},
     types::{
         Angle, Biome, Component as ChatComponent, DamageType, DimensionType, GameType, Intention,
-        Json, Nbt, Registries, Registry, Status, StatusPlayers, StatusVersion, VarI32,
+        Json, Nbt, PalettedContainer, Registries, Registry, Status, StatusPlayers, StatusVersion,
+        VarI32,
     },
     Decode, Encode,
 };
 
-use crate::{actor, level, registry};
+use crate::{actor, block::Base, level, registry};
 
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ClientUpdateFlush;
+pub struct UpdateFlush;
 
 pub struct ReplicationPlugin {
     pub address: SocketAddr,
@@ -93,11 +94,8 @@ impl Plugin for ReplicationPlugin {
         };
 
         app.add_systems(PostStartup, listen)
-            .add_systems(
-                First,
-                (spawn_player, update_players).before(ClientUpdateFlush),
-            )
-            .add_systems(First, apply_system_buffers.in_set(ClientUpdateFlush))
+            .add_systems(First, (spawn_player, update_players).before(UpdateFlush))
+            .add_systems(First, apply_system_buffers.in_set(UpdateFlush))
             .add_systems(Last, replicate_initial)
             .add_systems(Last, subscribe_and_replicate_chunks)
             .add_systems(Last, cleanup_chunks)
@@ -297,6 +295,8 @@ async fn handle_new_connection(
     Ok(())
 }
 
+//====================================================================================== UPDATE ====
+
 #[derive(Resource)]
 struct NewConnectionRx(mpsc::UnboundedReceiver<Connection>);
 
@@ -312,71 +312,6 @@ fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnect
             SubscriptionDistance::default(),
             Subscriptions::default(),
         ));
-    }
-}
-
-fn replicate_initial(
-    dimension_type_registry: Res<registry::DataRegistry<DimensionType>>,
-    biome_registry: Res<registry::DataRegistry<Biome>>,
-    damage_type_registry: Res<registry::DataRegistry<DamageType>>,
-    levels: Query<(&level::Level, &level::AgeAndTime)>,
-    chunks: Query<&Parent>,
-    players: Query<
-        (
-            Entity,
-            &Connection,
-            &actor::Position,
-            &actor::Rotation,
-            &Parent,
-        ),
-        Added<Connection>,
-    >,
-) {
-    for (player, connection, actor_position, actor_rotation, chunk) in players.iter() {
-        let (level_base, level_age_and_time) =
-            levels.get(chunks.get(chunk.get()).unwrap().get()).unwrap();
-        connection.send(&s2c::GamePacket::Login {
-            player_id: player.index() as i32,
-            hardcore: false,
-            game_type: GameType::Creative,
-            previous_game_type: 0,
-            levels: vec![level_base.name.to_string()],
-            registry_holder: Nbt(Registries {
-                dimension_type: Cow::Borrowed(dimension_type_registry.registry()),
-                biome: Cow::Borrowed(biome_registry.registry()),
-                chat_type: Cow::Owned(Registry {
-                    type_: "minecraft:chat_type".into(),
-                    value: vec![],
-                }),
-                damage_type: Cow::Borrowed(damage_type_registry.registry()),
-            }),
-            dimension_type: level_base.dimension_type.clone(),
-            dimension: level_base.name.to_string(),
-            seed: 0,
-            max_players: VarI32(0),
-            chunk_radius: VarI32(0),
-            simulation_distance: VarI32(0),
-            reduced_debug_info: false,
-            show_death_screen: false,
-            is_debug: false,
-            is_flat: false,
-            last_death_location: None,
-        });
-        connection.send(&s2c::GamePacket::SetDefaultSpawnPosition {
-            pos: default(),
-            yaw: default(),
-        });
-        connection.send(&s2c::GamePacket::SetTime {
-            game_time: level_age_and_time.age as i64,
-            day_time: level_age_and_time.time as i64,
-        });
-        connection.send(&s2c::GamePacket::PlayerPosition {
-            pos: actor_position.0,
-            yaw: actor_rotation.yaw,
-            pitch: actor_rotation.pitch,
-            relative_arguments: 0,
-            id: VarI32(0),
-        });
     }
 }
 
@@ -522,6 +457,73 @@ fn update_players(
     }
 }
 
+//================================================================================= REPLICATION ====
+
+fn replicate_initial(
+    dimension_type_registry: Res<registry::DataRegistry<DimensionType>>,
+    biome_registry: Res<registry::DataRegistry<Biome>>,
+    damage_type_registry: Res<registry::DataRegistry<DamageType>>,
+    levels: Query<(&level::Base, &level::AgeAndTime)>,
+    chunks: Query<&Parent>,
+    players: Query<
+        (
+            Entity,
+            &Connection,
+            &actor::Position,
+            &actor::Rotation,
+            &Parent,
+        ),
+        Added<Connection>,
+    >,
+) {
+    for (player, connection, actor_position, actor_rotation, chunk) in players.iter() {
+        let (level_base, level_age_and_time) =
+            levels.get(chunks.get(chunk.get()).unwrap().get()).unwrap();
+        connection.send(&s2c::GamePacket::Login {
+            player_id: player.index() as i32,
+            hardcore: false,
+            game_type: GameType::Creative,
+            previous_game_type: 0,
+            levels: vec![level_base.name.to_string()],
+            registry_holder: Nbt(Registries {
+                dimension_type: Cow::Borrowed(dimension_type_registry.registry()),
+                biome: Cow::Borrowed(biome_registry.registry()),
+                chat_type: Cow::Owned(Registry {
+                    type_: "minecraft:chat_type".into(),
+                    value: vec![],
+                }),
+                damage_type: Cow::Borrowed(damage_type_registry.registry()),
+            }),
+            dimension_type: level_base.dimension_type.to_string(),
+            dimension: level_base.name.to_string(),
+            seed: 0,
+            max_players: VarI32(0),
+            chunk_radius: VarI32(0),
+            simulation_distance: VarI32(0),
+            reduced_debug_info: false,
+            show_death_screen: false,
+            is_debug: false,
+            is_flat: false,
+            last_death_location: None,
+        });
+        connection.send(&s2c::GamePacket::SetDefaultSpawnPosition {
+            pos: default(),
+            yaw: default(),
+        });
+        connection.send(&s2c::GamePacket::SetTime {
+            game_time: level_age_and_time.age as i64,
+            day_time: level_age_and_time.time as i64,
+        });
+        connection.send(&s2c::GamePacket::PlayerPosition {
+            pos: actor_position.0,
+            yaw: actor_rotation.yaw,
+            pitch: actor_rotation.pitch,
+            relative_arguments: 0,
+            id: VarI32(0),
+        });
+    }
+}
+
 //=========================================================================== CHUNK REPLICATION ====
 
 #[derive(Default, Component)]
@@ -575,16 +577,17 @@ fn cleanup_chunks(
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn subscribe_and_replicate_chunks(
     registries: Res<registry::Registries>,
     mut commands: Commands,
     mut levels: Query<&mut level::chunk::LookupTable>,
-    chunks: Query<(&level::chunk::Chunk, &Parent)>,
-    mut subscription_chunks: Query<(Option<&level::chunk::Terrain>, &mut Replication)>,
+    chunks: Query<(&level::chunk::Base, &Parent)>,
+    mut subscription_chunks: Query<(Option<&level::chunk::Data>, &mut Replication)>,
+    blocks: Query<&Base>,
     actors: Query<(
         Entity,
-        &actor::Actor,
+        &actor::Base,
         &actor::Position,
         &actor::Rotation,
         &actor::HeadRotation,
@@ -690,14 +693,14 @@ fn subscribe_and_replicate_chunks(
             // acquire chunks
             for chunk_position in acquire_chunks {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
-                    if let Ok((terrain, mut replication)) = subscription_chunks.get_mut(chunk) {
+                    if let Ok((chunk_data, mut replication)) = subscription_chunks.get_mut(chunk) {
                         trace!("Acquire chunk: {:?}", chunk_position);
 
                         replication.subscriber.insert(player);
 
-                        if let Some(terrain) = terrain {
+                        if let Some(chunk_data) = chunk_data {
                             // connection: add chunk and actors, cause: subscribe
-                            connection.send(&add_chunk_packet(chunk_position, terrain));
+                            connection.send(&add_chunk_packet(chunk_position, chunk_data, &blocks));
                             for (
                                 actor,
                                 actor_base,
@@ -747,13 +750,14 @@ fn subscribe_and_replicate_chunks(
 
 fn replicate_chunks_late(
     chunks: Query<
-        (&level::chunk::Chunk, &level::chunk::Terrain, &Replication),
-        Added<level::chunk::Terrain>,
+        (&level::chunk::Base, &level::chunk::Data, &Replication),
+        Added<level::chunk::Data>,
     >,
+    blocks: Query<&Base>,
     players: Query<&Connection>,
 ) {
-    for (chunk_base, terrain, replication) in chunks.iter() {
-        let add_chunk_packet = add_chunk_packet(chunk_base.0, terrain);
+    for (chunk_base, chunk_data, replication) in chunks.iter() {
+        let add_chunk_packet = add_chunk_packet(chunk_base.0, chunk_data, &blocks);
         for &player in &replication.subscriber {
             // connection: add chunk, cause: subscribe (late)
             if let Ok(connection) = players.get(player) {
@@ -765,20 +769,17 @@ fn replicate_chunks_late(
 
 fn replicate_chunks_delta(
     mut chunks: Query<
-        (
-            &level::chunk::Chunk,
-            &mut level::chunk::Terrain,
-            &Replication,
-        ),
-        Changed<level::chunk::Terrain>,
+        (&level::chunk::Base, &mut level::chunk::Data, &Replication),
+        Changed<level::chunk::Data>,
     >,
+    blocks: Query<&Base>,
     players: Query<&Connection>,
 ) {
-    for (chunk_base, mut terrain, replication) in chunks.iter_mut() {
+    for (chunk_base, mut chunk_data, replication) in chunks.iter_mut() {
         let mut update_chunk_packets = vec![];
         {
-            let y_offset = terrain.y_offset as i32;
-            for (section_y, section) in terrain.sections.iter_mut().enumerate() {
+            let y_offset = chunk_data.y_offset as i32;
+            for (section_y, section) in chunk_data.sections.iter_mut().enumerate() {
                 if section.block_state_changes.is_empty() {
                     continue;
                 }
@@ -795,14 +796,18 @@ fn replicate_chunks_delta(
                             .block_state_changes
                             .iter()
                             .map(|block_state_update| {
+                                let value = section.block_states.get(*block_state_update as u32);
                                 s2c::game::SectionBlocksUpdatePacketPositionAndState {
                                     x: *block_state_update as u8 & 0xF,
                                     y: (*block_state_update >> 8) as u8,
                                     z: *block_state_update as u8 >> 4 & 0xF,
-                                    block_state: section
-                                        .block_states
-                                        .get(*block_state_update as u32)
-                                        as i64,
+                                    block_state: if value & 1 << 31 != 0 {
+                                        value & ((1 << 31) - 1)
+                                    } else {
+                                        blocks
+                                            .get(Entity::from_raw(value))
+                                            .map_or(value, |block| block.id)
+                                    } as i64,
                                 }
                             })
                             .collect(),
@@ -832,7 +837,7 @@ fn replicate_actors(
     registries: Res<registry::Registries>,
     mut chunks: Query<(&Children, &mut Replication), Changed<Children>>,
     actors: Query<(
-        &actor::Actor,
+        &actor::Base,
         &actor::Position,
         &actor::Rotation,
         &actor::HeadRotation,
@@ -987,13 +992,52 @@ async fn next(socket: &mut Framed<TcpStream, Codec>) -> tesseract_protocol::Resu
         .map(Packet)
 }
 
-fn add_chunk_packet<'a>(position: IVec2, terrain: &level::chunk::Terrain) -> s2c::GamePacket<'a> {
+fn add_chunk_packet<'a>(
+    position: IVec2,
+    chunk_data: &level::chunk::Data,
+    blocks: &Query<&Base>,
+) -> s2c::GamePacket<'a> {
     let mut buffer = Vec::new();
     let mut sky_y_mask = 0i64;
     let mut sky_updates = Vec::new();
-    for (i, section) in terrain.sections.iter().enumerate() {
+    for (i, section) in chunk_data.sections.iter().enumerate() {
         4096i16.encode(&mut buffer).unwrap();
-        section.block_states.encode(&mut buffer).unwrap();
+        match &section.block_states {
+            PalettedContainer::SingleValue(value) => {
+                0u8.encode(&mut buffer).unwrap();
+                VarI32(if value & 1 << 31 != 0 {
+                    *value & ((1 << 31) - 1)
+                } else {
+                    blocks
+                        .get(Entity::from_raw(*value))
+                        .map_or(*value, |block| block.id)
+                } as i32)
+                .encode(&mut buffer)
+                .unwrap();
+                VarI32(0).encode(&mut buffer).unwrap();
+            }
+            PalettedContainer::Linear { palette, storage } => {
+                (storage.bits() as u8).encode(&mut buffer).unwrap();
+                VarI32(palette.len() as i32).encode(&mut buffer).unwrap();
+                for &element in palette {
+                    VarI32(if element & 1 << 31 != 0 {
+                        element & ((1 << 31) - 1)
+                    } else {
+                        blocks
+                            .get(Entity::from_raw(element))
+                            .map_or(element, |block| block.id)
+                    } as i32)
+                    .encode(&mut buffer)
+                    .unwrap();
+                }
+                let data = storage.data();
+                VarI32(data.len() as i32).encode(&mut buffer).unwrap();
+                for &element in data {
+                    element.encode(&mut buffer).unwrap();
+                }
+            }
+            PalettedContainer::Global(_storage) => todo!(),
+        }
         section.biomes.encode(&mut buffer).unwrap();
 
         sky_y_mask |= 1 << (i + 1);
@@ -1023,7 +1067,7 @@ fn add_chunk_packet<'a>(position: IVec2, terrain: &level::chunk::Terrain) -> s2c
 fn add_actor_packet<'a>(
     registries: &registry::Registries,
     actor: Entity,
-    actor_base: &actor::Actor,
+    actor_base: &actor::Base,
     position: &actor::Position,
     rotation: &actor::Rotation,
     head_rotation: &actor::HeadRotation,

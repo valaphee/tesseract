@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use bevy::prelude::*;
 
 pub mod chunk;
@@ -5,16 +7,16 @@ pub mod chunk;
 /// All required components to describe a level
 #[derive(Bundle)]
 pub struct LevelBundle {
-    pub level: Level,
+    pub base: Base,
     pub age_and_time: AgeAndTime,
     pub chunks: chunk::LookupTable,
 }
 
-/// Required properties (Level)
+/// Required properties (part of Level)
 #[derive(Component)]
-pub struct Level {
-    pub name: String,
-    pub dimension_type: String,
+pub struct Base {
+    pub name: Cow<'static, str>,
+    pub dimension_type: Cow<'static, str>,
 }
 
 #[derive(Default, Component)]
