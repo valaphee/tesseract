@@ -101,27 +101,27 @@ pub struct DataSection {
 }
 
 impl Data {
-    pub fn get(&self, x: u8, y: i16, z: u8) -> u32 {
-        let section_y = ((y >> 4) + self.y_offset as i16) as usize;
+    pub fn get(&self, x: u8, y: u16, z: u8) -> u32 {
+        let section_y = (y >> 4) as usize;
         // x,z are wrapping
         if section_y >= self.sections.len() {
             return 0;
         }
 
         let section = &self.sections[section_y];
-        let index = (y as u16 & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
+        let index = (y & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
         section.block_states.get(index as u32)
     }
 
-    pub fn set(&mut self, x: u8, y: i16, z: u8, value: u32) {
-        let section_y = ((y >> 4) + self.y_offset as i16) as usize;
+    pub fn set(&mut self, x: u8, y: u16, z: u8, value: u32) {
+        let section_y = (y >> 4) as usize;
         // x,z are wrapping
         if section_y >= self.sections.len() {
             return;
         }
 
         let section = &mut self.sections[section_y];
-        let index = (y as u16 & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
+        let index = (y & 0xF) << 8 | (z as u16 & 0xF) << 4 | (x as u16 & 0xF);
         if section.block_states.get_and_set(index as u32, value) != value {
             section.block_state_changes.insert(index);
         }
@@ -132,5 +132,3 @@ impl Data {
 
 #[derive(Component)]
 pub struct QueuedUpdates(pub HashSet<u16>);
-
-fn queue_updates() {}

@@ -41,8 +41,14 @@ pub fn update_interactions(
                         })
                     };
 
+                    // TODO: clean-up (just for testing)
                     if let Some(mut chunk_data) = chunk_data {
-                        chunk_data.set(position.x as u8, position.y as i16, position.z as u8, 0);
+                        chunk_data.set(
+                            position.x as u8,
+                            (position.y + 64) as u16,
+                            position.z as u8,
+                            1 << 31 | 0,
+                        );
                     }
                 }
 
@@ -62,8 +68,14 @@ pub fn update_interactions(
                         })
                     };
 
+                    // TODO: clean-up (just for testing)
                     if let Some(mut chunk_data) = chunk_data {
-                        chunk_data.set(position.x as u8, position.y as i16, position.z as u8, 95);
+                        chunk_data.set(
+                            position.x as u8,
+                            (position.y + 64) as u16,
+                            position.z as u8,
+                            1 << 31 | 95,
+                        );
                     }
                 }
 

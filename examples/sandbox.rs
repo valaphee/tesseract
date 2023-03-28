@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, math::DVec3, prelude::*};
 
@@ -43,7 +43,8 @@ fn main() {
         First,
         (spawn_players, spawn_chunks).after(replication::UpdateFlush),
     )
-    .add_systems(Update, update_fluids);
+    .add_systems(Update, update_fluids)
+    .add_systems(PostUpdate, queue_updates);
 
     app.run();
 }
@@ -135,12 +136,14 @@ fn spawn_chunks(
                 chunk_data.set(x, 4, z, grass_block_id);
             }
         }
-        chunk_data.set(8, 6, 8, water_block_id);
         for section in &mut chunk_data.sections {
             section.block_state_changes.clear();
         }
+        chunk_data.set(8, 6, 8, water_block_id);
 
-        commands.entity(chunk).insert(chunk_data);
+        commands
+            .entity(chunk)
+            .insert((chunk_data, level::chunk::QueuedUpdates(HashSet::default())));
     }
 }
 
@@ -148,8 +151,44 @@ fn spawn_chunks(
 struct Fluid;
 
 fn update_fluids(
-    chunks: Query<&level::chunk::Data, Changed<level::chunk::Data>>,
+    mut chunks: Query<(&mut level::chunk::Data, &level::chunk::QueuedUpdates)>,
     blocks: Query<&Fluid>,
 ) {
-    for chunk_data in chunks.iter() {}
+    for (mut chunk_data, chunk_queued_updates) in chunks.iter_mut() {
+        if chunk_queued_updates.0.is_empty() {
+            continue;
+        }
+
+        for &queued_update in &chunk_queued_updates.0 {
+            let y = queued_update >> 8;
+            if y == 0 {
+                continue;
+            }
+
+            let x = queued_update as u8 & 0xF;
+            let z = queued_update as u8 >> 4 & 0xF;
+            let value = chunk_data.get(x, y, z);
+            if let Ok(_fluid) = blocks.get(Entity::from_raw(value)) {
+                chunk_data.set(x, y - 1, z, value);
+            }
+        }
+    }
+}
+
+fn queue_updates(
+    mut chunks: Query<
+        (&level::chunk::Data, &mut level::chunk::QueuedUpdates),
+        Changed<level::chunk::Data>,
+    >,
+) {
+    for (chunk_data, mut chunk_queued_updates) in chunks.iter_mut() {
+        chunk_queued_updates.0.clear();
+        for (section_y, section) in chunk_data.sections.iter().enumerate() {
+            for &block_state_change in &section.block_state_changes {
+                chunk_queued_updates
+                    .0
+                    .insert(block_state_change | (section_y as u16) << 12);
+            }
+        }
+    }
 }
