@@ -31,7 +31,10 @@ use tesseract_protocol::{
     Decode, Encode,
 };
 
-use crate::{actor, level, registry, PreLoad, Save};
+use crate::{actor, level, registry};
+
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ClientUpdateFlush;
 
 pub struct ReplicationPlugin {
     pub address: SocketAddr,
@@ -90,15 +93,18 @@ impl Plugin for ReplicationPlugin {
         };
 
         app.add_systems(PostStartup, listen)
-            .add_systems(PreLoad, spawn_player)
-            .add_systems(PreLoad, update_players)
-            .add_systems(Save, replicate_initial)
-            .add_systems(Save, subscribe_and_replicate_chunks)
-            .add_systems(Save, cleanup_chunks)
-            .add_systems(Save, replicate_chunks_late)
-            .add_systems(Save, replicate_chunks_delta)
-            .add_systems(Save, replicate_actors)
-            .add_systems(Save, replicate_actors_delta);
+            .add_systems(
+                First,
+                (spawn_player, update_players).before(ClientUpdateFlush),
+            )
+            .add_systems(First, apply_system_buffers.in_set(ClientUpdateFlush))
+            .add_systems(Last, replicate_initial)
+            .add_systems(Last, subscribe_and_replicate_chunks)
+            .add_systems(Last, cleanup_chunks)
+            .add_systems(Last, replicate_chunks_late)
+            .add_systems(Last, replicate_chunks_delta)
+            .add_systems(Last, replicate_actors)
+            .add_systems(Last, replicate_actors_delta);
     }
 }
 
@@ -169,7 +175,7 @@ async fn handle_new_connection(
                         )
                         .await;
                     }
-                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
+                    _ => return Err(tesseract_protocol::Error::Unexpected),
                 }
 
                 match next(&mut framed_socket).await?.decode()? {
@@ -180,13 +186,13 @@ async fn handle_new_connection(
                         )
                         .await;
                     }
-                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
+                    _ => return Err(tesseract_protocol::Error::Unexpected),
                 };
             }
             Intention::Login => {
                 let name = match next(&mut framed_socket).await?.decode()? {
                     c2s::LoginPacket::Hello { name, .. } => name,
-                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
+                    _ => return Err(tesseract_protocol::Error::Unexpected),
                 };
 
                 let nonce: [u8; 16] = rand::random();
@@ -208,11 +214,11 @@ async fn handle_new_connection(
                             .decrypt(Pkcs1v15Encrypt::default(), &key)
                             .unwrap()
                     }
-                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
+                    _ => return Err(tesseract_protocol::Error::Unexpected),
                 };
                 framed_socket.codec_mut().enable_encryption(&key);
 
-                let user = has_joined_server(
+                if let Ok(user) = has_joined_server(
                     &Configuration::new(),
                     &name,
                     &BigInt::from_signed_bytes_be(
@@ -225,64 +231,66 @@ async fn handle_new_connection(
                     None,
                 )
                 .await
-                .unwrap();
+                {
+                    if let Some(compression_threshold) = compression_threshold {
+                        encode_and_send(
+                            &mut framed_socket,
+                            &s2c::LoginPacket::LoginCompression {
+                                compression_threshold: VarI32(compression_threshold as i32),
+                            },
+                        )
+                        .await;
+                        framed_socket
+                            .codec_mut()
+                            .enable_compression(compression, compression_threshold);
+                    }
 
-                if let Some(compression_threshold) = compression_threshold {
                     encode_and_send(
                         &mut framed_socket,
-                        &s2c::LoginPacket::LoginCompression {
-                            compression_threshold: VarI32(compression_threshold as i32),
-                        },
+                        &s2c::LoginPacket::GameProfile(user.clone()),
                     )
                     .await;
-                    framed_socket
-                        .codec_mut()
-                        .enable_compression(compression, compression_threshold);
-                }
 
-                encode_and_send(
-                    &mut framed_socket,
-                    &s2c::LoginPacket::GameProfile(user.clone()),
-                )
-                .await;
+                    let (rx_packet_tx, rx_packet_rx) = mpsc::unbounded_channel();
+                    let (tx_packet_tx, mut tx_packet_rx) = mpsc::unbounded_channel();
+                    let _ = new_connection_tx.send(Connection {
+                        user,
+                        rx: rx_packet_rx,
+                        tx: tx_packet_tx,
+                        keep_alive: Instant::now(),
+                        keep_alive_id: None,
+                        latency: 0,
+                    });
 
-                let (rx_packet_tx, rx_packet_rx) = mpsc::unbounded_channel();
-                let (tx_packet_tx, mut tx_packet_rx) = mpsc::unbounded_channel();
-                let _ = new_connection_tx.send(Connection {
-                    user,
-                    rx: rx_packet_rx,
-                    tx: tx_packet_tx,
-                    keep_alive: Instant::now(),
-                    keep_alive_id: None,
-                    latency: 0,
-                });
-
-                tokio::spawn(async move {
-                    loop {
-                        tokio::select! {
-                            packet = framed_socket.next() => {
-                                if let Some(Ok(packet)) = packet {
-                                    let _ = rx_packet_tx.send(packet);
-                                } else {
-                                    break;
-                                }
-                            }
-                            packet = tx_packet_rx.recv() => {
-                                if let Some(packet) = packet {
-                                    if framed_socket.send(&packet).await.is_err() {
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::select! {
+                                packet = framed_socket.next() => {
+                                    if let Some(Ok(packet)) = packet {
+                                        let _ = rx_packet_tx.send(packet);
+                                    } else {
                                         break;
                                     }
-                                } else {
-                                    break;
+                                }
+                                packet = tx_packet_rx.recv() => {
+                                    if let Some(packet) = packet {
+                                        if framed_socket.send(&packet).await.is_err() {
+                                            break;
+                                        }
+                                    } else {
+                                        break;
+                                    }
                                 }
                             }
                         }
-                    }
-                    tx_packet_rx.close();
-                    let _ = framed_socket.close().await;
-                });
+                        tx_packet_rx.close();
+                        let _ = framed_socket.close().await;
+                    });
+                } else {
+                    return Err(tesseract_protocol::Error::Unexpected);
+                }
             }
-            _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
+            _ => return Err(tesseract_protocol::Error::Unexpected),
         },
     }
 
@@ -346,8 +354,8 @@ fn replicate_initial(
             dimension: level_base.name.to_string(),
             seed: 0,
             max_players: VarI32(0),
-            chunk_radius: VarI32(16),
-            simulation_distance: VarI32(16),
+            chunk_radius: VarI32(0),
+            simulation_distance: VarI32(0),
             reduced_debug_info: false,
             show_death_screen: false,
             is_debug: false,
@@ -421,7 +429,11 @@ fn update_players(
             while let Ok(packet) = connection.rx.try_recv() {
                 match Packet(packet).decode().unwrap() {
                     c2s::GamePacket::ClientInformation { view_distance, .. } => {
-                        let new_subscription_distance = view_distance as u8 + 3;
+                        connection.send(&s2c::GamePacket::SetChunkCacheRadius {
+                            radius: VarI32(view_distance as i32),
+                        });
+
+                        let new_subscription_distance = view_distance as u8 + 4;
                         if subscription_distance.0 != new_subscription_distance {
                             subscription_distance.0 = new_subscription_distance;
                         }

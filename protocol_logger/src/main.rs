@@ -70,28 +70,28 @@ async fn handle_new_connection(socket: TcpStream) -> tesseract_protocol::Result<
                 if matches!(packet, c2s::StatusPacket::StatusRequest { .. }) {
                     encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
-                    return Err(tesseract_protocol::Error::UnexpectedPacket);
+                    return Err(tesseract_protocol::Error::Unexpected);
                 }
 
                 let packet = next(&mut framed_client_socket).await?.decode()?;
                 if matches!(packet, s2c::StatusPacket::StatusResponse { .. }) {
                     encode_and_send(&mut framed_socket, &packet).await;
                 } else {
-                    return Err(tesseract_protocol::Error::UnexpectedPacket);
+                    return Err(tesseract_protocol::Error::Unexpected);
                 }
 
                 let packet = next(&mut framed_socket).await?.decode()?;
                 if matches!(packet, c2s::StatusPacket::PingRequest { .. }) {
                     encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
-                    return Err(tesseract_protocol::Error::UnexpectedPacket);
+                    return Err(tesseract_protocol::Error::Unexpected);
                 }
 
                 let packet = next(&mut framed_client_socket).await?.decode()?;
                 if matches!(packet, s2c::StatusPacket::PongResponse { .. }) {
                     encode_and_send(&mut framed_socket, &packet).await;
                 } else {
-                    return Err(tesseract_protocol::Error::UnexpectedPacket);
+                    return Err(tesseract_protocol::Error::Unexpected);
                 }
             }
             Intention::Login => {
@@ -110,7 +110,7 @@ async fn handle_new_connection(socket: TcpStream) -> tesseract_protocol::Result<
                 if matches!(packet, c2s::LoginPacket::Hello { .. }) {
                     encode_and_send(&mut framed_client_socket, &packet).await;
                 } else {
-                    return Err(tesseract_protocol::Error::UnexpectedPacket);
+                    return Err(tesseract_protocol::Error::Unexpected);
                 }
 
                 match next(&mut framed_client_socket).await?.decode()? {
@@ -182,7 +182,7 @@ async fn handle_new_connection(socket: TcpStream) -> tesseract_protocol::Result<
                                         encode_and_send(&mut framed_socket, &packet).await;
                                         break;
                                     } else {
-                                        return Err(tesseract_protocol::Error::UnexpectedPacket);
+                                        return Err(tesseract_protocol::Error::Unexpected);
                                     }
                                 }
                             }
@@ -206,10 +206,10 @@ async fn handle_new_connection(socket: TcpStream) -> tesseract_protocol::Result<
                             }
                         });
                     }
-                    _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
+                    _ => return Err(tesseract_protocol::Error::Unexpected),
                 };
             }
-            _ => return Err(tesseract_protocol::Error::UnexpectedPacket),
+            _ => return Err(tesseract_protocol::Error::Unexpected),
         },
     }
 

@@ -1,11 +1,6 @@
 use std::time::Duration;
 
-use bevy::{
-    app::{MainScheduleOrder, ScheduleRunnerSettings},
-    log::LogPlugin,
-    math::DVec3,
-    prelude::*,
-};
+use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, math::DVec3, prelude::*};
 
 use tesseract_base::*;
 use tesseract_protocol::types::{Biome, DamageType, DimensionType, PalettedContainer};
@@ -15,7 +10,7 @@ fn main() {
     let mut app = App::new();
     // required
     app.insert_resource(ScheduleRunnerSettings::run_loop(Duration::from_secs_f64(
-        1.0 / 10.0,
+        1.0 / 20.0,
     )))
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
@@ -37,10 +32,6 @@ fn main() {
         "generated/data/damage_type",
         "minecraft:damage_type",
     ))
-    .init_schedule(PreLoad)
-    .init_schedule(Load)
-    .init_schedule(PostLoad)
-    .init_schedule(Save)
     .add_plugin(replication::ReplicationPlugin::default())
     .add_systems(PostUpdate, level::chunk::update_hierarchy)
     // gameplay
@@ -48,15 +39,10 @@ fn main() {
     .add_systems(Update, level::update_time)
     // custom
     .add_systems(PreStartup, spawn_level)
-    .add_systems(PostLoad, spawn_players)
-    .add_systems(PostLoad, spawn_chunks);
-
-    // required
-    let mut order = app.world.resource_mut::<MainScheduleOrder>();
-    order.insert_after(First, PreLoad);
-    order.insert_after(PreLoad, Load);
-    order.insert_after(Load, PostLoad);
-    order.insert_after(PostUpdate, Save);
+    .add_systems(
+        First,
+        (spawn_players, spawn_chunks).after(replication::ClientUpdateFlush),
+    );
 
     app.run();
 }

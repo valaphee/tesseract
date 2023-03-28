@@ -10,7 +10,12 @@ use flate2::read::GzDecoder;
 
 use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
 
-use crate::{actor, level, level::AgeAndTime, registry, replication, Load};
+use crate::{
+    actor, level, level::AgeAndTime, registry, replication, replication::ClientUpdateFlush,
+};
+
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PersistenceLoadFlush;
 
 pub struct PersistencePlugin(pub HashMap<String, PersistencePluginLevel>);
 
@@ -58,8 +63,16 @@ impl Plugin for PersistencePlugin {
         };
 
         app.add_systems(PreStartup, spawn_levels)
-            .add_systems(Load, load_players)
-            .add_systems(Load, load_chunks);
+            .add_systems(
+                First,
+                (load_players, load_chunks).before(PersistenceLoadFlush),
+            )
+            .add_systems(
+                First,
+                apply_system_buffers
+                    .in_set(PersistenceLoadFlush)
+                    .after(ClientUpdateFlush),
+            );
     }
 }
 

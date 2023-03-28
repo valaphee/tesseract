@@ -31,8 +31,8 @@ pub enum Error {
 
     #[error("Unexpected end")]
     UnexpectedEnd,
-    #[error("Unexpected packet")]
-    UnexpectedPacket,
+    #[error("Unexpected")]
+    Unexpected,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
