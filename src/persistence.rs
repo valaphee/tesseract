@@ -79,6 +79,7 @@ struct Persistence {
 /// Loads savegame data for newly connected players
 fn load_players(
     mut commands: Commands,
+
     levels: Query<(Entity, &level::Base)>,
     players: Query<(Entity, &replication::Connection), Added<replication::Connection>>,
 ) {
@@ -122,8 +123,8 @@ fn load_players(
                         interaction: default(),
                         inventory: actor::player::Inventory {
                             content: vec![None; 46],
-                            hotbar_slot: 0,
-                        }
+                            selected_slot: 0,
+                        },
                     })
                     .set_parent(level);
             } else {
@@ -140,7 +141,9 @@ fn load_players(
 fn load_chunks(
     block_state_registry: Res<registry::BlockStateRegistry>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
+
     mut commands: Commands,
+
     mut levels: Query<&mut Persistence>,
     chunks: Query<(Entity, &level::chunk::Base, &Parent), Added<level::chunk::Base>>,
 ) {

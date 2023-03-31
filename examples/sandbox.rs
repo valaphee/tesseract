@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-use std::fs::File;
 use std::time::Duration;
 
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, math::DVec3, prelude::*};
 
 use tesseract_base::*;
-use tesseract_protocol::types::{Biome, DamageType, DimensionType, PalettedContainer};
+use tesseract_protocol::types::{Biome, PalettedContainer};
 
 fn main() {
     // create and run app
@@ -16,32 +14,20 @@ fn main() {
     )))
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
-    .insert_resource(registry::Registries::new(
-        "generated/reports/registries.json",
-    ))
-    .insert_resource(registry::BlockStateRegistry::new(
-        "generated/reports/blocks.json",
-    ))
-    .insert_resource(registry::DataRegistry::<DimensionType>::new(
-        "generated/data/dimension_type",
-        "minecraft:dimension_type",
-    ))
-    .insert_resource(registry::DataRegistry::<Biome>::new(
-        "generated/data/worldgen/biome",
-        "minecraft:worldgen/biome",
-    ))
-    .insert_resource(registry::DataRegistry::<DamageType>::new(
-        "generated/data/damage_type",
-        "minecraft:damage_type",
-    ))
     .add_plugin(replication::ReplicationPlugin::default())
-    .add_systems(PostUpdate, level::chunk::update_hierarchy)
-    .add_systems(PostUpdate, level::chunk::queue_updates)
+    .add_systems(Startup, (item::build_lut, block::build_lut))
+    .add_systems(
+        PostUpdate,
+        (level::chunk::update_hierarchy, level::chunk::queue_updates),
+    )
     // gameplay
-    .add_systems(Update, actor::player::update_interactions)
-    .add_systems(Update, level::update_time)
+    .add_systems(
+        Update,
+        (level::update_time, actor::player::update_interactions),
+    )
     // custom
-    .add_systems(PreStartup, spawn_level)
+    .add_systems(PreStartup, register_blocks_and_items)
+    .add_systems(Startup, spawn_levels)
     .add_systems(
         First,
         (spawn_players, spawn_chunks).after(replication::UpdateFlush),
@@ -50,7 +36,56 @@ fn main() {
     app.run();
 }
 
-fn spawn_level(mut commands: Commands) {
+fn register_blocks_and_items(mut commands: Commands) {
+    commands.spawn(block::Base("minecraft:air".into()));
+    commands.spawn((
+        block::Base("minecraft:bedrock".into()),
+        item::Base("minecraft:bedrock".into()),
+    ));
+    commands.spawn((
+        block::Base("minecraft:dirt".into()),
+        item::Base("minecraft:dirt".into()),
+    ));
+    commands.spawn((
+        block::Base("minecraft:grass_block".into()),
+        item::Base("minecraft:grass_block".into()),
+    ));
+
+    {
+        let empty_bucket = commands.spawn(item::Base("minecraft:bucket".into())).id();
+
+        let water = commands
+            .spawn((
+                block::Base("minecraft:water[level=0]".into()),
+                block::Fluid {
+                    volume: 7,
+                    filter: 0,
+                },
+            ))
+            .id();
+        commands.spawn_batch((0..7).map(|volume| {
+            (
+                block::Base(format!("minecraft:water[level={}]", 7 - volume).into()),
+                block::Fluid { volume, filter: 0 },
+            )
+        }));
+        let filled_water_bucket = commands
+            .spawn((
+                item::Base("minecraft:water_bucket".into()),
+                item::Bucket {
+                    fluid: water,
+                    empty: empty_bucket,
+                },
+            ))
+            .id();
+
+        commands
+            .entity(empty_bucket)
+            .insert(item::EmptyBucket([(water, filled_water_bucket)].into()));
+    }
+}
+
+fn spawn_levels(mut commands: Commands) {
     commands.spawn(level::LevelBundle {
         base: level::Base {
             name: "minecraft:overworld".into(),
@@ -62,8 +97,9 @@ fn spawn_level(mut commands: Commands) {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn spawn_players(
+fn spawn_players(
     mut commands: Commands,
+
     levels: Query<Entity, With<level::Base>>,
     players: Query<
         (Entity, &replication::Connection),
@@ -84,27 +120,29 @@ pub fn spawn_players(
                 interaction: default(),
                 inventory: actor::player::Inventory {
                     content: vec![None; 46],
-                    hotbar_slot: 0,
-                }
+                    selected_slot: 0,
+                },
             },))
             .set_parent(levels.single());
     }
 }
 
 fn spawn_chunks(
-    block_state_registry: Res<registry::BlockStateRegistry>,
+    block_lut: Res<block::LookupTable>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
+
     mut commands: Commands,
+
     chunks: Query<Entity, Added<level::chunk::Base>>,
 ) {
     if chunks.is_empty() {
         return;
     }
 
-    let air_id = block_state_registry.id("minecraft:air") | 1 << 31;
-    let bedrock_id = block_state_registry.id("minecraft:bedrock") | 1 << 31;
-    let dirt_id = block_state_registry.id("minecraft:dirt") | 1 << 31;
-    let grass_block_id = block_state_registry.id("minecraft:grass_block") | 1 << 31;
+    let air_id = block_lut.0["minecraft:air"].index();
+    let bedrock_id = block_lut.0["minecraft:bedrock"].index();
+    let dirt_id = block_lut.0["minecraft:dirt"].index();
+    let grass_block_id = block_lut.0["minecraft:grass_block"].index();
     for chunk in chunks.iter() {
         let mut chunk_data = level::chunk::Data {
             sections: {
@@ -136,8 +174,6 @@ fn spawn_chunks(
             section.block_state_changes.clear();
         }
 
-        commands
-            .entity(chunk)
-            .insert(chunk_data);
+        commands.entity(chunk).insert(chunk_data);
     }
 }

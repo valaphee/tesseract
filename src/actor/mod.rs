@@ -37,3 +37,17 @@ pub struct Rotation {
 pub struct HeadRotation {
     pub head_yaw: f32,
 }
+
+#[derive(Component)]
+pub struct Armor {
+    pub head: Option<Entity>,
+    pub torso: Option<Entity>,
+    pub legs: Option<Entity>,
+    pub feet: Option<Entity>,
+}
+
+#[derive(Component)]
+pub struct Hand {
+    pub main_hand: Option<Entity>,
+    pub off_hand: Option<Entity>,
+}

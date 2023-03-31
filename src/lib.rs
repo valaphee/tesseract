@@ -2,6 +2,7 @@
 
 pub mod actor;
 pub mod block;
+pub mod item;
 pub mod level;
 pub mod persistence;
 pub mod registry;

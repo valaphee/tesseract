@@ -32,11 +32,11 @@ impl ChunkBundle {
     }
 }
 
-/// Chunk by position look-up table (Level)
+/// Chunk by position look-up table (part of Level)
 #[derive(Component, Default)]
 pub struct LookupTable(pub HashMap<IVec2, Entity>);
 
-/// Required properties (Chunk)
+/// Required properties (part of Chunk)
 #[derive(Component)]
 pub struct Base(pub IVec2);
 
@@ -45,11 +45,11 @@ pub struct Base(pub IVec2);
 /// - if new chunk does not exist, create new chunk
 pub fn update_hierarchy(
     mut commands: Commands,
+
     mut levels: Query<&mut LookupTable>,
     chunks: Query<(&Base, &Parent)>,
     actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
 ) {
-    // early return
     for (actor, actor_position, level_or_chunk) in actors.iter() {
         let chunk_position = IVec2::new(
             (actor_position.0.x as i32) >> 4,
@@ -136,12 +136,7 @@ impl Data {
 #[derive(Component, Default)]
 pub struct QueuedUpdates(pub HashSet<u16>);
 
-pub fn queue_updates(
-    mut chunks: Query<
-        (&Data, &mut QueuedUpdates),
-        Changed<Data>,
-    >,
-) {
+pub fn queue_updates(mut chunks: Query<(&Data, &mut QueuedUpdates), Changed<Data>>) {
     for (chunk_data, mut chunk_queued_updates) in chunks.iter_mut() {
         chunk_queued_updates.0.clear();
         for (section_y, section) in chunk_data.sections.iter().enumerate() {
