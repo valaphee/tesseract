@@ -10,15 +10,6 @@ pub struct LookupTable(pub HashMap<String, Entity>);
 #[derive(Component)]
 pub struct Base(pub Cow<'static, str>);
 
-#[derive(Component)]
-pub struct EmptyBucket(pub HashMap<Entity, Entity>);
-
-#[derive(Component)]
-pub struct Bucket {
-    pub fluid: Entity,
-    pub empty: Entity,
-}
-
 /// Builds the look-up table
 pub fn build_lut(mut commands: Commands, items: Query<(Entity, &Base)>) {
     commands.insert_resource(LookupTable(
@@ -27,4 +18,13 @@ pub fn build_lut(mut commands: Commands, items: Query<(Entity, &Base)>) {
             .map(|(item, item_base)| (item_base.0.to_string(), item))
             .collect(),
     ));
+}
+
+#[derive(Component)]
+pub struct EmptyBucket(pub HashMap<Entity, Entity>);
+
+#[derive(Component)]
+pub struct Bucket {
+    pub fluid: Entity,
+    pub empty: Entity,
 }

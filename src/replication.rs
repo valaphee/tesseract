@@ -136,10 +136,29 @@ struct Mappings {
     item_from_network: HashMap<u32, u32>,
 }
 
+/*impl FromWorld for Mappings {
+    fn from_world(world: &mut World) -> Self {
+        let mut blocks = world.query::<(Entity, &block::Base)>();
+        let mut items = world.query::<(Entity, &item::Base)>();
+        let registries = world.get_resource::<registry::Registries>().unwrap();
+        let block_state_registry = world.get_resource::<registry::BlockStateRegistry>().unwrap();
+        Mappings {
+            block_to_network: blocks.iter(world)
+                .map(|(block, block_base)| (block.index(), block_state_registry.id(&block_base.0)))
+                .collect(),
+            item_from_network: items.iter(world)
+                .map(|(item, item_base)| (registries.id("minecraft:item", &item_base.0), item.index()))
+                .collect(),
+        }
+    }
+}*/
+
 fn build_mappings(
     registries: Res<registry::Registries>,
     block_state_registry: Res<registry::BlockStateRegistry>,
+
     mut commands: Commands,
+
     blocks: Query<(Entity, &block::Base)>,
     items: Query<(Entity, &item::Base)>,
 ) {
@@ -411,9 +430,6 @@ fn update_players(
                 .entity(player)
                 .remove::<Connection>()
                 .remove::<SubscriptionDistance>();
-
-            // remove all subscriptions
-            subscription_distance.0 = 0;
         } else {
             while let Ok(packet) = connection.rx.try_recv() {
                 match Packet(packet).decode().unwrap() {

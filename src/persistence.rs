@@ -159,20 +159,16 @@ fn load_chunks(
                 .into_iter()
                 .map(|region_chunk_section| level::chunk::DataSection {
                     block_states: if let Some(data) = region_chunk_section.block_states.data {
-                        if region_chunk_section.block_states.palette.is_empty() {
-                            PalettedContainer::Global(BitStorage::from_data(16 * 16 * 16, data))
-                        } else {
-                            PalettedContainer::Linear {
-                                palette: region_chunk_section
-                                    .block_states
-                                    .palette
-                                    .iter()
-                                    .map(|entry| block_state_registry.id(&entry.name()))
-                                    .collect(),
-                                storage: BitStorage::from_data(16 * 16 * 16, data),
-                            }
-                            .fix()
+                        PalettedContainer::Linear {
+                            palette: region_chunk_section
+                                .block_states
+                                .palette
+                                .iter()
+                                .map(|entry| block_state_registry.id(&entry.name()))
+                                .collect(),
+                            storage: BitStorage::from_data(16 * 16 * 16, data),
                         }
+                        .fix()
                     } else {
                         PalettedContainer::SingleValue(
                             block_state_registry.id(&region_chunk_section
@@ -184,20 +180,16 @@ fn load_chunks(
                         )
                     },
                     biomes: if let Some(data) = region_chunk_section.biomes.data {
-                        if region_chunk_section.biomes.palette.is_empty() {
-                            PalettedContainer::Global(BitStorage::from_data(4 * 4 * 4, data))
-                        } else {
-                            PalettedContainer::Linear {
-                                palette: region_chunk_section
-                                    .biomes
-                                    .palette
-                                    .iter()
-                                    .map(|entry| biome_registry.id(entry))
-                                    .collect(),
-                                storage: BitStorage::from_data(4 * 4 * 4, data),
-                            }
-                            .fix()
+                        PalettedContainer::Linear {
+                            palette: region_chunk_section
+                                .biomes
+                                .palette
+                                .iter()
+                                .map(|entry| biome_registry.id(entry))
+                                .collect(),
+                            storage: BitStorage::from_data(4 * 4 * 4, data),
                         }
+                        .fix()
                     } else {
                         PalettedContainer::SingleValue(
                             biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()),

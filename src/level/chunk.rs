@@ -131,7 +131,7 @@ impl Data {
     }
 }
 
-//====================================================================================== UPDATE ====
+//=============================================================================== QUEUED UPDATE ====
 
 #[derive(Component, Default)]
 pub struct QueuedUpdates(pub HashSet<QueuedUpdate>);

@@ -12,9 +12,6 @@ pub struct LookupTable(pub HashMap<String, Entity>);
 #[derive(Component)]
 pub struct Base(pub Cow<'static, str>);
 
-#[derive(Component)]
-pub struct Fluid(pub u8);
-
 /// Builds the look-up table
 pub fn build_lut(mut commands: Commands, blocks: Query<(Entity, &Base)>) {
     commands.insert_resource(LookupTable(
@@ -24,6 +21,9 @@ pub fn build_lut(mut commands: Commands, blocks: Query<(Entity, &Base)>) {
             .collect(),
     ));
 }
+
+#[derive(Component)]
+pub struct Fluid(pub u8);
 
 pub struct FluidCache([u32; 8]);
 
