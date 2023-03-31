@@ -19,7 +19,7 @@ pub struct Bucket {
     pub empty: Entity,
 }
 
-/// Builds the lookup table
+/// Builds the look-up table
 pub fn build_lut(mut commands: Commands, items: Query<(Entity, &Base)>) {
     commands.insert_resource(LookupTable(
         items

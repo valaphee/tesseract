@@ -31,7 +31,8 @@ fn main() {
     .add_systems(
         First,
         (spawn_players, spawn_chunks).after(replication::UpdateFlush),
-    );
+    )
+    .add_systems(Update, block::update_fluids);
 
     app.run();
 }
@@ -51,38 +52,17 @@ fn register_blocks_and_items(mut commands: Commands) {
         item::Base("minecraft:grass_block".into()),
     ));
 
-    {
-        let empty_bucket = commands.spawn(item::Base("minecraft:bucket".into())).id();
-
-        let water = commands
-            .spawn((
-                block::Base("minecraft:water[level=0]".into()),
-                block::Fluid {
-                    volume: 7,
-                    filter: 0,
-                },
-            ))
-            .id();
-        commands.spawn_batch((0..7).map(|volume| {
-            (
-                block::Base(format!("minecraft:water[level={}]", 7 - volume).into()),
-                block::Fluid { volume, filter: 0 },
-            )
-        }));
-        let filled_water_bucket = commands
-            .spawn((
-                item::Base("minecraft:water_bucket".into()),
-                item::Bucket {
-                    fluid: water,
-                    empty: empty_bucket,
-                },
-            ))
-            .id();
-
-        commands
-            .entity(empty_bucket)
-            .insert(item::EmptyBucket([(water, filled_water_bucket)].into()));
-    }
+    commands.spawn((
+        block::Base("minecraft:water[level=0]".into()),
+        block::Fluid(7),
+        item::Base("minecraft:water_bucket".into()),
+    ));
+    commands.spawn_batch((0..7).map(|volume| {
+        (
+            block::Base(format!("minecraft:water[level={}]", 7 - volume).into()),
+            block::Fluid(volume),
+        )
+    }));
 }
 
 fn spawn_levels(mut commands: Commands) {

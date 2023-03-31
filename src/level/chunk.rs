@@ -134,16 +134,34 @@ impl Data {
 //====================================================================================== UPDATE ====
 
 #[derive(Component, Default)]
-pub struct QueuedUpdates(pub HashSet<u16>);
+pub struct QueuedUpdates(pub HashSet<QueuedUpdate>);
+
+#[derive(Eq, PartialEq, Hash)]
+pub struct QueuedUpdate(u8, u16);
+
+impl QueuedUpdate {
+    pub fn x(&self) -> u8 {
+        self.0 & 0xF
+    }
+
+    pub fn y(&self) -> u16 {
+        self.1
+    }
+
+    pub fn z(&self) -> u8 {
+        self.0 >> 4 & 0xF
+    }
+}
 
 pub fn queue_updates(mut chunks: Query<(&Data, &mut QueuedUpdates), Changed<Data>>) {
     for (chunk_data, mut chunk_queued_updates) in chunks.iter_mut() {
         chunk_queued_updates.0.clear();
         for (section_y, section) in chunk_data.sections.iter().enumerate() {
             for &block_state_change in &section.block_state_changes {
-                chunk_queued_updates
-                    .0
-                    .insert(block_state_change | (section_y as u16) << 12);
+                chunk_queued_updates.0.insert(QueuedUpdate(
+                    block_state_change as u8,
+                    block_state_change >> 8 | (section_y as u16) << 4,
+                ));
             }
         }
     }
