@@ -3,8 +3,9 @@
 
 extern crate core;
 
-pub use tesseract_protocol_derive::{Decode, Encode};
 use thiserror::Error;
+
+pub use tesseract_protocol_derive::{Decode, Encode};
 
 pub mod codec;
 pub mod packet;

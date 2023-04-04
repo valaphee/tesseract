@@ -29,6 +29,10 @@ git = "https://github.com/valaphee/bevy.git"
 branch = "tesseract"
 default-features = false
 
+[dev-dependencies]
+tesseract_java = { path = "plugins/java" }
+tesseract_ta_physics = { path = "plugins/ta_physics" }
+
 [profile.release]
 strip = true
 lto = true

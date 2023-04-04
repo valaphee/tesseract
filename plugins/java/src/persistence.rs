@@ -8,13 +8,11 @@ use std::{
 use bevy::{math::DVec3, prelude::*};
 use flate2::read::GzDecoder;
 
+pub use tesseract_base::persistence::*;
 use tesseract_base::{actor, block, level};
 use tesseract_java_protocol::types::{Biome, BitStorage, PalettedContainer};
 
 use crate::{registry, replication};
-
-#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct UpdateFlush;
 
 pub struct PersistencePlugin(pub HashMap<String, PersistencePluginLevel>);
 
@@ -42,15 +40,12 @@ impl Plugin for PersistencePlugin {
 
                 commands.spawn((
                     level::LevelBundle {
-                        base: level::Base {
-                            name: level_name.clone().into(),
-                            dimension_type: level_name.clone().into(),
-                        },
+                        base: level::Base::new(level_name.clone(), level_name.clone()),
                         age_and_time: level::AgeAndTime {
                             age: savegame_level.time as u64,
                             time: savegame_level.day_time as u64,
                         },
-                        chunks: default(),
+                        chunks: Default::default(),
                     },
                     Persistence {
                         region_storage: tesseract_java_savegame::region::RegionStorage::new(
@@ -101,7 +96,7 @@ fn load_players(
 
             if let Some((level, _)) = levels
                 .iter()
-                .find(|(_, level_base)| level_base.name == savegame_player.level)
+                .find(|(_, level_base)| level_base.name() == savegame_player.level)
             {
                 commands
                     .entity(player)
@@ -120,7 +115,7 @@ fn load_players(
                         head_rotation: actor::HeadRotation {
                             head_yaw: savegame_player.entity.rotation[0],
                         },
-                        interaction: default(),
+                        interaction: Default::default(),
                         inventory: actor::player::Inventory {
                             content: vec![None; 46],
                             selected_slot: 0,
@@ -193,7 +188,7 @@ fn load_chunks(
                             biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()),
                         )
                     },
-                    block_state_changes: default(),
+                    block_state_changes: Default::default(),
                 })
                 .collect::<Vec<_>>();
 

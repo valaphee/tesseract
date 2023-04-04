@@ -15,8 +15,28 @@ pub struct LevelBundle {
 /// Required properties (part of Level)
 #[derive(Component)]
 pub struct Base {
-    pub name: Cow<'static, str>,
-    pub dimension_type: Cow<'static, str>,
+    name: Cow<'static, str>,
+    dimension_type: Cow<'static, str>,
+}
+
+impl Base {
+    pub fn new(
+        name: impl Into<Cow<'static, str>>,
+        dimension_type: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            dimension_type: dimension_type.into(),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn dimension_type(&self) -> &str {
+        &self.dimension_type
+    }
 }
 
 #[derive(Default, Component)]

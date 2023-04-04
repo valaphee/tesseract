@@ -1,9 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use bevy::prelude::*;
-use rand::prelude::*;
-
-use crate::level;
 
 /// Block by name look-up table
 #[derive(Resource)]
@@ -22,7 +19,7 @@ pub struct Base {
 }
 
 impl Base {
-    pub fn new<N: Into<Cow<'static, str>>>(name: N) -> Self {
+    pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
         Self { name: name.into() }
     }
 

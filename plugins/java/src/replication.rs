@@ -21,6 +21,7 @@ use mojang_session_api::{
     apis::{configuration::Configuration, default_api::has_joined_server},
     models::User,
 };
+pub use tesseract_base::replication::*;
 use tesseract_base::{actor, level};
 use tesseract_java_protocol::{
     codec::{Codec, Compression},
@@ -34,9 +35,6 @@ use tesseract_java_protocol::{
 };
 
 use crate::registry;
-
-#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct UpdateFlush;
 
 pub struct ReplicationPlugin {
     pub address: SocketAddr,
@@ -504,7 +502,7 @@ fn replicate_initial(
             hardcore: false,
             game_type: GameType::Creative,
             previous_game_type: 0,
-            levels: vec![level_base.name.to_string()],
+            levels: vec![level_base.name().into()],
             registry_holder: Nbt(Registries {
                 dimension_type: Cow::Borrowed(dimension_type_registry.registry()),
                 biome: Cow::Borrowed(biome_registry.registry()),
@@ -514,8 +512,8 @@ fn replicate_initial(
                 }),
                 damage_type: Cow::Borrowed(damage_type_registry.registry()),
             }),
-            dimension_type: level_base.dimension_type.to_string(),
-            dimension: level_base.name.to_string(),
+            dimension_type: level_base.dimension_type().into(),
+            dimension: level_base.name().into(),
             seed: 0,
             max_players: VarI32(0),
             chunk_radius: VarI32(0),
@@ -527,8 +525,8 @@ fn replicate_initial(
             last_death_location: None,
         });
         connection.send(&s2c::GamePacket::SetDefaultSpawnPosition {
-            pos: default(),
-            yaw: default(),
+            pos: Default::default(),
+            yaw: Default::default(),
         });
         connection.send(&s2c::GamePacket::SetTime {
             game_time: level_age_and_time.age as i64,
@@ -545,31 +543,6 @@ fn replicate_initial(
 }
 
 //=========================================================================== CHUNK REPLICATION ====
-
-#[derive(Default, Component)]
-pub struct Replication {
-    subscriber: HashSet<Entity>,
-    replicated: Vec<Entity>,
-}
-
-impl Replication {
-    pub fn with_subscriber(subscriber_: Entity) -> Self {
-        Self {
-            subscriber: {
-                let mut subscriber = HashSet::new();
-                subscriber.insert(subscriber_);
-                subscriber
-            },
-            replicated: default(),
-        }
-    }
-}
-
-#[derive(Default, Component)]
-struct SubscriptionDistance(pub u8);
-
-#[derive(Default, Component)]
-struct Subscriptions(HashSet<IVec2>);
 
 fn cleanup_chunks(
     mut commands: Commands,
@@ -754,16 +727,20 @@ fn subscribe_and_replicate_chunks(
                 } else {
                     trace!("Acquire chunk: {:?} (not spawned)", chunk_position);
 
-                    // chunk_lut.0.insert(
-                    // chunk_position,
-                    // commands
-                    // .spawn(level::chunk::ChunkBundle::with_subscriber(
-                    // chunk_position,
-                    // player,
-                    // ))
-                    // .set_parent(level.get())
-                    // .id(),
-                    // );
+                    chunk_lut.0.insert(
+                        chunk_position,
+                        commands
+                            .spawn(level::chunk::ChunkBundle {
+                                base: level::chunk::Base(chunk_position),
+                                queued_updates: Default::default(),
+                                replication: Replication {
+                                    subscriber: HashSet::from([player]),
+                                    replicated: vec![],
+                                },
+                            })
+                            .set_parent(level.get())
+                            .id(),
+                    );
                 }
             }
 

@@ -4,22 +4,15 @@ use bevy::prelude::*;
 
 use tesseract_java_protocol::types::PalettedContainer;
 
-use crate::actor;
+use crate::{actor, replication};
 
 /// All required components to describe a chunk
 #[derive(Bundle)]
 pub struct ChunkBundle {
-    base: Base,
-    queued_updates: UpdateQueue,
-}
+    pub base: Base,
+    pub queued_updates: UpdateQueue,
 
-impl ChunkBundle {
-    pub fn new(position: IVec2) -> Self {
-        Self {
-            base: Base(position),
-            queued_updates: Default::default(),
-        }
-    }
+    pub replication: replication::Replication,
 }
 
 /// Chunk by position look-up table (part of Level)
@@ -61,7 +54,11 @@ pub fn update_hierarchy(
                 commands.entity(chunk).add_child(actor);
             } else {
                 let chunk = commands
-                    .spawn(ChunkBundle::new(chunk_position))
+                    .spawn(ChunkBundle {
+                        base: Base(chunk_position),
+                        queued_updates: Default::default(),
+                        replication: Default::default(),
+                    })
                     .set_parent(level)
                     .add_child(actor)
                     .id();
@@ -83,6 +80,30 @@ pub fn update_hierarchy(
 pub struct Data {
     pub sections: Vec<DataSection>,
     pub y_offset: u8,
+}
+
+impl Data {
+    pub fn new(
+        section_count: u8,
+        y_offset: u8,
+        default_block_id: u32,
+        default_biome_id: u32,
+    ) -> Self {
+        Self {
+            sections: {
+                let mut sections = vec![];
+                for _ in 0..section_count {
+                    sections.push(DataSection {
+                        block_states: PalettedContainer::SingleValue(default_block_id),
+                        biomes: PalettedContainer::SingleValue(default_biome_id),
+                        block_state_changes: Default::default(),
+                    })
+                }
+                sections
+            },
+            y_offset,
+        }
+    }
 }
 
 pub struct DataSection {

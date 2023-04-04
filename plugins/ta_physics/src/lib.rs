@@ -25,6 +25,7 @@ impl FromWorld for FluidCache {
 pub fn update_fluids(
     fluids: Query<(Entity, &Fluid)>,
     fluid_cache: Local<FluidCache>,
+
     mut chunks: Query<(&mut level::chunk::Data, &level::chunk::UpdateQueue)>,
 ) {
     for (mut chunk_data, chunk_queued_updates) in chunks.iter_mut() {

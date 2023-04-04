@@ -19,7 +19,7 @@ pub struct Base {
 }
 
 impl Base {
-    pub fn new<N: Into<Cow<'static, str>>>(name: N) -> Self {
+    pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
         Self { name: name.into() }
     }
 

@@ -15,25 +15,21 @@ pub struct RegistryPlugin;
 
 impl Plugin for RegistryPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Registries::new(
-            "../../../generated/reports/registries.json",
-        ))
-        .insert_resource(BlockStateRegistry::new(
-            "../../../generated/reports/blocks.json",
-        ))
-        .insert_resource(DataRegistry::<DimensionType>::new(
-            "../../../generated/data/dimension_type",
-            "minecraft:dimension_type",
-        ))
-        .insert_resource(DataRegistry::<Biome>::new(
-            "../../../generated/data/worldgen/biome",
-            "minecraft:worldgen/biome",
-        ))
-        .insert_resource(DataRegistry::<DamageType>::new(
-            "../../../generated/data/damage_type",
-            "minecraft:damage_type",
-        ))
-        .add_systems(Startup, build_mappings);
+        app.insert_resource(Registries::new("generated/reports/registries.json"))
+            .insert_resource(BlockStateRegistry::new("generated/reports/blocks.json"))
+            .insert_resource(DataRegistry::<DimensionType>::new(
+                "generated/data/dimension_type",
+                "minecraft:dimension_type",
+            ))
+            .insert_resource(DataRegistry::<Biome>::new(
+                "generated/data/worldgen/biome",
+                "minecraft:worldgen/biome",
+            ))
+            .insert_resource(DataRegistry::<DamageType>::new(
+                "generated/data/damage_type",
+                "minecraft:damage_type",
+            ))
+            .add_systems(Startup, build_mappings);
     }
 }
 
