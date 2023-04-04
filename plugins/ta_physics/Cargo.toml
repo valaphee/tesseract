@@ -1,0 +1,16 @@
+[package]
+name = "tesseract_ta_physics"
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/tesseract.git"
+description = "An ECS-based Minecraft server written in Rust."
+
+[dependencies]
+rand = "0.8.5"
+tesseract_base = { path = "../.." }
+
+[dependencies.bevy]
+git = "https://github.com/valaphee/bevy.git"
+branch = "tesseract"
+default-features = false

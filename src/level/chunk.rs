@@ -2,16 +2,15 @@ use std::collections::{BTreeSet, HashMap};
 
 use bevy::prelude::*;
 
-use tesseract_protocol::types::PalettedContainer;
+use tesseract_java_protocol::types::PalettedContainer;
 
-use crate::{actor, replication};
+use crate::actor;
 
 /// All required components to describe a chunk
 #[derive(Bundle)]
 pub struct ChunkBundle {
     base: Base,
     queued_updates: UpdateQueue,
-    replication: replication::Replication,
 }
 
 impl ChunkBundle {
@@ -19,15 +18,6 @@ impl ChunkBundle {
         Self {
             base: Base(position),
             queued_updates: Default::default(),
-            replication: default(),
-        }
-    }
-
-    pub fn with_subscriber(position: IVec2, subscriber: Entity) -> Self {
-        Self {
-            base: Base(position),
-            queued_updates: Default::default(),
-            replication: replication::Replication::with_subscriber(subscriber),
         }
     }
 }
