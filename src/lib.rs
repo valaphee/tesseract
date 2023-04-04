@@ -1,3 +1,4 @@
+#![feature(array_zip)]
 #![feature(result_flattening)]
 
 pub mod actor;

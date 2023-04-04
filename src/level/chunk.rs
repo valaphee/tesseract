@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use bevy::prelude::*;
 
@@ -10,7 +10,7 @@ use crate::{actor, replication};
 #[derive(Bundle)]
 pub struct ChunkBundle {
     base: Base,
-    queued_updates: QueuedUpdates,
+    queued_updates: UpdateQueue,
     replication: replication::Replication,
 }
 
@@ -45,7 +45,6 @@ pub struct Base(pub IVec2);
 /// - if new chunk does not exist, create new chunk
 pub fn update_hierarchy(
     mut commands: Commands,
-
     mut levels: Query<&mut LookupTable>,
     chunks: Query<(&Base, &Parent)>,
     actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
@@ -100,7 +99,7 @@ pub struct DataSection {
     pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
     pub biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
 
-    pub block_state_changes: HashSet<u16>,
+    pub block_state_changes: BTreeSet<u16>,
 }
 
 impl Data {
@@ -131,15 +130,15 @@ impl Data {
     }
 }
 
-//=============================================================================== QUEUED UPDATE ====
+//================================================================================ UPDATE QUEUE ====
 
 #[derive(Component, Default)]
-pub struct QueuedUpdates(pub HashSet<QueuedUpdate>);
+pub struct UpdateQueue(pub Vec<Update>);
 
 #[derive(Eq, PartialEq, Hash)]
-pub struct QueuedUpdate(u8, u16);
+pub struct Update(u8, u16);
 
-impl QueuedUpdate {
+impl Update {
     pub fn x(&self) -> u8 {
         self.0 & 0xF
     }
@@ -153,16 +152,23 @@ impl QueuedUpdate {
     }
 }
 
-pub fn queue_updates(mut chunks: Query<(&Data, &mut QueuedUpdates), Changed<Data>>) {
+pub fn queue_updates(mut chunks: Query<(&Data, &mut UpdateQueue), Changed<Data>>) {
     for (chunk_data, mut chunk_queued_updates) in chunks.iter_mut() {
         chunk_queued_updates.0.clear();
         for (section_y, section) in chunk_data.sections.iter().enumerate() {
-            for &block_state_change in &section.block_state_changes {
-                chunk_queued_updates.0.insert(QueuedUpdate(
-                    block_state_change as u8,
-                    block_state_change >> 8 | (section_y as u16) << 4,
-                ));
-            }
+            chunk_queued_updates
+                .0
+                .extend(
+                    section
+                        .block_state_changes
+                        .iter()
+                        .map(|&block_state_change| {
+                            Update(
+                                block_state_change as u8,
+                                block_state_change >> 8 | (section_y as u16) << 4,
+                            )
+                        }),
+                );
         }
     }
 }

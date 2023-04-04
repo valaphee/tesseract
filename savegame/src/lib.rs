@@ -27,14 +27,18 @@ pub struct BlockState {
 
 impl BlockState {
     pub fn name(&self) -> String {
-        format!(
-            "{}[{}]",
-            self.name,
-            self.properties
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        )
+        if self.properties.is_empty() {
+            self.name.clone()
+        } else {
+            format!(
+                "{}[{}]",
+                self.name,
+                self.properties
+                    .iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        }
     }
 }

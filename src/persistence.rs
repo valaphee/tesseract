@@ -10,7 +10,7 @@ use flate2::read::GzDecoder;
 
 use tesseract_protocol::types::{Biome, BitStorage, PalettedContainer};
 
-use crate::{actor, level, registry, replication};
+use crate::{actor, block, level, registry, replication};
 
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UpdateFlush;
@@ -79,7 +79,6 @@ struct Persistence {
 /// Loads savegame data for newly connected players
 fn load_players(
     mut commands: Commands,
-
     levels: Query<(Entity, &level::Base)>,
     players: Query<(Entity, &replication::Connection), Added<replication::Connection>>,
 ) {
@@ -139,11 +138,9 @@ fn load_players(
 
 /// Loads savegame chunks for newly spawned chunks
 fn load_chunks(
-    block_state_registry: Res<registry::BlockStateRegistry>,
+    block_lut: Res<block::LookupTable>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
-
     mut commands: Commands,
-
     mut levels: Query<&mut Persistence>,
     chunks: Query<(Entity, &level::chunk::Base, &Parent), Added<level::chunk::Base>>,
 ) {
@@ -164,14 +161,14 @@ fn load_chunks(
                                 .block_states
                                 .palette
                                 .iter()
-                                .map(|entry| block_state_registry.id(&entry.name()))
+                                .map(|entry| block_lut.id(&entry.name()))
                                 .collect(),
                             storage: BitStorage::from_data(16 * 16 * 16, data),
                         }
                         .fix()
                     } else {
                         PalettedContainer::SingleValue(
-                            block_state_registry.id(&region_chunk_section
+                            block_lut.id(&region_chunk_section
                                 .block_states
                                 .palette
                                 .first()

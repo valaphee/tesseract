@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, math::DVec3, prelude::*};
 
@@ -14,7 +14,15 @@ fn main() {
     )))
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
+    .add_plugin(registry::RegistryPlugin::default())
     .add_plugin(replication::ReplicationPlugin::default())
+    .add_plugin(persistence::PersistencePlugin(HashMap::from([(
+        "minecraft:overworld".into(),
+        persistence::PersistencePluginLevel {
+            path: "levels/overworld".into(),
+        },
+    )])))
+    .add_systems(PreStartup, registry::register_noop_blocks_and_items)
     .add_systems(Startup, (item::build_lut, block::build_lut))
     .add_systems(
         PostUpdate,
@@ -26,8 +34,6 @@ fn main() {
         (level::update_time, actor::player::update_interactions),
     )
     // custom
-    .add_systems(PreStartup, register_blocks_and_items)
-    .add_systems(Startup, spawn_levels)
     .add_systems(
         First,
         (spawn_players, spawn_chunks).after(replication::UpdateFlush),
@@ -37,49 +43,9 @@ fn main() {
     app.run();
 }
 
-fn register_blocks_and_items(mut commands: Commands) {
-    commands.spawn(block::Base("minecraft:air".into()));
-    commands.spawn((
-        block::Base("minecraft:bedrock".into()),
-        item::Base("minecraft:bedrock".into()),
-    ));
-    commands.spawn((
-        block::Base("minecraft:dirt".into()),
-        item::Base("minecraft:dirt".into()),
-    ));
-    commands.spawn((
-        block::Base("minecraft:grass_block".into()),
-        item::Base("minecraft:grass_block".into()),
-    ));
-
-    commands.spawn((
-        block::Base("minecraft:water[level=0]".into()),
-        block::Fluid(7),
-        item::Base("minecraft:water_bucket".into()),
-    ));
-    commands.spawn_batch((0..7).map(|volume| {
-        (
-            block::Base(format!("minecraft:water[level={}]", 7 - volume).into()),
-            block::Fluid(volume),
-        )
-    }));
-}
-
-fn spawn_levels(mut commands: Commands) {
-    commands.spawn(level::LevelBundle {
-        base: level::Base {
-            name: "minecraft:overworld".into(),
-            dimension_type: "minecraft:overworld".into(),
-        },
-        age_and_time: default(),
-        chunks: default(),
-    });
-}
-
 #[allow(clippy::type_complexity)]
 fn spawn_players(
     mut commands: Commands,
-
     levels: Query<Entity, With<level::Base>>,
     players: Query<
         (Entity, &replication::Connection),
@@ -110,19 +76,17 @@ fn spawn_players(
 fn spawn_chunks(
     block_lut: Res<block::LookupTable>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
-
     mut commands: Commands,
-
-    chunks: Query<Entity, Added<level::chunk::Base>>,
+    chunks: Query<Entity, (Added<level::chunk::Base>, Without<level::chunk::Data>)>,
 ) {
     if chunks.is_empty() {
         return;
     }
 
-    let air_id = block_lut.0["minecraft:air"].index();
-    let bedrock_id = block_lut.0["minecraft:bedrock"].index();
-    let dirt_id = block_lut.0["minecraft:dirt"].index();
-    let grass_block_id = block_lut.0["minecraft:grass_block"].index();
+    let air_id = block_lut.id("minecraft:air");
+    let bedrock_id = block_lut.id("minecraft:bedrock");
+    let dirt_id = block_lut.id("minecraft:dirt");
+    let grass_block_id = block_lut.id("minecraft:grass_block[snowy=false]");
     for chunk in chunks.iter() {
         let mut chunk_data = level::chunk::Data {
             sections: {

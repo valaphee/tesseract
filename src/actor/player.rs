@@ -29,7 +29,6 @@ pub enum Interaction {
 
 pub fn update_interactions(
     block_items: Query<(), (With<block::Base>, With<item::Base>)>,
-
     levels: Query<&level::chunk::LookupTable>,
     mut chunks: Query<(&level::chunk::Base, &mut level::chunk::Data, &Parent)>,
     mut players: Query<(&mut Interaction, &Inventory, &Parent), Changed<Interaction>>,

@@ -1,29 +1,50 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use bevy::prelude::*;
+use rand::prelude::*;
 
 use crate::level;
 
 /// Block by name look-up table
 #[derive(Resource)]
-pub struct LookupTable(pub HashMap<String, Entity>);
+pub struct LookupTable(HashMap<String, u32>);
+
+impl LookupTable {
+    pub fn id(&self, name: &str) -> u32 {
+        self.0[name]
+    }
+}
 
 /// Required properties (part of Block)
 #[derive(Component)]
-pub struct Base(pub Cow<'static, str>);
+pub struct Base {
+    name: Cow<'static, str>,
+}
+
+impl Base {
+    pub fn new<N: Into<Cow<'static, str>>>(name: N) -> Self {
+        Self { name: name.into() }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
 
 /// Builds the look-up table
 pub fn build_lut(mut commands: Commands, blocks: Query<(Entity, &Base)>) {
     commands.insert_resource(LookupTable(
         blocks
             .iter()
-            .map(|(block, block_base)| (block_base.0.to_string(), block))
+            .map(|(block, block_base)| (block_base.name.to_string(), block.index()))
             .collect(),
     ));
 }
 
 #[derive(Component)]
-pub struct Fluid(pub u8);
+pub struct Fluid {
+    pub volume: u8,
+}
 
 pub struct FluidCache([u32; 8]);
 
@@ -31,7 +52,7 @@ impl FromWorld for FluidCache {
     fn from_world(world: &mut World) -> Self {
         let mut fluids_ = [0; 8];
         for (fluid, fluid_base) in world.query::<(Entity, &Fluid)>().iter(world) {
-            fluids_[fluid_base.0 as usize] = fluid.index();
+            fluids_[fluid_base.volume as usize] = fluid.index();
         }
         FluidCache(fluids_)
     }
@@ -40,8 +61,7 @@ impl FromWorld for FluidCache {
 pub fn update_fluids(
     fluids: Query<(Entity, &Fluid)>,
     fluid_cache: Local<FluidCache>,
-
-    mut chunks: Query<(&mut level::chunk::Data, &level::chunk::QueuedUpdates)>,
+    mut chunks: Query<(&mut level::chunk::Data, &level::chunk::UpdateQueue)>,
 ) {
     for (mut chunk_data, chunk_queued_updates) in chunks.iter_mut() {
         if chunk_queued_updates.0.is_empty() {
@@ -66,48 +86,13 @@ pub fn update_fluids(
                 ) -> u8 {
                     let value = chunk_data.get(x, y, z);
                     if value == 0 {
+                        // (replaceable)
                         return 0;
                     }
 
                     fluids
                         .get(Entity::from_raw(value))
-                        .map_or(u8::MAX, |(_, fluid_base)| fluid_base.0 + 1)
-                }
-
-                let mut volume = fluid_base.0 + 1;
-                let mut volume_below = get_volume(&fluids, &chunk_data, x, y - 1, z);
-                if volume_below <= 7 {
-                    volume_below += fluid_base.0;
-                    if volume_below >= 8 {
-                        volume = volume_below - 8;
-                        volume_below = 7;
-                    } else {
-                        volume = 0;
-                    }
-                    chunk_data.set(x, y - 1, z, fluid_cache.0[volume_below as usize]);
-                }
-
-                let mut volumes = [
-                    0,
-                    get_volume(&fluids, &chunk_data, x.wrapping_sub(1), y, z),
-                    get_volume(&fluids, &chunk_data, x + 1, y, z),
-                    get_volume(&fluids, &chunk_data, x, y, z.wrapping_sub(1)),
-                    get_volume(&fluids, &chunk_data, x, y, z + 1),
-                ];
-
-                let mut volume_index = 0;
-                let mut volume_maximum = 1;
-                while volume > 0 {
-                    if volumes[volume_index] < volume_maximum {
-                        volumes[volume_index] += 1;
-                        volume -= 1;
-                    }
-
-                    volume_index += 1;
-                    if volume_index >= volumes.len() {
-                        volume_index = 0;
-                        volume_maximum += 1;
-                    }
+                        .map_or(u8::MAX, |(_, fluid_base)| fluid_base.volume + 1)
                 }
 
                 fn set_volume(
@@ -120,31 +105,66 @@ pub fn update_fluids(
                 ) {
                     match volume {
                         0 => chunk_data.set(x, y, z, 0),
-                        u8::MAX => {}
-                        _ => chunk_data.set(x, y, z, fluid_cache.0[(volume - 1) as usize]),
+                        VOLUME_MIN..=VOLUME_MAX => {
+                            chunk_data.set(x, y, z, fluid_cache.0[(volume - 1) as usize])
+                        }
+                        _ => {}
                     }
                 }
 
-                set_volume(&fluid_cache, &mut chunk_data, x, y, z, volumes[0]);
-                set_volume(
-                    &fluid_cache,
-                    &mut chunk_data,
-                    x.wrapping_sub(1),
-                    y,
-                    z,
-                    volumes[1],
-                );
-                set_volume(&fluid_cache, &mut chunk_data, x + 1, y, z, volumes[2]);
-                set_volume(
-                    &fluid_cache,
-                    &mut chunk_data,
-                    x,
-                    y,
-                    z.wrapping_sub(1),
-                    volumes[3],
-                );
-                set_volume(&fluid_cache, &mut chunk_data, x, y, z + 1, volumes[4]);
+                // falling
+                let mut volume = fluid_base.volume + 1;
+                let mut volume_below = get_volume(&fluids, &chunk_data, x, y - 1, z);
+                if volume_below < VOLUME_MAX {
+                    volume_below += volume;
+                    if volume_below > VOLUME_MAX {
+                        volume = volume_below - VOLUME_MAX;
+                        volume_below = VOLUME_MAX;
+                    } else {
+                        volume = 0;
+                    }
+                    chunk_data.set(x, y - 1, z, fluid_cache.0[(volume_below - 1) as usize]);
+                }
+
+                // spreading
+                let mut xz_positions = [
+                    (x.wrapping_sub(1), z),
+                    (x + 1, z),
+                    (x, z.wrapping_sub(1)),
+                    (x, z + 1),
+                ];
+                xz_positions.shuffle(&mut thread_rng());
+                let mut volumes = xz_positions.map(|xz_position| {
+                    get_volume(&fluids, &chunk_data, xz_position.0, y, xz_position.1)
+                });
+
+                let mut volume_index = 0;
+                let mut spread = false;
+                while volume > VOLUME_MIN {
+                    if volumes[volume_index] < volume {
+                        volumes[volume_index] += 1;
+                        volume -= 1;
+                        spread = true;
+                    }
+
+                    volume_index += 1;
+                    if volume_index >= volumes.len() {
+                        volume_index = 0;
+                        if !spread {
+                            break;
+                        }
+                        spread = false;
+                    }
+                }
+
+                set_volume(&fluid_cache, &mut chunk_data, x, y, z, volume);
+                for ((x, z), volume) in xz_positions.zip(volumes) {
+                    set_volume(&fluid_cache, &mut chunk_data, x, y, z, volume);
+                }
             }
         }
     }
 }
+
+const VOLUME_MIN: u8 = 1;
+const VOLUME_MAX: u8 = 8;

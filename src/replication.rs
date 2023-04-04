@@ -32,7 +32,7 @@ use tesseract_protocol::{
     Decode, Encode,
 };
 
-use crate::{actor, block, item, level, registry};
+use crate::{actor, level, registry};
 
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct UpdateFlush;
@@ -93,85 +93,22 @@ impl Plugin for ReplicationPlugin {
             });
         };
 
-        app.insert_resource(registry::Registries::new(
-            "generated/reports/registries.json",
-        ))
-        .insert_resource(registry::BlockStateRegistry::new(
-            "generated/reports/blocks.json",
-        ))
-        .insert_resource(registry::DataRegistry::<DimensionType>::new(
-            "generated/data/dimension_type",
-            "minecraft:dimension_type",
-        ))
-        .insert_resource(registry::DataRegistry::<Biome>::new(
-            "generated/data/worldgen/biome",
-            "minecraft:worldgen/biome",
-        ))
-        .insert_resource(registry::DataRegistry::<DamageType>::new(
-            "generated/data/damage_type",
-            "minecraft:damage_type",
-        ))
-        .add_systems(Startup, build_mappings)
-        .add_systems(PostStartup, listen)
-        .add_systems(First, (spawn_player, update_players).before(UpdateFlush))
-        .add_systems(First, apply_system_buffers.in_set(UpdateFlush))
-        .add_systems(
-            Last,
-            (
-                replicate_initial,
-                subscribe_and_replicate_chunks,
-                cleanup_chunks,
-                replicate_chunks_late,
-                replicate_chunks_delta,
-                replicate_actors,
-                replicate_actors_delta,
-            ),
-        );
+        app.add_systems(PostStartup, listen)
+            .add_systems(First, (spawn_player, update_players).before(UpdateFlush))
+            .add_systems(First, apply_system_buffers.in_set(UpdateFlush))
+            .add_systems(
+                Last,
+                (
+                    replicate_initial,
+                    subscribe_and_replicate_chunks,
+                    cleanup_chunks,
+                    replicate_chunks_late,
+                    replicate_chunks_delta,
+                    replicate_actors,
+                    replicate_actors_delta,
+                ),
+            );
     }
-}
-
-#[derive(Resource)]
-struct Mappings {
-    block_to_network: HashMap<u32, u32>,
-    item_from_network: HashMap<u32, u32>,
-}
-
-/*impl FromWorld for Mappings {
-    fn from_world(world: &mut World) -> Self {
-        let mut blocks = world.query::<(Entity, &block::Base)>();
-        let mut items = world.query::<(Entity, &item::Base)>();
-        let registries = world.get_resource::<registry::Registries>().unwrap();
-        let block_state_registry = world.get_resource::<registry::BlockStateRegistry>().unwrap();
-        Mappings {
-            block_to_network: blocks.iter(world)
-                .map(|(block, block_base)| (block.index(), block_state_registry.id(&block_base.0)))
-                .collect(),
-            item_from_network: items.iter(world)
-                .map(|(item, item_base)| (registries.id("minecraft:item", &item_base.0), item.index()))
-                .collect(),
-        }
-    }
-}*/
-
-fn build_mappings(
-    registries: Res<registry::Registries>,
-    block_state_registry: Res<registry::BlockStateRegistry>,
-
-    mut commands: Commands,
-
-    blocks: Query<(Entity, &block::Base)>,
-    items: Query<(Entity, &item::Base)>,
-) {
-    commands.insert_resource(Mappings {
-        block_to_network: blocks
-            .iter()
-            .map(|(block, block_base)| (block.index(), block_state_registry.id(&block_base.0)))
-            .collect(),
-        item_from_network: items
-            .iter()
-            .map(|(item, item_base)| (registries.id("minecraft:item", &item_base.0), item.index()))
-            .collect(),
-    });
 }
 
 #[derive(Component)]
@@ -384,10 +321,8 @@ fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnect
 }
 
 fn update_players(
-    mappings: Res<Mappings>,
-
+    mappings: Res<registry::Mappings>,
     mut commands: Commands,
-
     mut players: Query<(
         Entity,
         &mut Connection,
@@ -516,9 +451,7 @@ fn update_players(
                         inventory.content.insert(
                             slot_num as usize,
                             item_stack.map(|item_stack| {
-                                Entity::from_raw(
-                                    mappings.item_from_network[&(item_stack.item.0 as u32)],
-                                )
+                                Entity::from_raw(mappings.item_by_id[&(item_stack.item.0 as u32)])
                             }),
                         );
                     }
@@ -549,7 +482,6 @@ fn replicate_initial(
     dimension_type_registry: Res<registry::DataRegistry<DimensionType>>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
     damage_type_registry: Res<registry::DataRegistry<DamageType>>,
-
     levels: Query<(&level::Base, &level::AgeAndTime)>,
     chunks: Query<&Parent>,
     players: Query<
@@ -640,7 +572,6 @@ struct Subscriptions(HashSet<IVec2>);
 
 fn cleanup_chunks(
     mut commands: Commands,
-
     levels: Query<&level::chunk::LookupTable>,
     chunks: Query<&Parent>,
     mut subscription_chunks: Query<&mut Replication>,
@@ -667,11 +598,9 @@ fn cleanup_chunks(
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn subscribe_and_replicate_chunks(
-    mappings: Res<Mappings>,
+    mappings: Res<registry::Mappings>,
     registries: Res<registry::Registries>,
-
     mut commands: Commands,
-
     mut levels: Query<&mut level::chunk::LookupTable>,
     chunks: Query<(&level::chunk::Base, &Parent)>,
     mut subscription_chunks: Query<(Option<&level::chunk::Data>, &mut Replication)>,
@@ -843,8 +772,7 @@ fn subscribe_and_replicate_chunks(
 }
 
 fn replicate_chunks_late(
-    mappings: Res<Mappings>,
-
+    mappings: Res<registry::Mappings>,
     chunks: Query<
         (&level::chunk::Base, &level::chunk::Data, &Replication),
         Added<level::chunk::Data>,
@@ -863,8 +791,7 @@ fn replicate_chunks_late(
 }
 
 fn replicate_chunks_delta(
-    mappings: Res<Mappings>,
-
+    mappings: Res<registry::Mappings>,
     mut chunks: Query<
         (&level::chunk::Base, &mut level::chunk::Data, &Replication),
         Changed<level::chunk::Data>,
@@ -896,7 +823,7 @@ fn replicate_chunks_delta(
                                     x: *block_state_update as u8 & 0xF,
                                     y: (*block_state_update >> 8) as u8,
                                     z: *block_state_update as u8 >> 4 & 0xF,
-                                    block_state: mappings.block_to_network
+                                    block_state: mappings.id_by_block
                                         [&section.block_states.get(*block_state_update as u32)]
                                         as i64,
                                 }
@@ -926,7 +853,6 @@ fn replicate_chunks_delta(
 
 fn replicate_actors(
     registries: Res<registry::Registries>,
-
     mut chunks: Query<(&Children, &mut Replication), Changed<Children>>,
     actors: Query<(
         &actor::Base,
@@ -1085,7 +1011,7 @@ async fn next(socket: &mut Framed<TcpStream, Codec>) -> tesseract_protocol::Resu
 }
 
 fn add_chunk_packet<'a>(
-    mappings: &Mappings,
+    mappings: &registry::Mappings,
     position: IVec2,
     chunk_data: &level::chunk::Data,
 ) -> s2c::GamePacket<'a> {
@@ -1097,7 +1023,7 @@ fn add_chunk_packet<'a>(
         match &section.block_states {
             PalettedContainer::SingleValue(value) => {
                 0u8.encode(&mut buffer).unwrap();
-                VarI32(mappings.block_to_network[value] as i32)
+                VarI32(mappings.id_by_block[value] as i32)
                     .encode(&mut buffer)
                     .unwrap();
                 VarI32(0).encode(&mut buffer).unwrap();
@@ -1106,7 +1032,7 @@ fn add_chunk_packet<'a>(
                 (storage.bits() as u8).encode(&mut buffer).unwrap();
                 VarI32(palette.len() as i32).encode(&mut buffer).unwrap();
                 for element in palette {
-                    VarI32(mappings.block_to_network[element] as i32)
+                    VarI32(mappings.id_by_block[element] as i32)
                         .encode(&mut buffer)
                         .unwrap();
                 }
