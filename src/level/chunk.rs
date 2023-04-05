@@ -10,7 +10,7 @@ use crate::{actor, replication};
 #[derive(Bundle)]
 pub struct ChunkBundle {
     pub base: Base,
-    pub queued_updates: UpdateQueue,
+    pub update_queue: UpdateQueue,
 
     pub replication: replication::Replication,
 }
@@ -28,6 +28,7 @@ pub struct Base(pub IVec2);
 /// - if new chunk does not exist, create new chunk
 pub fn update_hierarchy(
     mut commands: Commands,
+
     mut levels: Query<&mut LookupTable>,
     chunks: Query<(&Base, &Parent)>,
     actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
@@ -56,7 +57,7 @@ pub fn update_hierarchy(
                 let chunk = commands
                     .spawn(ChunkBundle {
                         base: Base(chunk_position),
-                        queued_updates: Default::default(),
+                        update_queue: Default::default(),
                         replication: Default::default(),
                     })
                     .set_parent(level)

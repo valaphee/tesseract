@@ -1,10 +1,10 @@
 [package]
-name = "tesseract_ta_physics"
+name = "tesseract_physics"
 version = "0.0.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/valaphee/tesseract.git"
-description = "An ECS-based Minecraft server written in Rust."
+description = "Tesseract Physics"
 
 [dependencies]
 rand = "0.8.5"

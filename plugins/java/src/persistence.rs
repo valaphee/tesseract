@@ -57,7 +57,7 @@ impl Plugin for PersistencePlugin {
         };
 
         app.add_systems(PreStartup, spawn_levels)
-            .add_systems(First, (load_players, load_chunks).before(UpdateFlush))
+            .add_systems(First, (load_players/*, load_chunks*/).before(UpdateFlush))
             .add_systems(
                 First,
                 apply_system_buffers
@@ -75,6 +75,7 @@ struct Persistence {
 /// Loads savegame data for newly connected players
 fn load_players(
     mut commands: Commands,
+
     levels: Query<(Entity, &level::Base)>,
     players: Query<(Entity, &replication::Connection), Added<replication::Connection>>,
 ) {
@@ -132,11 +133,13 @@ fn load_players(
     }
 }
 
-/// Loads savegame chunks for newly spawned chunks
+/*/// Loads savegame chunks for newly spawned chunks
 fn load_chunks(
     block_lut: Res<block::LookupTable>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
+
     mut commands: Commands,
+
     mut levels: Query<&mut Persistence>,
     chunks: Query<(Entity, &level::chunk::Base, &Parent), Added<level::chunk::Base>>,
 ) {
@@ -198,4 +201,4 @@ fn load_chunks(
             });
         }
     }
-}
+}*/

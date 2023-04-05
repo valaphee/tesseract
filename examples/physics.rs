@@ -15,7 +15,6 @@ fn main() {
     .add_plugins(MinimalPlugins)
     .add_plugin(LogPlugin::default())
     // required (Tesseract)
-    .add_systems(Startup, (item::build_lut, block::build_lut))
     .add_systems(
         PostUpdate,
         (level::chunk::update_hierarchy, level::chunk::queue_updates),
@@ -29,7 +28,7 @@ fn main() {
         (
             level::update_time,
             actor::player::update_interactions,
-            tesseract_ta_physics::update_fluids,
+            tesseract_physics::update_fluids,
         ),
     )
     // gameplay (custom)
@@ -44,29 +43,38 @@ fn main() {
 }
 
 fn register_blocks_and_items(mut commands: Commands) {
-    commands.spawn(block::Base::new("minecraft:air"));
     commands.spawn((
-        block::Base::new("minecraft:bedrock"),
-        item::Base::new("minecraft:bedrock"),
+        block::Base { collision: false },
+        tesseract_java::registry::RegistryName::new("minecraft:air"),
     ));
     commands.spawn((
-        block::Base::new("minecraft:dirt"),
-        item::Base::new("minecraft:dirt"),
+        block::Base { collision: true },
+        item::Base,
+        tesseract_java::registry::RegistryName::new("minecraft:bedrock"),
     ));
     commands.spawn((
-        block::Base::new("minecraft:grass_block[snowy=false]"),
-        item::Base::new("minecraft:grass_block"),
+        block::Base { collision: true },
+        item::Base,
+        tesseract_java::registry::RegistryName::new("minecraft:dirt"),
     ));
-
     commands.spawn((
-        block::Base::new("minecraft:water[level=0]"),
-        tesseract_ta_physics::Fluid { volume: 7 },
-        item::Base::new("minecraft:water_bucket"),
+        block::Base { collision: true },
+        item::Base,
+        tesseract_java::registry::RegistryName::new("minecraft:grass_block[snowy=false]"),
+    ));
+    commands.spawn((
+        block::Base { collision: false },
+        tesseract_physics::Fluid { volume: 7 },
+        tesseract_java::registry::RegistryName::new("minecraft:water[level=0]"),
     ));
     commands.spawn_batch((0..7).map(|volume| {
         (
-            block::Base::new(format!("minecraft:water[level={}]", 7 - volume)),
-            tesseract_ta_physics::Fluid { volume },
+            block::Base { collision: false },
+            tesseract_physics::Fluid { volume },
+            tesseract_java::registry::RegistryName::new(format!(
+                "minecraft:water[level={}]",
+                7 - volume
+            )),
         )
     }));
 }
@@ -113,19 +121,19 @@ fn spawn_players(
 }
 
 fn spawn_chunks(
-    block_lut: Res<block::LookupTable>,
     biome_registry: Res<tesseract_java::registry::DataRegistry<Biome>>,
     mut commands: Commands,
+
     chunks: Query<Entity, Added<level::chunk::Base>>,
 ) {
     if chunks.is_empty() {
         return;
     }
 
-    let air_id = block_lut.id("minecraft:air");
-    let bedrock_id = block_lut.id("minecraft:bedrock");
-    let dirt_id = block_lut.id("minecraft:dirt");
-    let grass_block_id = block_lut.id("minecraft:grass_block[snowy=false]");
+    let air_id = 0;
+    let bedrock_id = 1;
+    let dirt_id = 2;
+    let grass_block_id = 3;
     for chunk in chunks.iter() {
         let mut chunk_data =
             level::chunk::Data::new(24, 4, air_id, biome_registry.id("minecraft:plains"));

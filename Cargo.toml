@@ -6,7 +6,7 @@ members = [
     "plugins/java/protocol",
     "plugins/java/savegame",
     "plugins/java/session_api",
-    "plugins/ta_physics"
+    "plugins/physics"
 ]
 resolver = "2"
 
@@ -31,7 +31,7 @@ default-features = false
 
 [dev-dependencies]
 tesseract_java = { path = "plugins/java" }
-tesseract_ta_physics = { path = "plugins/ta_physics" }
+tesseract_physics = { path = "plugins/physics" }
 
 [profile.release]
 strip = true

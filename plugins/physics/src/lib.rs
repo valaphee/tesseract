@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use rand::prelude::*;
 
-use tesseract_base::level;
+use tesseract_base::{block, level};
 
 #[derive(Component)]
 pub struct Fluid {
@@ -23,8 +23,10 @@ impl FromWorld for FluidCache {
 }
 
 pub fn update_fluids(
-    fluids: Query<(Entity, &Fluid)>,
     fluid_cache: Local<FluidCache>,
+
+    blocks: Query<&block::Base>,
+    fluids: Query<(Entity, &Fluid)>,
 
     mut chunks: Query<(&mut level::chunk::Data, &level::chunk::UpdateQueue)>,
 ) {
@@ -42,44 +44,30 @@ pub fn update_fluids(
             let x = queued_update.x();
             let z = queued_update.z();
             if let Ok((_, fluid_base)) = fluids.get(Entity::from_raw(chunk_data.get(x, y, z))) {
-                fn get_volume(
-                    fluids: &Query<(Entity, &Fluid)>,
-                    chunk_data: &level::chunk::Data,
-                    x: u8,
-                    y: u16,
-                    z: u8,
-                ) -> u8 {
-                    let value = chunk_data.get(x, y, z);
-                    if value == 0 {
-                        // (replaceable)
-                        return 0;
-                    }
-
-                    fluids
-                        .get(Entity::from_raw(value))
-                        .map_or(u8::MAX, |(_, fluid_base)| fluid_base.volume + 1)
-                }
-
-                fn set_volume(
-                    fluid_cache: &FluidCache,
-                    chunk_data: &mut level::chunk::Data,
-                    x: u8,
-                    y: u16,
-                    z: u8,
-                    volume: u8,
-                ) {
-                    match volume {
-                        0 => chunk_data.set(x, y, z, 0),
-                        VOLUME_MIN..=VOLUME_MAX => {
-                            chunk_data.set(x, y, z, fluid_cache.0[(volume - 1) as usize])
-                        }
-                        _ => {}
-                    }
-                }
+                let value2volume = |value| {
+                    fluids.get(Entity::from_raw(value)).map_or_else(
+                        |_| {
+                            if blocks
+                                .get(Entity::from_raw(value))
+                                .map_or(false, |replaceable| replaceable.collision)
+                            {
+                                u8::MAX
+                            } else {
+                                0
+                            }
+                        },
+                        |(_, fluid_base)| fluid_base.volume + 1,
+                    )
+                };
+                let volume2value = |volume| match volume {
+                    0 => Some(0),
+                    VOLUME_MIN..=VOLUME_MAX => Some(fluid_cache.0[(volume - 1) as usize]),
+                    _ => None,
+                };
 
                 // falling
                 let mut volume = fluid_base.volume + 1;
-                let mut volume_below = get_volume(&fluids, &chunk_data, x, y - 1, z);
+                let mut volume_below = value2volume(chunk_data.get(x, y - 1, z));
                 if volume_below < VOLUME_MAX {
                     volume_below += volume;
                     if volume_below > VOLUME_MAX {
@@ -100,7 +88,7 @@ pub fn update_fluids(
                 ];
                 xz_positions.shuffle(&mut thread_rng());
                 let mut volumes = xz_positions.map(|xz_position| {
-                    get_volume(&fluids, &chunk_data, xz_position.0, y, xz_position.1)
+                    value2volume(chunk_data.get(xz_position.0, y, xz_position.1))
                 });
 
                 let mut volume_index = 0;
@@ -122,9 +110,13 @@ pub fn update_fluids(
                     }
                 }
 
-                set_volume(&fluid_cache, &mut chunk_data, x, y, z, volume);
+                if let Some(value) = volume2value(volume) {
+                    chunk_data.set(x, y, z, value);
+                }
                 for ((x, z), volume) in xz_positions.zip(volumes) {
-                    set_volume(&fluid_cache, &mut chunk_data, x, y, z, volume);
+                    if let Some(value) = volume2value(volume) {
+                        chunk_data.set(x, y, z, value);
+                    }
                 }
             }
         }

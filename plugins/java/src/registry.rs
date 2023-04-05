@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap},
     fs::File,
     path::Path,
@@ -16,7 +17,6 @@ pub struct RegistryPlugin;
 impl Plugin for RegistryPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Registries::new("generated/reports/registries.json"))
-            .insert_resource(BlockStateRegistry::new("generated/reports/blocks.json"))
             .insert_resource(DataRegistry::<DimensionType>::new(
                 "generated/data/dimension_type",
                 "minecraft:dimension_type",
@@ -63,48 +63,9 @@ struct RegistryReport {
     entries: HashMap<String, RegistryEntryReport>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct RegistryEntryReport {
     protocol_id: u32,
-}
-
-#[derive(Resource)]
-pub struct BlockStateRegistry {
-    id_by_name: HashMap<String, u32>,
-}
-
-impl BlockStateRegistry {
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        let report =
-            serde_json::from_reader::<_, HashMap<String, BlockReport>>(File::open(path).unwrap())
-                .unwrap();
-        let mut id_by_name = HashMap::with_capacity(report.len() * 16);
-        for (name, block_report) in report {
-            for block_state_report in block_report.states {
-                if block_state_report.properties.is_empty() {
-                    id_by_name.insert(name.clone(), block_state_report.id);
-                } else {
-                    id_by_name.insert(
-                        format!(
-                            "{name}[{}]",
-                            block_state_report
-                                .properties
-                                .iter()
-                                .map(|(key, value)| format!("{key}={value}"))
-                                .collect::<Vec<_>>()
-                                .join(",")
-                        ),
-                        block_state_report.id,
-                    );
-                }
-            }
-        }
-        Self { id_by_name }
-    }
-
-    pub fn id(&self, name: &str) -> u32 {
-        *self.id_by_name.get(name).unwrap_or(&0)
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -172,56 +133,69 @@ impl<T: DeserializeOwned> DataRegistry<T> {
     }
 }
 
-pub fn register_noop_blocks_and_items(
-    registries: Res<Registries>,
-    block_state_registry: Res<BlockStateRegistry>,
-    mut commands: Commands,
-) {
-    for name in block_state_registry.id_by_name.keys() {
-        commands.spawn(block::Base::new(name.clone()));
-    }
-    // commands.spawn_batch(
-    // block_state_registry
-    // .id_by_name
-    // .keys()
-    // .map(|name| block::Base::new(name.clone()))
-    // .collect::<Vec<_>>(),
-    // );
-    for name in registries.registries["minecraft:item"].entries.keys() {
-        commands.spawn(item::Base::new(name.clone()));
-    }
-    // commands.spawn_batch(
-    // registries.registries["minecraft:item"]
-    // .entries
-    // .keys()
-    // .map(|name| item::Base::new(name.clone()))
-    // .collect::<Vec<_>>(),
-    // );
-}
-
 #[derive(Resource)]
 pub struct Mappings {
     pub id_by_block: HashMap<u32, u32>,
     pub item_by_id: HashMap<u32, u32>,
 }
 
+#[derive(Component)]
+pub struct RegistryName(Cow<'static, str>);
+
+impl RegistryName {
+    pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
+        Self(name.into())
+    }
+}
+
 fn build_mappings(
     registries: Res<Registries>,
-    block_state_registry: Res<BlockStateRegistry>,
+
     mut commands: Commands,
-    blocks: Query<(Entity, &block::Base)>,
-    items: Query<(Entity, &item::Base)>,
+
+    blocks: Query<(Entity, &RegistryName), With<block::Base>>,
+    items: Query<(Entity, &RegistryName), With<item::Base>>,
 ) {
+    let report = serde_json::from_reader::<_, HashMap<String, BlockReport>>(
+        File::open("generated/reports/blocks.json").unwrap(),
+    )
+    .unwrap();
+    let mut id_by_name = HashMap::with_capacity(report.len() * 16);
+    for (name, block_report) in report {
+        for block_state_report in block_report.states {
+            if block_state_report.properties.is_empty() {
+                id_by_name.insert(name.clone(), block_state_report.id);
+            } else {
+                id_by_name.insert(
+                    format!(
+                        "{name}[{}]",
+                        block_state_report
+                            .properties
+                            .iter()
+                            .map(|(key, value)| format!("{key}={value}"))
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    ),
+                    block_state_report.id,
+                );
+            }
+        }
+    }
+
     commands.insert_resource(Mappings {
         id_by_block: blocks
             .iter()
-            .map(|(block, block_base)| (block.index(), block_state_registry.id(block_base.name())))
+            .filter_map(|(block, block_base)| {
+                id_by_name
+                    .get(block_base.0.as_ref())
+                    .map(|&id| (block.index(), id))
+            })
             .collect(),
         item_by_id: items
             .iter()
             .map(|(item, item_base)| {
                 (
-                    registries.id("minecraft:item", item_base.name()),
+                    registries.id("minecraft:item", item_base.0.split('[').next().unwrap()),
                     item.index(),
                 )
             })

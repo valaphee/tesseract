@@ -311,16 +311,15 @@ fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnect
             connection.user.name, connection.user.id
         );
 
-        commands.spawn((
-            connection,
-            Subscription::default(),
-        ));
+        commands.spawn((connection, Subscription::default()));
     }
 }
 
 fn update_players(
     mappings: Res<registry::Mappings>,
+
     mut commands: Commands,
+
     mut players: Query<(
         Entity,
         &mut Connection,
@@ -359,9 +358,7 @@ fn update_players(
                 connection.user.name, connection.user.id
             );
 
-            commands
-                .entity(player)
-                .remove::<Connection>();
+            commands.entity(player).remove::<Connection>();
         } else {
             while let Ok(packet) = connection.rx.try_recv() {
                 match Packet(packet).decode().unwrap() {
@@ -370,9 +367,9 @@ fn update_players(
                             radius: VarI32(view_distance as i32),
                         });
 
-                        let new_subscription_radius = view_distance as u8 + 4;
+                        let new_subscription_radius = view_distance as u8 + 2;
                         if subscription.radius != new_subscription_radius {
-                           subscription.radius = new_subscription_radius;
+                            subscription.radius = new_subscription_radius;
                         }
                     }
                     c2s::GamePacket::KeepAlive { id } => {
@@ -479,6 +476,7 @@ fn replicate_initial(
     dimension_type_registry: Res<registry::DataRegistry<DimensionType>>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
     damage_type_registry: Res<registry::DataRegistry<DamageType>>,
+
     levels: Query<(&level::Base, &level::AgeAndTime)>,
     chunks: Query<&Parent>,
     players: Query<
@@ -544,6 +542,7 @@ fn replicate_initial(
 
 fn cleanup_chunks(
     mut commands: Commands,
+
     levels: Query<&level::chunk::LookupTable>,
     chunks: Query<&Parent>,
     mut subscription_chunks: Query<&mut Replication>,
@@ -554,7 +553,9 @@ fn cleanup_chunks(
             commands.entity(player).remove::<Subscription>();
 
             let chunk_lut = levels.get(level.get()).unwrap();
-            for chunk_position in SquareIterator::new(subscription.last_center, subscription.last_radius as i32) {
+            for chunk_position in
+                SquareIterator::new(subscription.last_center, subscription.last_radius as i32)
+            {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     trace!("Release chunk: {:?}", chunk_position);
 
@@ -572,7 +573,9 @@ fn cleanup_chunks(
 fn subscribe_and_replicate_chunks(
     mappings: Res<registry::Mappings>,
     registries: Res<registry::Registries>,
+
     mut commands: Commands,
+
     mut levels: Query<&mut level::chunk::LookupTable>,
     chunks: Query<(&level::chunk::Base, &Parent)>,
     mut subscription_chunks: Query<(Option<&level::chunk::Data>, &mut Replication)>,
@@ -584,12 +587,7 @@ fn subscribe_and_replicate_chunks(
         &actor::HeadRotation,
     )>,
     mut players: Query<
-        (
-            Entity,
-            &Parent,
-            &Connection,
-            &mut Subscription,
-        ),
+        (Entity, &Parent, &Connection, &mut Subscription),
         Or<(Changed<Parent>, Changed<Subscription>)>,
     >,
 ) {
@@ -608,7 +606,12 @@ fn subscribe_and_replicate_chunks(
             let last_radius = subscription.last_radius as i32;
 
             // release chunks
-            for chunk_position in SquareIterator::new(last_center, last_radius).filter(|position| position.x >= (center.x + radius) || position.x <= (center.x - radius) || position.y >= (center.y + radius) || position.y <= (center.y - radius)) {
+            for chunk_position in SquareIterator::new(last_center, last_radius).filter(|position| {
+                position.x >= (center.x + radius)
+                    || position.x <= (center.x - radius)
+                    || position.y >= (center.y + radius)
+                    || position.y <= (center.y - radius)
+            }) {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     trace!("Release chunk: {:?}", chunk_position);
 
@@ -633,7 +636,14 @@ fn subscribe_and_replicate_chunks(
             }
 
             // acquire chunks
-            for chunk_position in SquareIterator::new(chunk_base.0, subscription.radius as i32).filter(|position| position.x >= (last_center.x + last_radius) || position.x <= (last_center.x - last_radius) || position.y >= (last_center.y + last_radius) || position.y <= (last_center.y - last_radius)) {
+            for chunk_position in SquareIterator::new(chunk_base.0, subscription.radius as i32)
+                .filter(|position| {
+                    position.x >= (last_center.x + last_radius)
+                        || position.x <= (last_center.x - last_radius)
+                        || position.y >= (last_center.y + last_radius)
+                        || position.y <= (last_center.y - last_radius)
+                })
+            {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     if let Ok((chunk_data, mut replication)) = subscription_chunks.get_mut(chunk) {
                         trace!("Acquire chunk: {:?}", chunk_position);
@@ -681,7 +691,7 @@ fn subscribe_and_replicate_chunks(
                         commands
                             .spawn(level::chunk::ChunkBundle {
                                 base: level::chunk::Base(chunk_position),
-                                queued_updates: Default::default(),
+                                update_queue: Default::default(),
                                 replication: Replication {
                                     subscriber: HashSet::from([player]),
                                     replicated: vec![],
@@ -701,6 +711,7 @@ fn subscribe_and_replicate_chunks(
 
 fn replicate_chunks_late(
     mappings: Res<registry::Mappings>,
+
     chunks: Query<
         (&level::chunk::Base, &level::chunk::Data, &Replication),
         Added<level::chunk::Data>,
@@ -781,6 +792,7 @@ fn replicate_chunks_delta(
 
 fn replicate_actors(
     registries: Res<registry::Registries>,
+
     mut chunks: Query<(&Children, &mut Replication), Changed<Children>>,
     actors: Query<(
         &actor::Base,
@@ -975,7 +987,7 @@ impl Iterator for SquareIterator {
         } else if self.n == 0 && self.r == 0 {
             self.r = 1;
             self.n = -1;
-            return Some(IVec2::new(self.center_x, self.center_z))
+            return Some(IVec2::new(self.center_x, self.center_z));
         }
 
         Some(match self.i {
@@ -983,17 +995,17 @@ impl Iterator for SquareIterator {
                 self.i = 1;
 
                 IVec2::new(self.center_x + self.n, self.center_z - self.r)
-            },
+            }
             1 => {
                 self.i = 2;
 
                 IVec2::new(self.center_x + self.r, self.center_z + self.n)
-            },
+            }
             2 => {
                 self.i = 3;
 
                 IVec2::new(self.center_x - self.n, self.center_z + self.r)
-            },
+            }
             _ => {
                 self.i = 0;
                 self.n += 1;

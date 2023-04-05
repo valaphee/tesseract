@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Valaphee <iam@valaphee.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/valaphee/tesseract.git"
-description = "Minecraft's Savegame"
+description = "Minecraft: Java Edition's Savegame"
 
 [dependencies]
 byteorder = "1.4.3"
