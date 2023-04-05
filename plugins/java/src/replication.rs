@@ -313,8 +313,7 @@ fn spawn_player(mut commands: Commands, mut new_connection_rx: ResMut<NewConnect
 
         commands.spawn((
             connection,
-            SubscriptionDistance::default(),
-            Subscriptions::default(),
+            Subscription::default(),
         ));
     }
 }
@@ -325,7 +324,7 @@ fn update_players(
     mut players: Query<(
         Entity,
         &mut Connection,
-        &mut SubscriptionDistance,
+        &mut Subscription,
         &mut actor::Position,
         &mut actor::Rotation,
         &mut actor::player::Interaction,
@@ -335,7 +334,7 @@ fn update_players(
     for (
         player,
         mut connection,
-        mut subscription_distance,
+        mut subscription,
         mut position,
         mut rotation,
         mut interaction,
@@ -362,8 +361,7 @@ fn update_players(
 
             commands
                 .entity(player)
-                .remove::<Connection>()
-                .remove::<SubscriptionDistance>();
+                .remove::<Connection>();
         } else {
             while let Ok(packet) = connection.rx.try_recv() {
                 match Packet(packet).decode().unwrap() {
@@ -372,9 +370,9 @@ fn update_players(
                             radius: VarI32(view_distance as i32),
                         });
 
-                        let new_subscription_distance = view_distance as u8 + 4;
-                        if subscription_distance.0 != new_subscription_distance {
-                            subscription_distance.0 = new_subscription_distance;
+                        let new_subscription_radius = view_distance as u8 + 4;
+                        if subscription.radius != new_subscription_radius {
+                           subscription.radius = new_subscription_radius;
                         }
                     }
                     c2s::GamePacket::KeepAlive { id } => {
@@ -549,15 +547,15 @@ fn cleanup_chunks(
     levels: Query<&level::chunk::LookupTable>,
     chunks: Query<&Parent>,
     mut subscription_chunks: Query<&mut Replication>,
-    players: Query<(Entity, &Parent, &Subscriptions), Without<Connection>>,
+    players: Query<(Entity, &Parent, &Subscription), Without<Connection>>,
 ) {
-    for (player, chunk, subscriptions) in players.iter() {
+    for (player, chunk, subscription) in players.iter() {
         if let Ok(level) = chunks.get(chunk.get()) {
-            commands.entity(player).remove::<Subscriptions>();
+            commands.entity(player).remove::<Subscription>();
 
             let chunk_lut = levels.get(level.get()).unwrap();
-            for chunk_position in subscriptions.0.iter() {
-                if let Some(&chunk) = chunk_lut.0.get(chunk_position) {
+            for chunk_position in SquareIterator::new(subscription.last_center, subscription.last_radius as i32) {
+                if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     trace!("Release chunk: {:?}", chunk_position);
 
                     let mut replication = subscription_chunks.get_mut(chunk).unwrap();
@@ -590,77 +588,28 @@ fn subscribe_and_replicate_chunks(
             Entity,
             &Parent,
             &Connection,
-            &SubscriptionDistance,
-            &mut Subscriptions,
+            &mut Subscription,
         ),
-        Or<(Changed<Parent>, Changed<SubscriptionDistance>)>,
+        Or<(Changed<Parent>, Changed<Subscription>)>,
     >,
 ) {
-    for (player, chunk, connection, subscription_distance, mut actual_subscriptions) in
-        players.iter_mut()
-    {
+    for (player, chunk, connection, mut subscription) in players.iter_mut() {
         if let Ok((chunk_base, level)) = chunks.get(chunk.get()) {
-            let subscription_distance = subscription_distance.0 as i32;
-            if subscription_distance == 0 {
-                continue;
-            }
-
-            let x = chunk_base.0.x;
-            let z = chunk_base.0.y;
-            connection.send(&s2c::GamePacket::SetChunkCacheCenter {
-                x: VarI32(x),
-                z: VarI32(z),
-            });
-
-            let mut acquire_chunks = Vec::new();
-            let mut target_subscriptions = HashSet::new();
-            if !actual_subscriptions.0.contains(&chunk_base.0) {
-                acquire_chunks.push(chunk_base.0);
-            }
-            target_subscriptions.insert(IVec2::new(x, z));
-
-            // square radius
-            for r in 1..subscription_distance {
-                for n in -r..r {
-                    // north
-                    let chunk_position = IVec2::new(x + n, z - r);
-                    if !actual_subscriptions.0.contains(&chunk_position) {
-                        acquire_chunks.push(chunk_position);
-                    }
-                    target_subscriptions.insert(chunk_position);
-
-                    // east
-                    let chunk_position = IVec2::new(x + r, z + n);
-                    if !actual_subscriptions.0.contains(&chunk_position) {
-                        acquire_chunks.push(chunk_position);
-                    }
-                    target_subscriptions.insert(chunk_position);
-
-                    // south
-                    let chunk_position = IVec2::new(x - n, z + r);
-                    if !actual_subscriptions.0.contains(&chunk_position) {
-                        acquire_chunks.push(chunk_position);
-                    }
-                    target_subscriptions.insert(chunk_position);
-
-                    // west
-                    let chunk_position = IVec2::new(x - r, z - n);
-                    if !actual_subscriptions.0.contains(&chunk_position) {
-                        acquire_chunks.push(chunk_position);
-                    }
-                    target_subscriptions.insert(chunk_position);
-                }
-            }
-
             let mut chunk_lut = levels.get_mut(level.get()).unwrap();
 
+            let center = chunk_base.0;
+            connection.send(&s2c::GamePacket::SetChunkCacheCenter {
+                x: VarI32(center.x),
+                z: VarI32(center.y),
+            });
+
+            let radius = subscription.radius as i32;
+            let last_center = subscription.last_center;
+            let last_radius = subscription.last_radius as i32;
+
             // release chunks
-            for chunk_position in actual_subscriptions
-                .0
-                .iter()
-                .filter(|&chunk_position| !target_subscriptions.contains(chunk_position))
-            {
-                if let Some(&chunk) = chunk_lut.0.get(chunk_position) {
+            for chunk_position in SquareIterator::new(last_center, last_radius).filter(|position| position.x >= (center.x + radius) || position.x <= (center.x - radius) || position.y >= (center.y + radius) || position.y <= (center.y - radius)) {
+                if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     trace!("Release chunk: {:?}", chunk_position);
 
                     let (_, mut replication) = subscription_chunks.get_mut(chunk).unwrap();
@@ -684,7 +633,7 @@ fn subscribe_and_replicate_chunks(
             }
 
             // acquire chunks
-            for chunk_position in acquire_chunks {
+            for chunk_position in SquareIterator::new(chunk_base.0, subscription.radius as i32).filter(|position| position.x >= (last_center.x + last_radius) || position.x <= (last_center.x - last_radius) || position.y >= (last_center.y + last_radius) || position.y <= (last_center.y - last_radius)) {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     if let Ok((chunk_data, mut replication)) = subscription_chunks.get_mut(chunk) {
                         trace!("Acquire chunk: {:?}", chunk_position);
@@ -744,7 +693,8 @@ fn subscribe_and_replicate_chunks(
                 }
             }
 
-            actual_subscriptions.0 = target_subscriptions;
+            subscription.last_center = chunk_base.0;
+            subscription.last_radius = subscription.radius;
         }
     }
 }
@@ -986,6 +936,76 @@ async fn next(socket: &mut Framed<TcpStream, Codec>) -> tesseract_java_protocol:
         .ok_or(tesseract_java_protocol::Error::UnexpectedEnd)
         .flatten()
         .map(Packet)
+}
+
+struct SquareIterator {
+    center_x: i32,
+    center_z: i32,
+    radius: i32,
+
+    r: i32,
+    n: i32,
+    i: i32,
+}
+
+impl SquareIterator {
+    fn new(center: IVec2, radius: i32) -> Self {
+        Self {
+            center_x: center.x,
+            center_z: center.y,
+            radius,
+
+            r: 0,
+            n: 0,
+            i: 0,
+        }
+    }
+}
+
+impl Iterator for SquareIterator {
+    type Item = IVec2;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.r >= self.radius {
+            return None;
+        }
+        if self.n > self.r {
+            self.r += 1;
+            self.n = -self.r;
+        } else if self.n == 0 && self.r == 0 {
+            self.r = 1;
+            self.n = -1;
+            return Some(IVec2::new(self.center_x, self.center_z))
+        }
+
+        Some(match self.i {
+            0 => {
+                self.i = 1;
+
+                IVec2::new(self.center_x + self.n, self.center_z - self.r)
+            },
+            1 => {
+                self.i = 2;
+
+                IVec2::new(self.center_x + self.r, self.center_z + self.n)
+            },
+            2 => {
+                self.i = 3;
+
+                IVec2::new(self.center_x - self.n, self.center_z + self.r)
+            },
+            _ => {
+                self.i = 0;
+                self.n += 1;
+
+                IVec2::new(self.center_x - self.r, self.center_z - self.n)
+            }
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some((self.radius * self.radius * 2) as usize))
+    }
 }
 
 fn add_chunk_packet<'a>(

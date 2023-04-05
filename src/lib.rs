@@ -25,8 +25,10 @@ pub mod replication {
     }
 
     #[derive(Default, Component)]
-    pub struct SubscriptionDistance(pub u8);
+    pub struct Subscription {
+        pub radius: u8,
 
-    #[derive(Default, Component)]
-    pub struct Subscriptions(pub HashSet<IVec2>);
+        pub last_center: IVec2,
+        pub last_radius: u8,
+    }
 }
