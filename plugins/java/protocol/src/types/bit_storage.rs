@@ -66,6 +66,7 @@ const MAGIC: [u32; 192] = [
     0b10000000000000000000000000000000, 0b00000000000000000000000000000000, 5
 ];
 
+#[derive(Clone)]
 pub struct BitStorage {
     size: u32,
     bits: u32,

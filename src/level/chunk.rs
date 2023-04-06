@@ -95,8 +95,8 @@ impl Data {
                 let mut sections = vec![];
                 for _ in 0..section_count {
                     sections.push(DataSection {
-                        block_states: PalettedContainer::SingleValue(default_block_id),
-                        biomes: PalettedContainer::SingleValue(default_biome_id),
+                        block_states: PalettedContainer::Single(default_block_id),
+                        biomes: PalettedContainer::Single(default_biome_id),
                         block_state_changes: Default::default(),
                     })
                 }
@@ -108,7 +108,7 @@ impl Data {
 }
 
 pub struct DataSection {
-    pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
+    pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 32, 32>,
     pub biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
 
     pub block_state_changes: BTreeSet<u16>,

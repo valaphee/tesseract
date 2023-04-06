@@ -95,6 +95,7 @@ impl Plugin for ReplicationPlugin {
         app.add_systems(PostStartup, listen)
             .add_systems(First, (spawn_player, update_players).before(UpdateFlush))
             .add_systems(First, apply_system_buffers.in_set(UpdateFlush))
+            .add_systems(PostUpdate, render_chunks)
             .add_systems(
                 Last,
                 (
@@ -540,6 +541,51 @@ fn replicate_initial(
 
 //=========================================================================== CHUNK REPLICATION ====
 
+#[derive(Component)]
+struct RenderedChunk {
+    sections: Vec<RenderedChunkSection>,
+}
+
+struct RenderedChunkSection {
+    block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
+    biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
+}
+
+fn render_chunks(
+    mappings: Res<registry::Mappings>,
+
+    mut commands: Commands,
+
+    mut chunks: Query<
+        (Entity, &level::chunk::Data, Option<&mut RenderedChunk>),
+        Changed<level::chunk::Data>,
+    >,
+) {
+    for (chunk, chunk_data, rendered_chunk) in chunks.iter_mut() {
+        if let Some(mut rendered_chunk) = rendered_chunk {
+            for (section_y, section) in chunk_data.sections.iter().enumerate() {
+                let rendered_section = &mut rendered_chunk.sections[section_y];
+                for &block_state_change in &section.block_state_changes {
+                    rendered_section.block_states.get_and_set(block_state_change as u32, mappings.id_by_block[&section.block_states.get(block_state_change as u32)]);
+                }
+            }
+        } else {
+            commands.entity(chunk).insert(RenderedChunk {
+                sections: chunk_data.sections.iter().map(|section| {
+                    RenderedChunkSection {
+                        block_states: match &section.block_states {
+                            PalettedContainer::Single(value) => PalettedContainer::Single(mappings.id_by_block[value]),
+                            PalettedContainer::Indirect { palette, storage } => PalettedContainer::Indirect { palette: palette.iter().map(|value| mappings.id_by_block[value]).collect(), storage: storage.clone() },
+                            PalettedContainer::Direct(_) => todo!()
+                        },
+                        biomes: section.biomes.clone(),
+                    }
+                }).collect(),
+            });
+        }
+    }
+}
+
 fn cleanup_chunks(
     mut commands: Commands,
 
@@ -571,14 +617,13 @@ fn cleanup_chunks(
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn subscribe_and_replicate_chunks(
-    mappings: Res<registry::Mappings>,
     registries: Res<registry::Registries>,
 
     mut commands: Commands,
 
     mut levels: Query<&mut level::chunk::LookupTable>,
     chunks: Query<(&level::chunk::Base, &Parent)>,
-    mut subscription_chunks: Query<(Option<&level::chunk::Data>, &mut Replication)>,
+    mut subscription_chunks: Query<(Option<&RenderedChunk>, &mut Replication)>,
     actors: Query<(
         Entity,
         &actor::Base,
@@ -652,11 +697,7 @@ fn subscribe_and_replicate_chunks(
 
                         if let Some(chunk_data) = chunk_data {
                             // connection: add chunk and actors, cause: subscribe
-                            connection.send(&add_chunk_packet(
-                                &mappings,
-                                chunk_position,
-                                chunk_data,
-                            ));
+                            connection.send(&add_chunk_packet(chunk_position, chunk_data));
                             for (
                                 actor,
                                 actor_base,
@@ -710,16 +751,14 @@ fn subscribe_and_replicate_chunks(
 }
 
 fn replicate_chunks_late(
-    mappings: Res<registry::Mappings>,
-
     chunks: Query<
-        (&level::chunk::Base, &level::chunk::Data, &Replication),
+        (&level::chunk::Base, &RenderedChunk, &Replication),
         Added<level::chunk::Data>,
     >,
     players: Query<&Connection>,
 ) {
     for (chunk_base, chunk_data, replication) in chunks.iter() {
-        let add_chunk_packet = add_chunk_packet(&mappings, chunk_base.0, chunk_data);
+        let add_chunk_packet = add_chunk_packet(chunk_base.0, chunk_data);
         for &player in &replication.subscriber {
             // connection: add chunk, cause: subscribe (late)
             if let Ok(connection) = players.get(player) {
@@ -730,14 +769,13 @@ fn replicate_chunks_late(
 }
 
 fn replicate_chunks_delta(
-    mappings: Res<registry::Mappings>,
     mut chunks: Query<
-        (&level::chunk::Base, &mut level::chunk::Data, &Replication),
+        (&level::chunk::Base, &mut level::chunk::Data, &RenderedChunk, &Replication),
         Changed<level::chunk::Data>,
     >,
     players: Query<&Connection>,
 ) {
-    for (chunk_base, mut chunk_data, replication) in chunks.iter_mut() {
+    for (chunk_base, mut chunk_data, rendered_chunk, replication) in chunks.iter_mut() {
         let mut update_chunk_packets = vec![];
         {
             let y_offset = chunk_data.y_offset as i32;
@@ -746,6 +784,7 @@ fn replicate_chunks_delta(
                     continue;
                 }
 
+                let rendered_section = &rendered_chunk.sections[section_y];
                 update_chunk_packets.push(s2c::GamePacket::SectionBlocksUpdate(
                     s2c::game::SectionBlocksUpdatePacket {
                         section_pos: IVec3::new(
@@ -757,14 +796,12 @@ fn replicate_chunks_delta(
                         position_and_states: section
                             .block_state_changes
                             .iter()
-                            .map(|block_state_update| {
+                            .map(|&block_state_change| {
                                 s2c::game::SectionBlocksUpdatePacketPositionAndState {
-                                    x: *block_state_update as u8 & 0xF,
-                                    y: (*block_state_update >> 8) as u8,
-                                    z: *block_state_update as u8 >> 4 & 0xF,
-                                    block_state: mappings.id_by_block
-                                        [&section.block_states.get(*block_state_update as u32)]
-                                        as i64,
+                                    x: block_state_change as u8 & 0xF,
+                                    y: (block_state_change >> 8) as u8,
+                                    z: block_state_change as u8 >> 4 & 0xF,
+                                    block_state: rendered_section.block_states.get(block_state_change as u32) as i64,
                                 }
                             })
                             .collect(),
@@ -1021,39 +1058,15 @@ impl Iterator for SquareIterator {
 }
 
 fn add_chunk_packet<'a>(
-    mappings: &registry::Mappings,
     position: IVec2,
-    chunk_data: &level::chunk::Data,
+    chunk_data: &RenderedChunk,
 ) -> s2c::GamePacket<'a> {
     let mut buffer = Vec::new();
     let mut sky_y_mask = 0i64;
     let mut sky_updates = Vec::new();
     for (i, section) in chunk_data.sections.iter().enumerate() {
         4096i16.encode(&mut buffer).unwrap();
-        match &section.block_states {
-            PalettedContainer::SingleValue(value) => {
-                0u8.encode(&mut buffer).unwrap();
-                VarI32(mappings.id_by_block[value] as i32)
-                    .encode(&mut buffer)
-                    .unwrap();
-                VarI32(0).encode(&mut buffer).unwrap();
-            }
-            PalettedContainer::Linear { palette, storage } => {
-                (storage.bits() as u8).encode(&mut buffer).unwrap();
-                VarI32(palette.len() as i32).encode(&mut buffer).unwrap();
-                for element in palette {
-                    VarI32(mappings.id_by_block[element] as i32)
-                        .encode(&mut buffer)
-                        .unwrap();
-                }
-                let data = storage.data();
-                VarI32(data.len() as i32).encode(&mut buffer).unwrap();
-                for &element in data {
-                    element.encode(&mut buffer).unwrap();
-                }
-            }
-            PalettedContainer::Global(_storage) => todo!(),
-        }
+        section.block_states.encode(&mut buffer).unwrap();
         section.biomes.encode(&mut buffer).unwrap();
 
         sky_y_mask |= 1 << (i + 1);

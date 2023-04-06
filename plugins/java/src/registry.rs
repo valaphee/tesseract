@@ -135,7 +135,10 @@ impl<T: DeserializeOwned> DataRegistry<T> {
 
 #[derive(Resource)]
 pub struct Mappings {
+    // block
     pub id_by_block: HashMap<u32, u32>,
+
+    // item
     pub item_by_id: HashMap<u32, u32>,
 }
 
