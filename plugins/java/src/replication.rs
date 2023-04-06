@@ -239,7 +239,7 @@ async fn handle_new_connection(
                         encode_and_send(
                             &mut framed_socket,
                             &s2c::LoginPacket::LoginCompression {
-                                compression_threshold: VarI32(compression_threshold as i32),
+                                compression_threshold: compression_threshold as i32,
                             },
                         )
                         .await;
@@ -365,7 +365,7 @@ fn update_players(
                 match Packet(packet).decode().unwrap() {
                     c2s::GamePacket::ClientInformation { view_distance, .. } => {
                         connection.send(&s2c::GamePacket::SetChunkCacheRadius {
-                            radius: VarI32(view_distance as i32),
+                            radius: view_distance as i32,
                         });
 
                         let new_subscription_radius = view_distance as u8 + 2;
@@ -446,7 +446,7 @@ fn update_players(
                         inventory.content.insert(
                             slot_num as usize,
                             item_stack.map(|item_stack| {
-                                Entity::from_raw(mappings.item_by_id[&(item_stack.item.0 as u32)])
+                                Entity::from_raw(mappings.item_by_id[&(item_stack.item as u32)])
                             }),
                         );
                     }
@@ -512,9 +512,9 @@ fn replicate_initial(
             dimension_type: level_base.dimension_type().into(),
             dimension: level_base.name().into(),
             seed: 0,
-            max_players: VarI32(0),
-            chunk_radius: VarI32(0),
-            simulation_distance: VarI32(0),
+            max_players: 0,
+            chunk_radius: 0,
+            simulation_distance: 0,
             reduced_debug_info: false,
             show_death_screen: false,
             is_debug: false,
@@ -534,7 +534,7 @@ fn replicate_initial(
             yaw: actor_rotation.yaw,
             pitch: actor_rotation.pitch,
             relative_arguments: 0,
-            id: VarI32(0),
+            id: 0,
         });
     }
 }
@@ -566,21 +566,36 @@ fn render_chunks(
             for (section_y, section) in chunk_data.sections.iter().enumerate() {
                 let rendered_section = &mut rendered_chunk.sections[section_y];
                 for &block_state_change in &section.block_state_changes {
-                    rendered_section.block_states.get_and_set(block_state_change as u32, mappings.id_by_block[&section.block_states.get(block_state_change as u32)]);
+                    rendered_section.block_states.get_and_set(
+                        block_state_change as u32,
+                        mappings.id_by_block[&section.block_states.get(block_state_change as u32)],
+                    );
                 }
             }
         } else {
             commands.entity(chunk).insert(RenderedChunk {
-                sections: chunk_data.sections.iter().map(|section| {
-                    RenderedChunkSection {
+                sections: chunk_data
+                    .sections
+                    .iter()
+                    .map(|section| RenderedChunkSection {
                         block_states: match &section.block_states {
-                            PalettedContainer::Single(value) => PalettedContainer::Single(mappings.id_by_block[value]),
-                            PalettedContainer::Indirect { palette, storage } => PalettedContainer::Indirect { palette: palette.iter().map(|value| mappings.id_by_block[value]).collect(), storage: storage.clone() },
-                            PalettedContainer::Direct(_) => todo!()
+                            PalettedContainer::Single(value) => {
+                                PalettedContainer::Single(mappings.id_by_block[value])
+                            }
+                            PalettedContainer::Indirect { palette, storage } => {
+                                PalettedContainer::Indirect {
+                                    palette: palette
+                                        .iter()
+                                        .map(|value| mappings.id_by_block[value])
+                                        .collect(),
+                                    storage: storage.clone(),
+                                }
+                            }
+                            PalettedContainer::Direct(_) => todo!(),
                         },
                         biomes: section.biomes.clone(),
-                    }
-                }).collect(),
+                    })
+                    .collect(),
             });
         }
     }
@@ -642,8 +657,8 @@ fn subscribe_and_replicate_chunks(
 
             let center = chunk_base.0;
             connection.send(&s2c::GamePacket::SetChunkCacheCenter {
-                x: VarI32(center.x),
-                z: VarI32(center.y),
+                x: center.x,
+                z: center.y,
             });
 
             let radius = subscription.radius as i32;
@@ -751,10 +766,7 @@ fn subscribe_and_replicate_chunks(
 }
 
 fn replicate_chunks_late(
-    chunks: Query<
-        (&level::chunk::Base, &RenderedChunk, &Replication),
-        Added<level::chunk::Data>,
-    >,
+    chunks: Query<(&level::chunk::Base, &RenderedChunk, &Replication), Added<level::chunk::Data>>,
     players: Query<&Connection>,
 ) {
     for (chunk_base, chunk_data, replication) in chunks.iter() {
@@ -770,7 +782,12 @@ fn replicate_chunks_late(
 
 fn replicate_chunks_delta(
     mut chunks: Query<
-        (&level::chunk::Base, &mut level::chunk::Data, &RenderedChunk, &Replication),
+        (
+            &level::chunk::Base,
+            &mut level::chunk::Data,
+            &RenderedChunk,
+            &Replication,
+        ),
         Changed<level::chunk::Data>,
     >,
     players: Query<&Connection>,
@@ -801,7 +818,10 @@ fn replicate_chunks_delta(
                                     x: block_state_change as u8 & 0xF,
                                     y: (block_state_change >> 8) as u8,
                                     z: block_state_change as u8 >> 4 & 0xF,
-                                    block_state: rendered_section.block_states.get(block_state_change as u32) as i64,
+                                    block_state: rendered_section
+                                        .block_states
+                                        .get(block_state_change as u32)
+                                        as i64,
                                 }
                             })
                             .collect(),
@@ -935,15 +955,15 @@ fn replicate_actors_delta(
     for (actor, chunk, actor_position, actor_rotation) in actors.iter() {
         if let Ok(replication) = chunks.get(chunk.get()) {
             let update_position_rotation_packet = s2c::GamePacket::TeleportEntity {
-                id: VarI32(actor.index() as i32),
+                id: actor.index() as i32,
                 pos: actor_position.0,
-                pitch: Angle(actor_rotation.pitch),
-                yaw: Angle(actor_rotation.yaw),
+                pitch: actor_rotation.pitch,
+                yaw: actor_rotation.yaw,
                 on_ground: false,
             };
             let update_head_rotation_packet = s2c::GamePacket::RotateHead {
-                entity_id: VarI32(actor.index() as i32),
-                head_yaw: Angle(actor_rotation.yaw),
+                entity_id: actor.index() as i32,
+                head_yaw: actor_rotation.yaw,
             };
 
             for &player in replication.subscriber.iter() {
@@ -1057,10 +1077,7 @@ impl Iterator for SquareIterator {
     }
 }
 
-fn add_chunk_packet<'a>(
-    position: IVec2,
-    chunk_data: &RenderedChunk,
-) -> s2c::GamePacket<'a> {
+fn add_chunk_packet<'a>(position: IVec2, chunk_data: &RenderedChunk) -> s2c::GamePacket<'a> {
     let mut buffer = Vec::new();
     let mut sky_y_mask = 0i64;
     let mut sky_updates = Vec::new();
@@ -1103,22 +1120,22 @@ fn add_actor_packet<'a>(
 ) -> s2c::GamePacket<'a> {
     if actor_base.type_ == "minecraft:player" {
         s2c::GamePacket::AddPlayer {
-            entity_id: VarI32(actor.index() as i32),
+            entity_id: actor.index() as i32,
             player_id: actor_base.id,
             pos: position.0,
-            pitch: Angle(rotation.pitch),
-            yaw: Angle(rotation.yaw),
+            pitch: rotation.pitch,
+            yaw: rotation.yaw,
         }
     } else {
         s2c::GamePacket::AddEntity {
-            id: VarI32(actor.index() as i32),
+            id: actor.index() as i32,
             uuid: actor_base.id,
-            type_: VarI32(registries.id("minecraft:entity_type", &actor_base.type_) as i32),
+            type_: registries.id("minecraft:entity_type", &actor_base.type_) as i32,
             pos: position.0,
-            pitch: Angle(rotation.pitch),
-            yaw: Angle(rotation.yaw),
-            head_yaw: Angle(head_rotation.head_yaw),
-            data: VarI32(0),
+            pitch: rotation.pitch,
+            yaw: rotation.yaw,
+            head_yaw: head_rotation.head_yaw,
+            data: 0,
             xa: 0,
             ya: 0,
             za: 0,

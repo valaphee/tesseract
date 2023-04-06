@@ -1,12 +1,29 @@
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    parse_macro_input, parse_quote, spanned::Spanned, Data, DeriveInput, Fields, GenericParam,
-    Lifetime, LifetimeDef,
+    parse_macro_input, parse_quote, spanned::Spanned, Data, DeriveInput, Field, Fields,
+    GenericParam, Lifetime, LifetimeParam,
 };
 
-#[proc_macro_derive(Encode)]
+#[proc_macro_derive(Encode, attributes(using))]
 pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    fn field_encode(field: &Field, field_ref: TokenStream) -> TokenStream {
+        if let Some(using) = field
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("using"))
+            .map(|attr| attr.parse_args::<Ident>().unwrap())
+        {
+            quote_spanned! {
+                field.span() => #using::from(#field_ref).encode(output)
+            }
+        } else {
+            quote_spanned! {
+                field.span() => #field_ref.encode(output)
+            }
+        }
+    }
+
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = input.ident;
@@ -17,10 +34,12 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             Fields::Named(fields) => {
                 if !fields.named.is_empty() {
                     let mut field_encodes = fields.named.iter().map(|field| {
-                        let field_name = &field.ident;
-                        quote_spanned! {
-                            field.span() => self.#field_name.encode(output)
-                        }
+                        field_encode(field, {
+                            let field_name = field.ident.as_ref().unwrap();
+                            quote! {
+                                self.#field_name
+                            }
+                        })
                     });
                     let first_field_encode = field_encodes.next().unwrap();
                     quote! {
@@ -35,7 +54,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             Fields::Unit => quote! {
                 Ok(())
             },
-            _ => unreachable!(),
+            _ => todo!(),
         },
         Data::Enum(data) => {
             let index_only = data
@@ -52,12 +71,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                                 .named
                                 .iter()
                                 .map(|field| field.ident.as_ref().unwrap());
-                            let mut field_encodes = fields.named.iter().map(|field| {
-                                let field_name = &field.ident;
-                                quote_spanned! {
-                                    field.span() => #field_name.encode(output)
-                                }
-                            });
+                            let mut field_encodes = fields.named.iter().map(|field| field_encode(field, field.ident.as_ref().unwrap().into_token_stream()));
                             let first_field_encode = field_encodes.next().unwrap();
                             quote! {
                                 Self::#variant_name { #(#field_names,)* } => {
@@ -74,12 +88,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                     Fields::Unnamed(fields) => {
                         if !fields.unnamed.is_empty() {
                             let field_names = (0..fields.unnamed.len()).map(|i| Ident::new(&format!("_{i}"), Span::call_site()));
-                            let mut field_encodes = fields.unnamed.iter().enumerate().map(|(i, field)| {
-                                let field_name = Ident::new(&format!("_{i}"), Span::call_site());
-                                quote_spanned! {
-                                    field.span() => #field_name.encode(output)
-                                }
-                            });
+                            let mut field_encodes = fields.unnamed.iter().enumerate().map(|(i, field)| field_encode(field, Ident::new(&format!("_{i}"), Span::call_site()).into_token_stream()));
                             let first_field_encode = field_encodes.next().unwrap();
                             quote! {
                                 Self::#variant_name(#(#field_names,)*) => {
@@ -124,7 +133,7 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 }
             }
         }
-        _ => unreachable!(),
+        _ => todo!(),
     };
 
     proc_macro::TokenStream::from(quote! {
@@ -138,8 +147,36 @@ pub fn derive_encode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     })
 }
 
-#[proc_macro_derive(Decode)]
+#[proc_macro_derive(Decode, attributes(using))]
 pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    fn field_decode(field: &Field) -> TokenStream {
+        let field_name = field.ident.as_ref();
+        if let Some(using) = field
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("using"))
+            .map(|attr| attr.parse_args::<Ident>().unwrap())
+        {
+            if let Some(field_name) = field_name {
+                quote_spanned! {
+                    field.span() => #field_name: #using::decode(input)?.into()
+                }
+            } else {
+                quote_spanned! {
+                    field.span() => #using::decode(input)?.into()
+                }
+            }
+        } else if let Some(field_name) = field_name {
+            quote_spanned! {
+                field.span() => #field_name: Decode::decode(input)?
+            }
+        } else {
+            quote_spanned! {
+                field.span() => Decode::decode(input)?
+            }
+        }
+    }
+
     let mut input = parse_macro_input!(input as DeriveInput);
 
     let name = input.ident;
@@ -152,7 +189,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         input
             .generics
             .params
-            .push(GenericParam::Lifetime(LifetimeDef::new(lifetime.clone())));
+            .push(GenericParam::Lifetime(LifetimeParam::new(lifetime.clone())));
         lifetime
     };
     let (impl_generics, _, where_clause) = input.generics.split_for_impl();
@@ -160,12 +197,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let body = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {
-                let field_decodes = fields.named.iter().map(|field| {
-                    let field_name = &field.ident;
-                    quote_spanned! {
-                        field.span() => #field_name: Decode::decode(input)?
-                    }
-                });
+                let field_decodes = fields.named.iter().map(field_decode);
                 quote! {
                     Self {
                         #(#field_decodes,)*
@@ -175,7 +207,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
             Fields::Unit => quote! {
                 Self
             },
-            _ => unreachable!(),
+            _ => todo!(),
         },
         Data::Enum(data) => {
             let match_arms = data.variants.iter().enumerate().map(|(i, variant)| {
@@ -183,12 +215,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 let variant_name = &variant.ident;
                 match &variant.fields {
                     Fields::Named(fields) => {
-                        let field_decodes = fields.named.iter().map(|field| {
-                            let field_name = &field.ident;
-                            quote_spanned! {
-                                field.span() => #field_name: Decode::decode(input)?
-                            }
-                        });
+                        let field_decodes = fields.named.iter().map(field_decode);
                         quote! {
                             #variant_index => Self::#variant_name {
                                 #(#field_decodes,)*
@@ -196,11 +223,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                         }
                     }
                     Fields::Unnamed(fields) => {
-                        let field_decodes = fields.unnamed.iter().map(|field| {
-                            quote_spanned! {
-                                field.span() => Decode::decode(input)?
-                            }
-                        });
+                        let field_decodes = fields.unnamed.iter().map(field_decode);
                         quote! {
                             #variant_index => Self::#variant_name(#(#field_decodes,)*)
                         }
@@ -217,7 +240,7 @@ pub fn derive_decode(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                 }
             }
         }
-        _ => unreachable!(),
+        _ => todo!(),
     };
 
     proc_macro::TokenStream::from(quote! {

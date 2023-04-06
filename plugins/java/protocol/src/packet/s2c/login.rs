@@ -15,10 +15,12 @@ pub enum LoginPacket {
     },
     GameProfile(User),
     LoginCompression {
-        compression_threshold: VarI32,
+        #[using(VarI32)]
+        compression_threshold: i32,
     },
     CustomQuery {
-        transaction_id: VarI32,
+        #[using(VarI32)]
+        transaction_id: i32,
         identifier: String,
         data: TrailingBytes<{ 1 << 20 }>,
     },

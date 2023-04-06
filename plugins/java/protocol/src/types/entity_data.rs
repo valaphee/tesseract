@@ -21,8 +21,8 @@ impl Encode for EntityData {
     }
 }
 
-impl<'a> Decode<'a> for EntityData {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for EntityData {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let mut fields = HashMap::new();
         loop {
             let index = u8::decode(input)?;
@@ -38,8 +38,8 @@ impl<'a> Decode<'a> for EntityData {
 #[derive(Encode, Decode, Clone, Debug)]
 pub enum EntityDataValue {
     Byte(u8),
-    Int(VarI32),
-    Long(VarI64),
+    Int(#[using(VarI32)] i32),
+    Long(#[using(VarI64)] i64),
     Float(f32),
     String(String),
     Component(String),
@@ -51,21 +51,24 @@ pub enum EntityDataValue {
     OptionalBlockPos(Option<IVec3>),
     Direction(Direction),
     OptionalUuid(Option<Uuid>),
-    BlockState(VarI32),
-    OptionalBlockState(VarI32),
+    BlockState(#[using(VarI32)] i32),
+    OptionalBlockState(#[using(VarI32)] i32),
     CompoundTag(Nbt<serde_value::Value>),
     Particle,
     VillagerData {
-        type_: VarI32,
-        profession: VarI32,
-        level: VarI32,
+        #[using(VarI32)]
+        type_: i32,
+        #[using(VarI32)]
+        profession: i32,
+        #[using(VarI32)]
+        level: i32,
     },
-    OptionalUnsignedInt(VarI32),
+    OptionalUnsignedInt(#[using(VarI32)] i32),
     Pose(Pose),
-    CatVariant(VarI32),
-    FrogVariant(VarI32),
+    CatVariant(#[using(VarI32)] i32),
+    FrogVariant(#[using(VarI32)] i32),
     OptionalGlobalPos(Option<(String, IVec3)>),
-    PaintingVariant(VarI32),
+    PaintingVariant(#[using(VarI32)] i32),
     SnifferState,
     Vector3(Vec3),
     Quaternion(Quat),

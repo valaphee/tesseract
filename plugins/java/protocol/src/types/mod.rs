@@ -28,8 +28,8 @@ impl Encode for bool {
     }
 }
 
-impl<'a> Decode<'a> for bool {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for bool {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(match u8::decode(input)? {
             0 => false,
             1 => true,
@@ -45,8 +45,8 @@ impl Encode for u8 {
     }
 }
 
-impl<'a> Decode<'a> for u8 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for u8 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_u8()?)
     }
 }
@@ -58,8 +58,8 @@ impl Encode for i8 {
     }
 }
 
-impl<'a> Decode<'a> for i8 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for i8 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_i8()?)
     }
 }
@@ -71,8 +71,8 @@ impl Encode for u16 {
     }
 }
 
-impl<'a> Decode<'a> for u16 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for u16 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_u16::<BigEndian>()?)
     }
 }
@@ -84,8 +84,8 @@ impl Encode for i16 {
     }
 }
 
-impl<'a> Decode<'a> for i16 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for i16 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_i16::<BigEndian>()?)
     }
 }
@@ -117,8 +117,8 @@ impl Encode for VarI21 {
     }
 }
 
-impl<'a> Decode<'a> for VarI21 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for VarI21 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
         while shift <= 21 {
@@ -140,8 +140,8 @@ impl Encode for i32 {
     }
 }
 
-impl<'a> Decode<'a> for i32 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for i32 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_i32::<BigEndian>()?)
     }
 }
@@ -149,6 +149,24 @@ impl<'a> Decode<'a> for i32 {
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
 pub struct VarI32(pub i32);
+
+impl From<i32> for VarI32 {
+    fn from(value: i32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&i32> for VarI32 {
+    fn from(value: &i32) -> Self {
+        Self(*value)
+    }
+}
+
+impl From<VarI32> for i32 {
+    fn from(value: VarI32) -> Self {
+        value.0
+    }
+}
 
 impl VarI32 {
     pub fn len(&self) -> usize {
@@ -173,8 +191,8 @@ impl Encode for VarI32 {
     }
 }
 
-impl<'a> Decode<'a> for VarI32 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for VarI32 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
         while shift <= 35 {
@@ -196,8 +214,8 @@ impl Encode for i64 {
     }
 }
 
-impl<'a> Decode<'a> for i64 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for i64 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_i64::<BigEndian>()?)
     }
 }
@@ -209,8 +227,8 @@ impl Encode for u64 {
     }
 }
 
-impl<'a> Decode<'a> for u64 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for u64 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_u64::<BigEndian>()?)
     }
 }
@@ -228,6 +246,24 @@ impl VarI64 {
     }
 }
 
+impl From<i64> for VarI64 {
+    fn from(value: i64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&i64> for VarI64 {
+    fn from(value: &i64) -> Self {
+        Self(*value)
+    }
+}
+
+impl From<VarI64> for i64 {
+    fn from(value: VarI64) -> Self {
+        value.0
+    }
+}
+
 impl Encode for VarI64 {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         let mut value = self.0 as u64;
@@ -242,8 +278,8 @@ impl Encode for VarI64 {
     }
 }
 
-impl<'a> Decode<'a> for VarI64 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for VarI64 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let mut value = 0;
         let mut shift = 0;
         while shift <= 70 {
@@ -265,8 +301,8 @@ impl Encode for f32 {
     }
 }
 
-impl<'a> Decode<'a> for f32 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for f32 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_f32::<BigEndian>()?)
     }
 }
@@ -278,8 +314,8 @@ impl Encode for f64 {
     }
 }
 
-impl<'a> Decode<'a> for f64 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for f64 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(input.read_f64::<BigEndian>()?)
     }
 }
@@ -367,8 +403,8 @@ impl<const N: usize> Encode for TrailingBytes<N> {
     }
 }
 
-impl<'a, const N: usize> Decode<'a> for TrailingBytes<N> {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl<const N: usize> Decode<'_> for TrailingBytes<N> {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         assert!(input.len() <= N);
         let value = input.to_vec();
         *input = &input[input.len()..];
@@ -467,8 +503,8 @@ impl Encode for String {
     }
 }
 
-impl<'a> Decode<'a> for String {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for String {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let length = VarI32::decode(input)?.0 as usize;
         let (bytes, input_) = input.split_at(length);
         *input = input_;
@@ -485,8 +521,8 @@ impl Encode for Uuid {
     }
 }
 
-impl<'a> Decode<'a> for Uuid {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for Uuid {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(Uuid::from_u128(input.read_u128::<BigEndian>()?))
     }
 }
@@ -504,8 +540,8 @@ impl Encode for IVec3 {
     }
 }
 
-impl<'a> Decode<'a> for IVec3 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for IVec3 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let value = i64::decode(input)?;
         Ok(Self {
             x: (value >> 38) as i32,
@@ -523,8 +559,8 @@ impl Encode for Vec3 {
     }
 }
 
-impl<'a> Decode<'a> for Vec3 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for Vec3 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(Vec3::new(
             Decode::decode(input)?,
             Decode::decode(input)?,
@@ -541,8 +577,8 @@ impl Encode for DVec3 {
     }
 }
 
-impl<'a> Decode<'a> for DVec3 {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for DVec3 {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(DVec3::new(
             Decode::decode(input)?,
             Decode::decode(input)?,
@@ -560,8 +596,8 @@ impl Encode for Quat {
     }
 }
 
-impl<'a> Decode<'a> for Quat {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for Quat {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(Quat::from_xyzw(
             Decode::decode(input)?,
             Decode::decode(input)?,
@@ -572,7 +608,26 @@ impl<'a> Decode<'a> for Quat {
 }
 
 #[derive(Clone, Debug)]
+#[repr(transparent)]
 pub struct Angle(pub f32);
+
+impl From<f32> for Angle {
+    fn from(value: f32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&f32> for Angle {
+    fn from(value: &f32) -> Self {
+        Self(*value)
+    }
+}
+
+impl From<Angle> for f32 {
+    fn from(value: Angle) -> Self {
+        value.0
+    }
+}
 
 impl Encode for Angle {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
@@ -580,8 +635,8 @@ impl Encode for Angle {
     }
 }
 
-impl<'a> Decode<'a> for Angle {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for Angle {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(Self(u8::decode(input)? as f32 / u8::MAX as f32 * 360.0))
     }
 }
@@ -633,8 +688,8 @@ impl Encode for AdvancementDisplayInfo {
     }
 }
 
-impl<'a> Decode<'a> for AdvancementDisplayInfo {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for AdvancementDisplayInfo {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let title = Decode::decode(input)?;
         let description = Decode::decode(input)?;
         let icon = Decode::decode(input)?;
@@ -764,7 +819,8 @@ pub struct ChatType {
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct ChatTypeBound {
-    pub chat_type: VarI32,
+    #[using(VarI32)]
+    pub chat_type: i32,
     pub name: Json<Component>,
     pub target_name: Option<Json<Component>>,
 }
@@ -793,36 +849,13 @@ pub enum ClickType {
     PickupAll,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
+#[using(u8)]
 pub enum Difficulty {
     Peaceful,
     Easy,
     Normal,
     Hard,
-}
-
-impl Encode for Difficulty {
-    fn encode(&self, output: &mut impl Write) -> Result<()> {
-        match self {
-            Difficulty::Peaceful => 0u8,
-            Difficulty::Easy => 1u8,
-            Difficulty::Normal => 2u8,
-            Difficulty::Hard => 3u8,
-        }
-        .encode(output)
-    }
-}
-
-impl<'a> Decode<'a> for Difficulty {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(match u8::decode(input)? % 4 {
-            0 => Difficulty::Peaceful,
-            1 => Difficulty::Easy,
-            2 => Difficulty::Normal,
-            3 => Difficulty::Hard,
-            _ => unreachable!(),
-        })
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -867,7 +900,8 @@ pub struct MonsterSpawnLightLevelCustomValue {
     max_inclusive: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
+#[using(u8)]
 pub enum Direction {
     Down,
     Up,
@@ -887,34 +921,6 @@ impl Direction {
             Direction::East => IVec3::NEG_X,
             Direction::West => IVec3::X,
         }
-    }
-}
-
-impl Encode for Direction {
-    fn encode(&self, output: &mut impl Write) -> Result<()> {
-        match self {
-            Direction::Down => 0u8,
-            Direction::Up => 1u8,
-            Direction::North => 2u8,
-            Direction::South => 3u8,
-            Direction::East => 4u8,
-            Direction::West => 5u8,
-        }
-        .encode(output)
-    }
-}
-
-impl<'a> Decode<'a> for Direction {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(match u8::decode(input)? % 6 {
-            0 => Direction::Down,
-            1 => Direction::Up,
-            2 => Direction::North,
-            3 => Direction::South,
-            4 => Direction::East,
-            5 => Direction::West,
-            _ => unreachable!(),
-        })
     }
 }
 
@@ -950,29 +956,12 @@ pub enum Intention {
     Login,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct ItemStack {
-    pub item: VarI32,
+    #[using(VarI32)]
+    pub item: i32,
     pub count: i8,
     pub tag: Nbt<Value>,
-}
-
-impl Encode for ItemStack {
-    fn encode(&self, output: &mut impl Write) -> Result<()> {
-        self.item.encode(output)?;
-        self.count.encode(output)?;
-        self.tag.encode(output)
-    }
-}
-
-impl<'a> Decode<'a> for ItemStack {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(ItemStack {
-            item: Decode::decode(input)?,
-            count: Decode::decode(input)?,
-            tag: Decode::decode(input)?,
-        })
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -994,7 +983,8 @@ impl<'a, T: DeserializeOwned> Decode<'a> for Json<T> {
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct LastSeenMessages {
-    pub offset: VarI32,
+    #[using(VarI32)]
+    pub offset: i32,
     pub acknowledged: [u8; 3],
 }
 
@@ -1068,8 +1058,8 @@ impl Encode for Option<MapPatch> {
     }
 }
 
-impl<'a> Decode<'a> for Option<MapPatch> {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for Option<MapPatch> {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let width = Decode::decode(input)?;
         Ok(if width != 0 {
             Some(MapPatch {
@@ -1110,8 +1100,8 @@ impl<T: Serialize> Encode for Nbt<T> {
     }
 }
 
-impl<'a, T: DeserializeOwned> Decode<'a> for Nbt<T> {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl<T: DeserializeOwned> Decode<'_> for Nbt<T> {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(Nbt(tesseract_nbt::de::from_slice(input)?))
     }
 }
@@ -1138,10 +1128,10 @@ pub enum Pose {
 pub enum Recipe {
     Shaped {
         id: String,
-        width: VarI32,
-        height: VarI32,
+        width: i32,
+        height: i32,
         group: String,
-        category: VarI32,
+        category: i32,
         ingredients: Vec<Vec<Option<ItemStack>>>,
         result: Option<ItemStack>,
         show_notification: bool,
@@ -1149,7 +1139,7 @@ pub enum Recipe {
     Shapeless {
         id: String,
         group: String,
-        category: VarI32,
+        category: i32,
         ingredients: Vec<Vec<Option<ItemStack>>>,
         result: Option<ItemStack>,
     },
@@ -1227,10 +1217,10 @@ impl Encode for Recipe {
                 show_notification,
             } => {
                 id.encode(output)?;
-                width.encode(output)?;
-                height.encode(output)?;
+                VarI32::from(width).encode(output)?;
+                VarI32::from(height).encode(output)?;
                 group.encode(output)?;
-                category.encode(output)?;
+                VarI32::from(category).encode(output)?;
                 for ingredient in ingredients {
                     ingredient.encode(output)?;
                 }
@@ -1246,7 +1236,7 @@ impl Encode for Recipe {
             } => {
                 id.encode(output)?;
                 group.encode(output)?;
-                category.encode(output)?;
+                VarI32::from(category).encode(output)?;
                 ingredients.encode(output)?;
                 result.encode(output)
             }
@@ -1293,16 +1283,16 @@ impl Encode for Recipe {
     }
 }
 
-impl<'a> Decode<'a> for Recipe {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for Recipe {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(match String::decode(input)?.as_str() {
             "minecraft:crafting_shaped" => {
                 let id = Decode::decode(input)?;
-                let width = VarI32::decode(input)?;
-                let height = VarI32::decode(input)?;
+                let width = VarI32::decode(input)?.into();
+                let height = VarI32::decode(input)?.into();
                 let group = Decode::decode(input)?;
-                let category = Decode::decode(input)?;
-                let ingredient_count = width.0 * height.0;
+                let category = VarI32::decode(input)?.into();
+                let ingredient_count = width * height;
                 let mut ingredients = Vec::with_capacity(ingredient_count as usize);
                 for _ in 0..ingredient_count {
                     ingredients.push(Decode::decode(input)?);
@@ -1323,7 +1313,7 @@ impl<'a> Decode<'a> for Recipe {
             "minecraft:crafting_shapeless" => Recipe::Shapeless {
                 id: Decode::decode(input)?,
                 group: Decode::decode(input)?,
-                category: Decode::decode(input)?,
+                category: VarI32::decode(input)?.into(),
                 ingredients: Decode::decode(input)?,
                 result: Decode::decode(input)?,
             },
@@ -1424,17 +1414,20 @@ pub struct RegistryEntry<T> {
 pub struct SimpleCooking {
     pub id: String,
     pub group: String,
-    pub category: VarI32,
+    #[using(VarI32)]
+    pub category: i32,
     pub ingredient: Vec<Option<ItemStack>>,
     pub result: Option<ItemStack>,
     pub experience: f32,
-    pub cooking_time: VarI32,
+    #[using(VarI32)]
+    pub cooking_time: i32,
 }
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct SimpleRecipe {
     pub id: String,
-    pub category: VarI32,
+    #[using(VarI32)]
+    pub category: i32,
 }
 
 #[derive(Clone, Debug)]
@@ -1455,8 +1448,8 @@ impl Encode for Sound {
     }
 }
 
-impl<'a> Decode<'a> for Sound {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for Sound {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let id = VarI32::decode(input)?;
         Ok(if id.0 == 0 {
             Sound::Name(Decode::decode(input)?)
@@ -1520,8 +1513,8 @@ impl Encode for User {
     }
 }
 
-impl<'a> Decode<'a> for User {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for User {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(User {
             id: Decode::decode(input)?,
             name: Decode::decode(input)?,
@@ -1538,8 +1531,8 @@ impl Encode for UserProperty {
     }
 }
 
-impl<'a> Decode<'a> for UserProperty {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for UserProperty {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(UserProperty {
             name: Decode::decode(input)?,
             value: Decode::decode(input)?,

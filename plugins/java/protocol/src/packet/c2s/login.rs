@@ -16,7 +16,8 @@ pub enum LoginPacket {
         nonce: Vec<u8>,
     },
     CustomQuery {
-        transaction_id: VarI32,
+        #[using(VarI32)]
+        transaction_id: i32,
         data: TrailingBytes<{ 1 << 20 }>,
     },
 }

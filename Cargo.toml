@@ -2,6 +2,7 @@
 members = [
     "nbt",
     "protocol_derive",
+    "plugins/bedrock/protocol",
     "plugins/java",
     "plugins/java/protocol",
     "plugins/java/savegame",

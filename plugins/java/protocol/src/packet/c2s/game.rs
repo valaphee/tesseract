@@ -12,17 +12,20 @@ use crate::{
 #[derive(Encode, Decode, Clone, Debug)]
 pub enum GamePacket {
     AcceptTeleportation {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
     },
     BlockEntityTagQuery {
-        transaction_id: VarI32,
+        #[using(VarI32)]
+        transaction_id: i32,
         pos: IVec3,
     },
     ChangeDifficulty {
         difficulty: Difficulty,
     },
     ChatAck {
-        offset: VarI32,
+        #[using(VarI32)]
+        offset: i32,
     },
     ChatCommand {
         command: String,
@@ -53,7 +56,8 @@ pub enum GamePacket {
         allow_listing: bool,
     },
     CommandSuggestion {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         command: String,
     },
     ContainerButtonClick {
@@ -62,7 +66,8 @@ pub enum GamePacket {
     },
     ContainerClick {
         container_id: i8,
-        state_id: VarI32,
+        #[using(VarI32)]
+        state_id: i32,
         slot_num: i16,
         button_num: i8,
         click_type: ClickType,
@@ -77,22 +82,27 @@ pub enum GamePacket {
         data: TrailingBytes<{ (1 << 15) - 1 }>,
     },
     EditBook {
-        slot: VarI32,
+        #[using(VarI32)]
+        slot: i32,
         pages: Vec<String>,
         title: Option<String>,
     },
     EntityTagQuery {
-        transaction_id: VarI32,
-        entity_id: VarI32,
+        #[using(VarI32)]
+        transaction_id: i32,
+        #[using(VarI32)]
+        entity_id: i32,
     },
     Interact {
-        entity_id: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
         action: InteractPacketAction,
         using_secondary_action: bool,
     },
     JigsawGenerate {
         pos: IVec3,
-        levels: VarI32,
+        #[using(VarI32)]
+        levels: i32,
         keep_jigsaws: bool,
     },
     KeepAlive {
@@ -135,7 +145,8 @@ pub enum GamePacket {
         right: bool,
     },
     PickItem {
-        slot: VarI32,
+        #[using(VarI32)]
+        slot: i32,
     },
     PlaceRecipe {
         container_id: i8,
@@ -149,12 +160,15 @@ pub enum GamePacket {
         action: PlayerActionPacketAction,
         pos: IVec3,
         direction: Direction,
-        sequence: VarI32,
+        #[using(VarI32)]
+        sequence: i32,
     },
     PlayerCommand {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         action: PlayerCommandPacketAction,
-        data: VarI32,
+        #[using(VarI32)]
+        data: i32,
     },
     PlayerInput {
         xxa: f32,
@@ -178,7 +192,8 @@ pub enum GamePacket {
     ResourcePack(ResourcePackPacket),
     SeenAdvancements(SeenAdvancementsPacket),
     SelectTrade {
-        item: VarI32,
+        #[using(VarI32)]
+        item: i32,
     },
     SetBeacon {
         primary: Option<VarI32>,
@@ -190,11 +205,13 @@ pub enum GamePacket {
     SetCommandBlock {
         pos: IVec3,
         command: String,
-        mode: VarI32,
+        #[using(VarI32)]
+        mode: i32,
         flags: i8,
     },
     SetCommandMinecart {
-        entity: VarI32,
+        #[using(VarI32)]
+        entity: i32,
         command: String,
         track_output: bool,
     },
@@ -212,19 +229,24 @@ pub enum GamePacket {
     },
     SetStructureBlock {
         pos: IVec3,
-        update_type: VarI32,
-        mode: VarI32,
+        #[using(VarI32)]
+        update_type: i32,
+        #[using(VarI32)]
+        mode: i32,
         offset_x: i8,
         offset_y: i8,
         offset_z: i8,
         size_x: i8,
         size_y: i8,
         size_z: i8,
-        mirror: VarI32,
-        rotation: VarI32,
+        #[using(VarI32)]
+        mirror: i32,
+        #[using(VarI32)]
+        rotation: i32,
         data: String,
         integrity: f32,
-        seed: VarI64,
+        #[using(VarI64)]
+        seed: i64,
         flags: i8,
     },
     SignUpdate {
@@ -245,11 +267,13 @@ pub enum GamePacket {
         pos_y: f32,
         pos_z: f32,
         inside: bool,
-        sequence: VarI32,
+        #[using(VarI32)]
+        sequence: i32,
     },
     UseItem {
         hand: Hand,
-        sequence: VarI32,
+        #[using(VarI32)]
+        sequence: i32,
     },
 }
 

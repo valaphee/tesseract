@@ -1,4 +1,5 @@
 use std::io::Write;
+
 use indexmap::{IndexMap, IndexSet};
 
 use crate::{
@@ -86,7 +87,9 @@ impl<
     pub fn get(&self, index: u32) -> u32 {
         match self {
             PalettedContainer::Single(value) => *value,
-            PalettedContainer::Indirect { palette, storage } => palette[storage.get(index) as usize],
+            PalettedContainer::Indirect { palette, storage } => {
+                palette[storage.get(index) as usize]
+            }
             PalettedContainer::Direct(storage) => storage.get(index),
         }
     }

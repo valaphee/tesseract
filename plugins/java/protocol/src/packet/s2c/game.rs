@@ -12,66 +12,82 @@ use crate::{
         MapDecoration, MapPatch, MerchantOffer, Nbt, Recipe, Registries, Sound, SoundSource,
         TrailingBytes, VarI32, VarI64,
     },
-    Decode, Encode, Error, Result,
+    Decode, Encode, Result,
 };
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub enum GamePacket<'a> {
     BundleDelimiter,
     AddEntity {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         uuid: Uuid,
-        type_: VarI32,
+        #[using(VarI32)]
+        type_: i32,
         pos: DVec3,
-        pitch: Angle,
-        yaw: Angle,
-        head_yaw: Angle,
-        data: VarI32,
+        #[using(Angle)]
+        pitch: f32,
+        #[using(Angle)]
+        yaw: f32,
+        #[using(Angle)]
+        head_yaw: f32,
+        #[using(VarI32)]
+        data: i32,
         xa: i16,
         ya: i16,
         za: i16,
     },
     AddExperienceOrb {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         pos: DVec3,
         value: i16,
     },
     AddPlayer {
-        entity_id: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
         player_id: Uuid,
         pos: DVec3,
-        yaw: Angle,
-        pitch: Angle,
+        #[using(Angle)]
+        yaw: f32,
+        #[using(Angle)]
+        pitch: f32,
     },
     Animate {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         action: AnimatePacketAction,
     },
     AwardStats {
         stats: Vec<(VarI32, VarI32, VarI32)>,
     },
     BlockChangedAck {
-        sequence: VarI32,
+        #[using(VarI32)]
+        sequence: i32,
     },
     BlockDestruction {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         pos: IVec3,
         progress: u8,
     },
     BlockEntityData {
         pos: IVec3,
-        type_: VarI32,
+        #[using(VarI32)]
+        type_: i32,
         tag: Nbt<serde_value::Value>,
     },
     BlockEvent {
         pos: IVec3,
         b0: u8,
         b1: u8,
-        block: VarI32,
+        #[using(VarI32)]
+        block: i32,
     },
     BlockUpdate {
         pos: IVec3,
-        block_state: VarI32,
+        #[using(VarI32)]
+        block_state: i32,
     },
     BossEvent {
         id: Uuid,
@@ -82,29 +98,36 @@ pub enum GamePacket<'a> {
         locked: bool,
     },
     ChunksBiomes {
-        x: VarI32,
-        z: VarI32,
+        #[using(VarI32)]
+        x: i32,
+        #[using(VarI32)]
+        z: i32,
         buffer: Vec<u8>,
     },
     ClearTitles {
         reset_times: bool,
     },
     CommandSuggestions {
-        id: VarI32,
-        suggestions_start: VarI32,
-        suggestions_length: VarI32,
+        #[using(VarI32)]
+        id: i32,
+        #[using(VarI32)]
+        suggestions_start: i32,
+        #[using(VarI32)]
+        suggestions_length: i32,
         suggestions: Vec<(String, Option<Json<Component>>)>,
     },
     Commands {
         entries: Vec<CommandsPacketEntry>,
-        root_index: VarI32,
+        #[using(VarI32)]
+        root_index: i32,
     },
     ContainerClose {
         container_id: u8,
     },
     ContainerSetContent {
         container_id: u8,
-        state_id: VarI32,
+        #[using(VarI32)]
+        state_id: i32,
         items: Vec<Option<ItemStack>>,
         carried_item: Option<ItemStack>,
     },
@@ -115,13 +138,16 @@ pub enum GamePacket<'a> {
     },
     ContainerSetSlot {
         container_id: i8,
-        state_id: VarI32,
+        #[using(VarI32)]
+        state_id: i32,
         slot: i16,
         item_stack: Option<ItemStack>,
     },
     Cooldown {
-        item: VarI32,
-        duration: VarI32,
+        #[using(VarI32)]
+        item: i32,
+        #[using(VarI32)]
+        duration: i32,
     },
     CustomChatCompletions {
         action: CustomChatCompletionsPacketAction,
@@ -132,10 +158,14 @@ pub enum GamePacket<'a> {
         data: TrailingBytes<{ 1 << 20 }>,
     },
     DamageEvent {
-        entity_id: VarI32,
-        source_type_id: VarI32,
-        source_cause_id: VarI32,
-        source_direct_id: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
+        #[using(VarI32)]
+        source_type_id: i32,
+        #[using(VarI32)]
+        source_cause_id: i32,
+        #[using(VarI32)]
+        source_direct_id: i32,
         source_position: Option<DVec3>,
     },
     DeleteChat {
@@ -170,11 +200,13 @@ pub enum GamePacket<'a> {
     },
     HorseScreenOpen {
         container_id: u8,
-        size: VarI32,
+        #[using(VarI32)]
+        size: i32,
         entity_id: i32,
     },
     HurtAnimation {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         yaw: f32,
     },
     InitializeBorder {
@@ -182,10 +214,14 @@ pub enum GamePacket<'a> {
         new_center_z: f64,
         old_size: f64,
         new_size: f64,
-        lerp_time: VarI64,
-        new_absolute_max_size: VarI32,
-        warning_blocks: VarI32,
-        warning_time: VarI32,
+        #[using(VarI64)]
+        lerp_time: i64,
+        #[using(VarI32)]
+        new_absolute_max_size: i32,
+        #[using(VarI32)]
+        warning_blocks: i32,
+        #[using(VarI32)]
+        warning_time: i32,
     },
     KeepAlive {
         id: i64,
@@ -203,7 +239,8 @@ pub enum GamePacket<'a> {
         global_event: bool,
     },
     LevelParticles {
-        particle_type: VarI32,
+        #[using(VarI32)]
+        particle_type: i32,
         override_limiter: bool,
         pos: DVec3,
         x_dist: f32,
@@ -214,8 +251,10 @@ pub enum GamePacket<'a> {
         particle: (),
     },
     LightUpdate {
-        x: VarI32,
-        z: VarI32,
+        #[using(VarI32)]
+        x: i32,
+        #[using(VarI32)]
+        z: i32,
         light_data: LightUpdatePacketData,
     },
     Login {
@@ -228,9 +267,12 @@ pub enum GamePacket<'a> {
         dimension_type: String,
         dimension: String,
         seed: i64,
-        max_players: VarI32,
-        chunk_radius: VarI32,
-        simulation_distance: VarI32,
+        #[using(VarI32)]
+        max_players: i32,
+        #[using(VarI32)]
+        chunk_radius: i32,
+        #[using(VarI32)]
+        simulation_distance: i32,
         reduced_debug_info: bool,
         show_death_screen: bool,
         is_debug: bool,
@@ -238,40 +280,51 @@ pub enum GamePacket<'a> {
         last_death_location: Option<(String, IVec3)>,
     },
     MapItemData {
-        map_id: VarI32,
+        #[using(VarI32)]
+        map_id: i32,
         scale: i8,
         locked: bool,
         decorations: Option<Vec<MapDecoration>>,
         color_patch: Option<MapPatch>,
     },
     MerchantOffers {
-        container_id: VarI32,
+        #[using(VarI32)]
+        container_id: i32,
         offers: Vec<MerchantOffer>,
-        villager_level: VarI32,
-        villager_xp: VarI32,
+        #[using(VarI32)]
+        villager_level: i32,
+        #[using(VarI32)]
+        villager_xp: i32,
         show_progress: bool,
         can_restock: bool,
     },
     MoveEntityPos {
-        entity_id: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
         xa: i16,
         ya: i16,
         za: i16,
         on_ground: bool,
     },
     MoveEntityPosRot {
-        entity_id: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
         xa: i16,
         ya: i16,
         za: i16,
-        yaw: Angle,
-        pitch: Angle,
+        #[using(Angle)]
+        yaw: f32,
+        #[using(Angle)]
+        pitch: f32,
         on_ground: bool,
     },
     MoveEntityRot {
-        entity_id: VarI32,
-        yaw: Angle,
-        pitch: Angle,
+        #[using(VarI32)]
+        entity_id: i32,
+        #[using(Angle)]
+        yaw: f32,
+        #[using(Angle)]
+        pitch: f32,
         on_ground: bool,
     },
     MoveVehicle {
@@ -283,8 +336,10 @@ pub enum GamePacket<'a> {
         hand: Hand,
     },
     OpenScreen {
-        container_id: VarI32,
-        type_: VarI32,
+        #[using(VarI32)]
+        container_id: i32,
+        #[using(VarI32)]
+        type_: i32,
         title: Json<Component>,
     },
     OpenSignEditor {
@@ -300,7 +355,8 @@ pub enum GamePacket<'a> {
     PlayerAbilities(PlayerAbilitiesPacket),
     PlayerChat {
         sender: Uuid,
-        index: VarI32,
+        #[using(VarI32)]
+        index: i32,
         signature: Option<[u8; 256]>,
         message: String,
         timestamp: i64,
@@ -309,12 +365,14 @@ pub enum GamePacket<'a> {
         chat_type: ChatTypeBound,
     },
     PlayerCombatEnd {
-        duration: VarI32,
+        #[using(VarI32)]
+        duration: i32,
         killer_id: i32,
     },
     PlayerCombatEnter,
     PlayerCombatKill {
-        player_id: VarI32,
+        #[using(VarI32)]
+        player_id: i32,
         killer_id: i32,
         message: Json<Component>,
     },
@@ -332,15 +390,18 @@ pub enum GamePacket<'a> {
         yaw: f32,
         pitch: f32,
         relative_arguments: u8,
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
     },
     Recipe(RecipePacket),
     RemoveEntities {
         entity_ids: Vec<VarI32>,
     },
     RemoveMobEffect {
-        entity_id: VarI32,
-        effect: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
+        #[using(VarI32)]
+        effect: i32,
     },
     ResourcePack {
         url: String,
@@ -360,8 +421,10 @@ pub enum GamePacket<'a> {
         last_death_location: Option<(String, IVec3)>,
     },
     RotateHead {
-        entity_id: VarI32,
-        head_yaw: Angle,
+        #[using(VarI32)]
+        entity_id: i32,
+        #[using(Angle)]
+        head_yaw: f32,
     },
     SectionBlocksUpdate(SectionBlocksUpdatePacket),
     SelectAdvancementsTab {
@@ -382,29 +445,36 @@ pub enum GamePacket<'a> {
     SetBorderLerpSize {
         old_size: f64,
         new_size: f64,
-        lerp_time: VarI64,
+        #[using(VarI64)]
+        lerp_time: i64,
     },
     SetBorderSize {
         size: f64,
     },
     SetBorderWarningDelay {
-        warning_delay: VarI32,
+        #[using(VarI32)]
+        warning_delay: i32,
     },
     SetBorderWarningDistance {
-        warning_blocks: VarI32,
+        #[using(VarI32)]
+        warning_blocks: i32,
     },
     SetCamera {
-        camera_id: VarI32,
+        #[using(VarI32)]
+        camera_id: i32,
     },
     SetCarriedItem {
         slot: i8,
     },
     SetChunkCacheCenter {
-        x: VarI32,
-        z: VarI32,
+        #[using(VarI32)]
+        x: i32,
+        #[using(VarI32)]
+        z: i32,
     },
     SetChunkCacheRadius {
-        radius: VarI32,
+        #[using(VarI32)]
+        radius: i32,
     },
     SetDefaultSpawnPosition {
         pos: IVec3,
@@ -415,7 +485,8 @@ pub enum GamePacket<'a> {
         objective_name: String,
     },
     SetEntityData {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         packed_items: EntityData,
     },
     SetEntityLink {
@@ -423,23 +494,28 @@ pub enum GamePacket<'a> {
         dest_id: i32,
     },
     SetEntityMotion {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         xa: i16,
         ya: i16,
         za: i16,
     },
     SetEquipment {
-        entity: VarI32,
+        #[using(VarI32)]
+        entity: i32,
         slots: SetEquipmentPacketSlots,
     },
     SetExperience {
         experience_progress: f32,
-        experience_level: VarI32,
-        total_experience: VarI32,
+        #[using(VarI32)]
+        experience_level: i32,
+        #[using(VarI32)]
+        total_experience: i32,
     },
     SetHealth {
         health: f32,
-        food: VarI32,
+        #[using(VarI32)]
+        food: i32,
         saturation: f32,
     },
     SetObjective {
@@ -447,7 +523,8 @@ pub enum GamePacket<'a> {
         method: SetObjectivePacketMethod,
     },
     SetPassengers {
-        vehicle: VarI32,
+        #[using(VarI32)]
+        vehicle: i32,
         passengers: Vec<VarI32>,
     },
     SetPlayerTeam {
@@ -459,7 +536,8 @@ pub enum GamePacket<'a> {
         method: SetScorePacketMethod,
     },
     SetSimulationDistance {
-        simulation_distance: VarI32,
+        #[using(VarI32)]
+        simulation_distance: i32,
     },
     SetSubtitleText {
         text: Json<Component>,
@@ -480,7 +558,8 @@ pub enum GamePacket<'a> {
         sound: Sound,
         range: Option<f32>,
         source: SoundSource,
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         volume: f32,
         pitch: f32,
         seed: i64,
@@ -506,19 +585,26 @@ pub enum GamePacket<'a> {
         footer: Json<Component>,
     },
     TagQuery {
-        transaction_id: VarI32,
+        #[using(VarI32)]
+        transaction_id: i32,
         tag: Nbt<serde_value::Value>,
     },
     TakeItemEntity {
-        item_id: VarI32,
-        player_id: VarI32,
-        amount: VarI32,
+        #[using(VarI32)]
+        item_id: i32,
+        #[using(VarI32)]
+        player_id: i32,
+        #[using(VarI32)]
+        amount: i32,
     },
     TeleportEntity {
-        id: VarI32,
+        #[using(VarI32)]
+        id: i32,
         pos: DVec3,
-        yaw: Angle,
-        pitch: Angle,
+        #[using(Angle)]
+        yaw: f32,
+        #[using(Angle)]
+        pitch: f32,
         on_ground: bool,
     },
     UpdateAdvancements {
@@ -528,17 +614,21 @@ pub enum GamePacket<'a> {
         progress: Vec<(String, Vec<(String, Option<i64>)>)>,
     },
     UpdateAttributes {
-        entity_id: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
         attributes: Vec<(String, f64, Vec<(Uuid, f64, i8)>)>,
     },
     UpdateEnabledFeatures {
         features: Vec<String>,
     },
     UpdateMobEffect {
-        entity_id: VarI32,
-        id: VarI32,
+        #[using(VarI32)]
+        entity_id: i32,
+        #[using(VarI32)]
+        id: i32,
         effect_amplifier: i8,
-        effect_duration_ticks: VarI32,
+        #[using(VarI32)]
+        effect_duration_ticks: i32,
         flags: u8,
         factor_data: Option<Nbt<serde_value::Value>>,
     },
@@ -550,39 +640,14 @@ pub enum GamePacket<'a> {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
+#[using(u8)]
 pub enum AnimatePacketAction {
     SwingMainHand,
     WakeUp,
     SwingOffHand,
     CriticalHit,
     MagicCriticalHit,
-}
-
-impl Encode for AnimatePacketAction {
-    fn encode(&self, output: &mut impl Write) -> Result<()> {
-        match self {
-            Self::SwingMainHand => 0u8,
-            Self::WakeUp => 1u8,
-            Self::SwingOffHand => 2u8,
-            Self::CriticalHit => 3u8,
-            Self::MagicCriticalHit => 4u8,
-        }
-        .encode(output)
-    }
-}
-
-impl<'a> Decode<'a> for AnimatePacketAction {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(match u8::decode(input)? {
-            0 => Self::SwingMainHand,
-            1 => Self::WakeUp,
-            2 => Self::SwingOffHand,
-            3 => Self::CriticalHit,
-            4 => Self::MagicCriticalHit,
-            variant => return Err(Error::UnknownVariant(variant as i32)),
-        })
-    }
 }
 
 #[derive(Encode, Decode, Clone, Debug)]
@@ -675,8 +740,8 @@ impl Encode for CommandsPacketEntry {
     }
 }
 
-impl<'a> Decode<'a> for CommandsPacketEntry {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for CommandsPacketEntry {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         let children = Decode::decode(input)?;
         let redirect_node = if flags & (1 << 3) != 0 {
@@ -812,7 +877,8 @@ pub enum CustomChatCompletionsPacketAction {
     Set,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Encode, Decode, Clone, Debug)]
+#[using(u8)]
 pub enum GameEventPacketEvent {
     NoRespawnBlockAvailable,
     StartRaining,
@@ -828,46 +894,6 @@ pub enum GameEventPacketEvent {
     ImmediateRespawn,
 }
 
-impl Encode for GameEventPacketEvent {
-    fn encode(&self, output: &mut impl Write) -> Result<()> {
-        match self {
-            Self::NoRespawnBlockAvailable => 0u8,
-            Self::StartRaining => 1u8,
-            Self::StopRaining => 2u8,
-            Self::ChangeGameMode => 3u8,
-            Self::WinGame => 4u8,
-            Self::DemoEvent => 5u8,
-            Self::ArrowHitPlayer => 6u8,
-            Self::RainLevelChange => 7u8,
-            Self::ThunderLevelChange => 8u8,
-            Self::PufferFishSting => 9u8,
-            Self::GuardianElderEffect => 10u8,
-            Self::ImmediateRespawn => 11u8,
-        }
-        .encode(output)
-    }
-}
-
-impl<'a> Decode<'a> for GameEventPacketEvent {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
-        Ok(match u8::decode(input)? {
-            0 => Self::NoRespawnBlockAvailable,
-            1 => Self::StartRaining,
-            2 => Self::StopRaining,
-            3 => Self::ChangeGameMode,
-            4 => Self::WinGame,
-            5 => Self::DemoEvent,
-            6 => Self::ArrowHitPlayer,
-            7 => Self::RainLevelChange,
-            8 => Self::ThunderLevelChange,
-            9 => Self::PufferFishSting,
-            10 => Self::GuardianElderEffect,
-            11 => Self::ImmediateRespawn,
-            variant => return Err(Error::UnknownVariant(variant as i32)),
-        })
-    }
-}
-
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct LevelChunkPacketData {
     pub heightmaps: Nbt<serde_value::Value>,
@@ -879,7 +905,8 @@ pub struct LevelChunkPacketData {
 pub struct LevelChunkPacketDataBlockEntity {
     pub xz: i8,
     pub y: i16,
-    pub type_: VarI32,
+    #[using(VarI32)]
+    pub type_: i32,
     pub data: Nbt<serde_value::Value>,
 }
 
@@ -925,8 +952,8 @@ impl Encode for PlayerAbilitiesPacket {
     }
 }
 
-impl<'a> Decode<'a> for PlayerAbilitiesPacket {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for PlayerAbilitiesPacket {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         let flying_speed = Decode::decode(input)?;
         let walking_speed = Decode::decode(input)?;
@@ -1013,8 +1040,8 @@ impl Encode for PlayerInfoUpdatePacket {
     }
 }
 
-impl<'a> Decode<'a> for PlayerInfoUpdatePacket {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for PlayerInfoUpdatePacket {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let actions = i8::decode(input)?;
         let add_player = actions & (1 << 0) != 0;
         let initialize_chat = actions & (1 << 1) != 0;
@@ -1072,7 +1099,8 @@ impl<'a> Decode<'a> for PlayerInfoUpdatePacket {
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct PlayerLookAtPacketAtEntity {
-    pub entity: VarI32,
+    #[using(VarI32)]
+    pub entity: i32,
     pub to_anchor: Anchor,
 }
 
@@ -1100,8 +1128,8 @@ impl Encode for SectionBlocksUpdatePacket {
     }
 }
 
-impl<'a> Decode<'a> for SectionBlocksUpdatePacket {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for SectionBlocksUpdatePacket {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         Ok(Self {
             section_pos: {
                 let value = i64::decode(input)?;
@@ -1137,8 +1165,8 @@ impl Encode for SectionBlocksUpdatePacketPositionAndState {
     }
 }
 
-impl<'a> Decode<'a> for SectionBlocksUpdatePacketPositionAndState {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for SectionBlocksUpdatePacketPositionAndState {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let value = VarI64::decode(input)?.0;
         Ok(Self {
             x: (value >> 8) as u8 & 0xF,
@@ -1205,8 +1233,8 @@ impl Encode for SetEquipmentPacketSlots {
     }
 }
 
-impl<'a> Decode<'a> for SetEquipmentPacketSlots {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for SetEquipmentPacketSlots {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let mut slots = HashMap::new();
         while {
             let equipment_slot_and_next_bit = u8::decode(input)?;
@@ -1224,12 +1252,14 @@ impl<'a> Decode<'a> for SetEquipmentPacketSlots {
 pub enum SetObjectivePacketMethod {
     Add {
         display_name: Json<Component>,
-        render_type: VarI32,
+        #[using(VarI32)]
+        render_type: i32,
     },
     Remove,
     Change {
         display_name: Json<Component>,
-        render_type: VarI32,
+        #[using(VarI32)]
+        render_type: i32,
     },
 }
 
@@ -1240,7 +1270,8 @@ pub enum SetPlayerTeamPacketMethod {
         options: i8,
         nametag_visibility: String,
         collision_rule: String,
-        color: VarI32,
+        #[using(VarI32)]
+        color: i32,
         prefix: Json<Component>,
         suffix: Json<Component>,
         players: Vec<String>,
@@ -1251,7 +1282,8 @@ pub enum SetPlayerTeamPacketMethod {
         options: i8,
         nametag_visibility: String,
         collision_rule: String,
-        color: VarI32,
+        #[using(VarI32)]
+        color: i32,
         prefix: Json<Component>,
         suffix: Json<Component>,
     },
@@ -1267,7 +1299,8 @@ pub enum SetPlayerTeamPacketMethod {
 pub enum SetScorePacketMethod {
     Change {
         objective_name: String,
-        score: VarI32,
+        #[using(VarI32)]
+        score: i32,
     },
     Remove {
         objective_name: String,
@@ -1300,8 +1333,8 @@ impl Encode for StopSoundPacket {
     }
 }
 
-impl<'a> Decode<'a> for StopSoundPacket {
-    fn decode(input: &mut &'a [u8]) -> Result<Self> {
+impl Decode<'_> for StopSoundPacket {
+    fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         Ok(Self {
             source: if flags & 1 << 0 != 0 {
