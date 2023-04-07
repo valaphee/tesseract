@@ -150,24 +150,6 @@ impl Decode<'_> for i32 {
 #[repr(transparent)]
 pub struct VarI32(pub i32);
 
-impl From<i32> for VarI32 {
-    fn from(value: i32) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&i32> for VarI32 {
-    fn from(value: &i32) -> Self {
-        Self(*value)
-    }
-}
-
-impl From<VarI32> for i32 {
-    fn from(value: VarI32) -> Self {
-        value.0
-    }
-}
-
 impl VarI32 {
     pub fn len(&self) -> usize {
         match self.0 {
@@ -243,24 +225,6 @@ impl VarI64 {
             0 => 1,
             n => (63 - n.leading_zeros() as usize) / 7 + 1,
         }
-    }
-}
-
-impl From<i64> for VarI64 {
-    fn from(value: i64) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&i64> for VarI64 {
-    fn from(value: &i64) -> Self {
-        Self(*value)
-    }
-}
-
-impl From<VarI64> for i64 {
-    fn from(value: VarI64) -> Self {
-        value.0
     }
 }
 
@@ -900,7 +864,7 @@ pub struct MonsterSpawnLightLevelCustomValue {
     max_inclusive: i32,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 #[using(u8)]
 pub enum Direction {
     Down,
@@ -1217,10 +1181,10 @@ impl Encode for Recipe {
                 show_notification,
             } => {
                 id.encode(output)?;
-                VarI32::from(width).encode(output)?;
-                VarI32::from(height).encode(output)?;
+                VarI32(*width).encode(output)?;
+                VarI32(*height).encode(output)?;
                 group.encode(output)?;
-                VarI32::from(category).encode(output)?;
+                VarI32(*category).encode(output)?;
                 for ingredient in ingredients {
                     ingredient.encode(output)?;
                 }
@@ -1236,7 +1200,7 @@ impl Encode for Recipe {
             } => {
                 id.encode(output)?;
                 group.encode(output)?;
-                VarI32::from(category).encode(output)?;
+                VarI32(*category).encode(output)?;
                 ingredients.encode(output)?;
                 result.encode(output)
             }
@@ -1288,10 +1252,10 @@ impl Decode<'_> for Recipe {
         Ok(match String::decode(input)?.as_str() {
             "minecraft:crafting_shaped" => {
                 let id = Decode::decode(input)?;
-                let width = VarI32::decode(input)?.into();
-                let height = VarI32::decode(input)?.into();
+                let width = VarI32::decode(input)?.0;
+                let height = VarI32::decode(input)?.0;
                 let group = Decode::decode(input)?;
-                let category = VarI32::decode(input)?.into();
+                let category = VarI32::decode(input)?.0;
                 let ingredient_count = width * height;
                 let mut ingredients = Vec::with_capacity(ingredient_count as usize);
                 for _ in 0..ingredient_count {
@@ -1313,7 +1277,7 @@ impl Decode<'_> for Recipe {
             "minecraft:crafting_shapeless" => Recipe::Shapeless {
                 id: Decode::decode(input)?,
                 group: Decode::decode(input)?,
-                category: VarI32::decode(input)?.into(),
+                category: VarI32::decode(input)?.0,
                 ingredients: Decode::decode(input)?,
                 result: Decode::decode(input)?,
             },

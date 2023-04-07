@@ -8,8 +8,7 @@ use crate::{
     Decode, Encode, Result,
 };
 
-#[derive(Clone, Debug)]
-pub struct EntityData(HashMap<u8, EntityDataValue>);
+pub struct EntityData(pub HashMap<u8, EntityDataValue>);
 
 impl Encode for EntityData {
     fn encode(&self, output: &mut impl Write) -> Result<()> {

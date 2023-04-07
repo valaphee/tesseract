@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use bevy::prelude::*;
 
-pub use persistence::{PersistencePlugin, PersistencePluginLevel};
+pub use persistence::PersistencePlugin;
 pub use registry::RegistryPlugin;
 pub use replication::ReplicationPlugin;
 
@@ -12,6 +12,7 @@ pub mod persistence;
 pub mod registry;
 pub mod replication;
 
+/// Tags which can be used to group entities together
 #[derive(Component)]
 pub struct Tag(pub Vec<Cow<'static, str>>);
 
@@ -20,10 +21,11 @@ pub mod block {
 
     use bevy::prelude::*;
 
+    /// Name of the block, used for finding blocks in the registry
     #[derive(Component, Eq, PartialEq, Hash)]
     pub struct Name {
         pub(crate) name: String,
-        pub(crate) properties: BTreeMap<String, String>
+        pub(crate) properties: BTreeMap<String, String>,
     }
 
     impl Name {
@@ -45,12 +47,13 @@ pub mod block {
             } else {
                 Self {
                     name: name.to_string(),
-                    properties: BTreeMap::default()
+                    properties: BTreeMap::default(),
                 }
             }
         }
     }
 
+    /// Some blocks have states which are automatically derived
     #[derive(Component)]
     pub enum Auto {
         Snowy,

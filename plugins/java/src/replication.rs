@@ -35,6 +35,7 @@ use tesseract_java_protocol::{
 
 use crate::{block, registry};
 
+/// Support for Minecraft: Java Edition replication
 pub struct ReplicationPlugin {
     pub address: SocketAddr,
 
@@ -94,7 +95,7 @@ impl Plugin for ReplicationPlugin {
         app.add_systems(PostStartup, listen)
             .add_systems(First, (spawn_player, update_players).before(UpdateFlush))
             .add_systems(First, apply_system_buffers.in_set(UpdateFlush))
-            .add_systems(PostUpdate, condense_chunks)
+            .add_systems(PostUpdate, render_chunks)
             .add_systems(
                 Last,
                 (
@@ -325,18 +326,10 @@ fn update_players(
         &mut actor::Position,
         &mut actor::Rotation,
         &mut actor::player::Interaction,
-        &mut actor::player::Inventory,
     )>,
 ) {
-    for (
-        player,
-        mut connection,
-        mut subscription,
-        mut position,
-        mut rotation,
-        mut interaction,
-        mut inventory,
-    ) in players.iter_mut()
+    for (player, mut connection, mut subscription, mut position, mut rotation, mut interaction) in
+        players.iter_mut()
     {
         if connection.keep_alive.elapsed() >= Duration::from_secs(15) {
             if connection.keep_alive_id.is_none() {
@@ -425,7 +418,7 @@ fn update_players(
 
                         match action {
                             PlayerActionPacketAction::StartDestroyBlock => {
-                                *interaction = actor::player::Interaction::BlockBreak(pos);
+                                *interaction = actor::player::Interaction::BreakBlock(pos);
                             }
                             PlayerActionPacketAction::AbortDestroyBlock => {
                                 *interaction = actor::player::Interaction::None;
@@ -433,20 +426,11 @@ fn update_players(
                             _ => {}
                         }
                     }
-                    c2s::GamePacket::SetCarriedItem { slot } => {
-                        inventory.selected_slot = slot as u8;
-                    }
+                    c2s::GamePacket::SetCarriedItem { slot } => {}
                     c2s::GamePacket::SetCreativeModeSlot {
                         slot_num,
                         item_stack,
-                    } => {
-                        /*inventory.content.insert(
-                            slot_num as usize,
-                            item_stack.map(|item_stack| {
-                                Entity::from_raw(mappings.item_by_id[&(item_stack.item as u32)])
-                            }),
-                        );*/
-                    }
+                    } => {}
                     c2s::GamePacket::UseItemOn {
                         block_pos,
                         direction,
@@ -455,8 +439,7 @@ fn update_players(
                     } => {
                         connection.send(&s2c::GamePacket::BlockChangedAck { sequence });
 
-                        *interaction =
-                            actor::player::Interaction::BlockPlace(block_pos + direction.vector());
+                        *interaction = actor::player::Interaction::UseItemOn(block_pos, direction);
                     }
                     c2s::GamePacket::UseItem { sequence, .. } => {
                         connection.send(&s2c::GamePacket::BlockChangedAck { sequence });
@@ -474,7 +457,6 @@ fn replicate_initial(
     dimension_type_registry: Res<registry::DataRegistry<DimensionType>>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
     damage_type_registry: Res<registry::DataRegistry<DamageType>>,
-
     levels: Query<(&level::Base, &level::AgeAndTime)>,
     chunks: Query<&Parent>,
     players: Query<
@@ -538,9 +520,11 @@ fn replicate_initial(
 
 //=========================================================================== CHUNK REPLICATION ====
 
-struct CondenseCache(HashMap<u32, CondenseBlock>);
+struct RenderCache {
+    blocks: HashMap<u32, RenderedBlock>,
+}
 
-impl FromWorld for CondenseCache {
+impl FromWorld for RenderCache {
     fn from_world(world: &mut World) -> Self {
         let mut blocks_query = world.query::<(Entity, &block::Name, Option<&block::Auto>)>();
         let blocks_report = world.resource::<registry::BlocksReport>();
@@ -568,7 +552,7 @@ impl FromWorld for CondenseCache {
                                 )
                             })
                             .collect::<Vec<_>>();
-                        CondenseBlock::Snowy {
+                        RenderedBlock::Snowy {
                             false_: block_state_reports
                                 .iter()
                                 .find(|block_state_report| {
@@ -585,7 +569,7 @@ impl FromWorld for CondenseCache {
                                 .id,
                         }
                     }
-                    _ => CondenseBlock::Default(
+                    _ => RenderedBlock::Default(
                         block_report
                             .states
                             .iter()
@@ -598,70 +582,72 @@ impl FromWorld for CondenseCache {
                 },
             );
         }
-        Self(blocks)
+        Self { blocks }
     }
 }
 
-pub enum CondenseBlock {
+pub enum RenderedBlock {
     Default(u32),
     Snowy { false_: u32, true_: u32 },
 }
 
 #[derive(Component)]
-struct CondenseChunk {
-    sections: Vec<CondenseChunkSection>,
+struct RenderedChunk {
+    sections: Vec<RenderedChunkSection>,
 }
 
-struct CondenseChunkSection {
+struct RenderedChunkSection {
     block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 8, 15>,
     biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
 }
 
-fn condense_chunks(
+fn render_chunks(
     mut commands: Commands,
 
-    condense_cache: Local<CondenseCache>,
+    render_cache: Local<RenderCache>,
 
     mut chunks: Query<
-        (Entity, &level::chunk::Data, Option<&mut CondenseChunk>),
+        (Entity, &level::chunk::Data, Option<&mut RenderedChunk>),
         Changed<level::chunk::Data>,
     >,
 ) {
-    for (chunk, chunk_data, condense_chunk) in chunks.iter_mut() {
-        if let Some(mut condense_chunk) = condense_chunk {
+    for (chunk, chunk_data, rendered_chunk) in chunks.iter_mut() {
+        if let Some(mut rendered_chunk) = rendered_chunk {
             for (section_y, section) in chunk_data.sections.iter().enumerate() {
-                let condense_section = &mut condense_chunk.sections[section_y];
+                let rendered_section = &mut rendered_chunk.sections[section_y];
                 for &block_state_change in &section.block_state_changes {
                     let block = section.block_states.get(block_state_change as u32);
-                    condense_section.block_states.get_and_set(
+                    rendered_section.block_states.get_and_set(
                         block_state_change as u32,
-                        match condense_cache.0.get(&block).unwrap() {
-                            CondenseBlock::Default(value) => *value,
-                            CondenseBlock::Snowy { false_, .. } => *false_,
+                        match render_cache.blocks.get(&block).unwrap() {
+                            RenderedBlock::Default(value) => *value,
+                            RenderedBlock::Snowy { false_, .. } => *false_,
                         },
                     );
                 }
             }
         } else {
-            commands.entity(chunk).insert(CondenseChunk {
+            commands.entity(chunk).insert(RenderedChunk {
                 sections: chunk_data
                     .sections
                     .iter()
-                    .map(|section| CondenseChunkSection {
+                    .map(|section| RenderedChunkSection {
                         block_states: match &section.block_states {
-                            PalettedContainer::Single(block) => {
-                                PalettedContainer::Single(match condense_cache.0.get(block).unwrap() {
-                                    CondenseBlock::Default(value) => *value,
-                                    CondenseBlock::Snowy { false_, .. } => *false_,
-                                })
-                            }
+                            PalettedContainer::Single(block) => PalettedContainer::Single(
+                                match render_cache.blocks.get(block).unwrap() {
+                                    RenderedBlock::Default(value) => *value,
+                                    RenderedBlock::Snowy { false_, .. } => *false_,
+                                },
+                            ),
                             PalettedContainer::Indirect { palette, storage } => {
                                 PalettedContainer::Indirect {
                                     palette: palette
                                         .iter()
-                                        .map(|block| match condense_cache.0.get(block).unwrap() {
-                                            CondenseBlock::Default(value) => *value,
-                                            CondenseBlock::Snowy { false_, .. } => *false_,
+                                        .map(|block| {
+                                            match render_cache.blocks.get(block).unwrap() {
+                                                RenderedBlock::Default(value) => *value,
+                                                RenderedBlock::Snowy { false_, .. } => *false_,
+                                            }
                                         })
                                         .collect(),
                                     storage: storage.clone(),
@@ -690,9 +676,10 @@ fn cleanup_chunks(
             commands.entity(player).remove::<Subscription>();
 
             let chunk_lut = levels.get(level.get()).unwrap();
-            for chunk_position in
-                SquareIterator::new(subscription.last_center, subscription.last_radius as i32)
-            {
+            for chunk_position in ConcentricSquareIterator::new(
+                subscription.last_center,
+                subscription.last_radius as i32,
+            ) {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     trace!("Release chunk: {:?}", chunk_position);
 
@@ -714,14 +701,8 @@ fn subscribe_and_replicate_chunks(
 
     mut levels: Query<&mut level::chunk::LookupTable>,
     chunks: Query<(&level::chunk::Base, &Parent)>,
-    mut subscription_chunks: Query<(Option<&CondenseChunk>, &mut Replication)>,
-    actors: Query<(
-        Entity,
-        &actor::Base,
-        &actor::Position,
-        &actor::Rotation,
-        &actor::HeadRotation,
-    )>,
+    mut subscription_chunks: Query<(Option<&RenderedChunk>, &mut Replication)>,
+    actors: Query<(Entity, &actor::Base, &actor::Position, &actor::Rotation)>,
     mut players: Query<
         (Entity, &Parent, &Connection, &mut Subscription),
         Or<(Changed<Parent>, Changed<Subscription>)>,
@@ -742,12 +723,14 @@ fn subscribe_and_replicate_chunks(
             let last_radius = subscription.last_radius as i32;
 
             // release chunks
-            for chunk_position in SquareIterator::new(last_center, last_radius).filter(|position| {
-                position.x >= (center.x + radius)
-                    || position.x <= (center.x - radius)
-                    || position.y >= (center.y + radius)
-                    || position.y <= (center.y - radius)
-            }) {
+            for chunk_position in
+                ConcentricSquareIterator::new(last_center, last_radius).filter(|position| {
+                    position.x >= (center.x + radius)
+                        || position.x <= (center.x - radius)
+                        || position.y >= (center.y + radius)
+                        || position.y <= (center.y - radius)
+                })
+            {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
                     trace!("Release chunk: {:?}", chunk_position);
 
@@ -772,30 +755,28 @@ fn subscribe_and_replicate_chunks(
             }
 
             // acquire chunks
-            for chunk_position in SquareIterator::new(chunk_base.position(), subscription.radius as i32)
-                .filter(|position| {
-                    position.x >= (last_center.x + last_radius)
-                        || position.x <= (last_center.x - last_radius)
-                        || position.y >= (last_center.y + last_radius)
-                        || position.y <= (last_center.y - last_radius)
-                })
+            for chunk_position in
+                ConcentricSquareIterator::new(chunk_base.position(), subscription.radius as i32)
+                    .filter(|position| {
+                        position.x >= (last_center.x + last_radius)
+                            || position.x <= (last_center.x - last_radius)
+                            || position.y >= (last_center.y + last_radius)
+                            || position.y <= (last_center.y - last_radius)
+                    })
             {
                 if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
-                    if let Ok((condense_chunk, mut replication)) = subscription_chunks.get_mut(chunk) {
+                    if let Ok((rendered_chunk, mut replication)) =
+                        subscription_chunks.get_mut(chunk)
+                    {
                         trace!("Acquire chunk: {:?}", chunk_position);
 
                         replication.subscriber.insert(player);
 
-                        if let Some(condense_chunk) = condense_chunk {
+                        if let Some(rendered_chunk) = rendered_chunk {
                             // connection: add chunk and actors, cause: subscribe
-                            connection.send(&add_chunk_packet(chunk_position, condense_chunk));
-                            for (
-                                actor,
-                                actor_base,
-                                actor_position,
-                                actor_rotation,
-                                actor_head_rotation,
-                            ) in actors.iter_many(&replication.replicated)
+                            connection.send(&add_chunk_packet(chunk_position, rendered_chunk));
+                            for (actor, actor_base, actor_position, actor_rotation) in
+                                actors.iter_many(&replication.replicated)
                             {
                                 // except owner
                                 if actor == player {
@@ -808,7 +789,6 @@ fn subscribe_and_replicate_chunks(
                                     actor_base,
                                     actor_position,
                                     actor_rotation,
-                                    actor_head_rotation,
                                 ));
                             }
                         }
@@ -842,11 +822,11 @@ fn subscribe_and_replicate_chunks(
 }
 
 fn replicate_chunks_late(
-    chunks: Query<(&level::chunk::Base, &CondenseChunk, &Replication), Added<level::chunk::Data>>,
+    chunks: Query<(&level::chunk::Base, &RenderedChunk, &Replication), Added<level::chunk::Data>>,
     players: Query<&Connection>,
 ) {
-    for (chunk_base, condense_chunk, replication) in chunks.iter() {
-        let add_chunk_packet = add_chunk_packet(chunk_base.position(), condense_chunk);
+    for (chunk_base, rendered_chunk, replication) in chunks.iter() {
+        let add_chunk_packet = add_chunk_packet(chunk_base.position(), rendered_chunk);
         for &player in &replication.subscriber {
             // connection: add chunk, cause: subscribe (late)
             if let Ok(connection) = players.get(player) {
@@ -861,14 +841,14 @@ fn replicate_chunks_delta(
         (
             &level::chunk::Base,
             &mut level::chunk::Data,
-            &CondenseChunk,
+            &RenderedChunk,
             &Replication,
         ),
         Changed<level::chunk::Data>,
     >,
     players: Query<&Connection>,
 ) {
-    for (chunk_base, mut chunk_data, condense_chunk, replication) in chunks.iter_mut() {
+    for (chunk_base, mut chunk_data, rendered_chunk, replication) in chunks.iter_mut() {
         let mut update_chunk_packets = vec![];
         {
             let y_offset = chunk_data.y_offset as i32;
@@ -877,29 +857,49 @@ fn replicate_chunks_delta(
                     continue;
                 }
 
-                let chunk_position = chunk_base.position();
-                let condense_section = &condense_chunk.sections[section_y];
-                update_chunk_packets.push(s2c::GamePacket::SectionBlocksUpdate(
-                    s2c::game::SectionBlocksUpdatePacket {
-                        section_pos: IVec3::new(chunk_position.x, section_y as i32 - y_offset, chunk_position.y),
-                        suppress_light_updates: true,
-                        position_and_states: section
-                            .block_state_changes
-                            .iter()
-                            .map(|&block_state_change| {
-                                s2c::game::SectionBlocksUpdatePacketPositionAndState {
-                                    x: block_state_change as u8 & 0xF,
-                                    y: (block_state_change >> 8) as u8,
-                                    z: block_state_change as u8 >> 4 & 0xF,
-                                    block_state: condense_section
-                                        .block_states
-                                        .get(block_state_change as u32)
-                                        as i64,
-                                }
-                            })
-                            .collect(),
-                    },
-                ));
+                if section.block_state_changes.len() == 1 {
+                    let block_state_change = *section.block_state_changes.first().unwrap();
+                    let chunk_position = chunk_base.position();
+                    update_chunk_packets.push(s2c::GamePacket::BlockUpdate {
+                        pos: IVec3::new(
+                            chunk_position.x * 16 + (block_state_change as u8 & 0xF) as i32,
+                            (section_y as i32 - y_offset) * 16 + (block_state_change >> 8) as i32,
+                            chunk_position.y * 16 + (block_state_change as u8 >> 4 & 0xF) as i32,
+                        ),
+                        block_state: rendered_chunk.sections[section_y]
+                            .block_states
+                            .get(block_state_change as u32)
+                            as i32,
+                    })
+                } else {
+                    let chunk_position = chunk_base.position();
+                    let rendered_section = &rendered_chunk.sections[section_y];
+                    update_chunk_packets.push(s2c::GamePacket::SectionBlocksUpdate(
+                        s2c::game::SectionBlocksUpdatePacket {
+                            section_pos: IVec3::new(
+                                chunk_position.x,
+                                section_y as i32 - y_offset,
+                                chunk_position.y,
+                            ),
+                            suppress_light_updates: true,
+                            position_and_states: section
+                                .block_state_changes
+                                .iter()
+                                .map(|&block_state_change| {
+                                    s2c::game::SectionBlocksUpdatePacketPositionAndState {
+                                        x: block_state_change as u8 & 0xF,
+                                        y: (block_state_change >> 8) as u8,
+                                        z: block_state_change as u8 >> 4 & 0xF,
+                                        block_state: rendered_section
+                                            .block_states
+                                            .get(block_state_change as u32)
+                                            as i64,
+                                    }
+                                })
+                                .collect(),
+                        },
+                    ));
+                }
 
                 section.block_state_changes.clear();
             }
@@ -924,12 +924,7 @@ fn replicate_actors(
     registries: Res<registry::RegistriesReport>,
 
     mut chunks: Query<(&Children, &mut Replication), Changed<Children>>,
-    actors: Query<(
-        &actor::Base,
-        &actor::Position,
-        &actor::Rotation,
-        &actor::HeadRotation,
-    )>,
+    actors: Query<(&actor::Base, &actor::Position, &actor::Rotation)>,
     players: Query<&Connection>,
 ) {
     // early return
@@ -965,15 +960,13 @@ fn replicate_actors(
             .iter()
             .filter(|actor| !replication.replicated.contains(actor))
         {
-            let (actor_base, actor_position, actor_rotation, actor_head_rotation) =
-                actors.get(actor).unwrap();
+            let (actor_base, actor_position, actor_rotation) = actors.get(actor).unwrap();
             let add_actor_packet = add_actor_packet(
                 &registries,
                 actor,
                 actor_base,
                 actor_position,
                 actor_rotation,
-                actor_head_rotation,
             );
 
             for &player in replication.subscriber.iter() {
@@ -1020,24 +1013,53 @@ fn replicate_actors(
 fn replicate_actors_delta(
     chunks: Query<&Replication>,
     actors: Query<
-        (Entity, &Parent, &actor::Position, &actor::Rotation),
+        (Entity, &Parent, Ref<actor::Position>, Ref<actor::Rotation>),
         Or<(Changed<actor::Position>, Changed<actor::Rotation>)>,
     >,
     players: Query<&Connection>,
 ) {
     for (actor, chunk, actor_position, actor_rotation) in actors.iter() {
         if let Ok(replication) = chunks.get(chunk.get()) {
-            let update_position_rotation_packet = s2c::GamePacket::TeleportEntity {
-                id: actor.index() as i32,
-                pos: actor_position.0,
-                pitch: actor_rotation.pitch,
-                yaw: actor_rotation.yaw,
-                on_ground: false,
-            };
-            let update_head_rotation_packet = s2c::GamePacket::RotateHead {
-                entity_id: actor.index() as i32,
-                head_yaw: actor_rotation.yaw,
-            };
+            let mut packets = vec![];
+            if actor_position.is_changed() {
+                /*if actor_rotation.is_changed() {
+                    s2c::GamePacket::MoveEntityPosRot {
+                        entity_id: actor.index() as i32,
+                        xa: 0,
+                        ya: 0,
+                        za: 0,
+                        yaw: actor_rotation.yaw,
+                        pitch: actor_rotation.pitch,
+                        on_ground: false,
+                    };
+                } else {
+                    s2c::GamePacket::MoveEntityPos {
+                        entity_id: actor.index() as i32,
+                        xa: 0,
+                        ya: 0,
+                        za: 0,
+                        on_ground: false,
+                    };
+                }*/
+                packets.push(s2c::GamePacket::TeleportEntity {
+                    id: actor.index() as i32,
+                    pos: actor_position.0,
+                    pitch: actor_rotation.pitch,
+                    yaw: actor_rotation.yaw,
+                    on_ground: false,
+                });
+            } else if actor_rotation.is_changed() {
+                packets.push(s2c::GamePacket::MoveEntityRot {
+                    entity_id: actor.index() as i32,
+                    yaw: actor_rotation.yaw,
+                    pitch: actor_rotation.pitch,
+                    on_ground: false,
+                });
+                packets.push(s2c::GamePacket::RotateHead {
+                    entity_id: actor.index() as i32,
+                    head_yaw: actor_rotation.yaw,
+                });
+            }
 
             for &player in replication.subscriber.iter() {
                 // except owner
@@ -1045,10 +1067,10 @@ fn replicate_actors_delta(
                     continue;
                 }
 
-                // connection: teleport entity, cause: movement
                 if let Ok(connection) = players.get(player) {
-                    connection.send(&update_position_rotation_packet);
-                    connection.send(&update_head_rotation_packet);
+                    for packet in &packets {
+                        connection.send(packet);
+                    }
                 }
             }
         }
@@ -1080,7 +1102,7 @@ async fn next(socket: &mut Framed<TcpStream, Codec>) -> tesseract_java_protocol:
         .map(Packet)
 }
 
-struct SquareIterator {
+struct ConcentricSquareIterator {
     center_x: i32,
     center_z: i32,
     radius: i32,
@@ -1090,7 +1112,7 @@ struct SquareIterator {
     i: i32,
 }
 
-impl SquareIterator {
+impl ConcentricSquareIterator {
     fn new(center: IVec2, radius: i32) -> Self {
         Self {
             center_x: center.x,
@@ -1104,7 +1126,7 @@ impl SquareIterator {
     }
 }
 
-impl Iterator for SquareIterator {
+impl Iterator for ConcentricSquareIterator {
     type Item = IVec2;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1146,18 +1168,18 @@ impl Iterator for SquareIterator {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (0, Some((self.radius * self.radius * 2) as usize))
+        (0, Some((self.radius * self.radius * 4 + 1) as usize))
     }
 }
 
-fn add_chunk_packet<'a>(position: IVec2, condense_chunk: &CondenseChunk) -> s2c::GamePacket<'a> {
+fn add_chunk_packet<'a>(position: IVec2, rendered_chunk: &RenderedChunk) -> s2c::GamePacket<'a> {
     let mut buffer = Vec::new();
     let mut sky_y_mask = 0i64;
     let mut sky_updates = Vec::new();
-    for (i, condense_section) in condense_chunk.sections.iter().enumerate() {
+    for (i, rendered_section) in rendered_chunk.sections.iter().enumerate() {
         4096i16.encode(&mut buffer).unwrap();
-        condense_section.block_states.encode(&mut buffer).unwrap();
-        condense_section.biomes.encode(&mut buffer).unwrap();
+        rendered_section.block_states.encode(&mut buffer).unwrap();
+        rendered_section.biomes.encode(&mut buffer).unwrap();
 
         sky_y_mask |= 1 << (i + 1);
         sky_updates.push(vec![0xFF; 2048])
@@ -1189,7 +1211,6 @@ fn add_actor_packet<'a>(
     actor_base: &actor::Base,
     position: &actor::Position,
     rotation: &actor::Rotation,
-    head_rotation: &actor::HeadRotation,
 ) -> s2c::GamePacket<'a> {
     if actor_base.type_ == "minecraft:player" {
         s2c::GamePacket::AddPlayer {
@@ -1207,7 +1228,7 @@ fn add_actor_packet<'a>(
             pos: position.0,
             pitch: rotation.pitch,
             yaw: rotation.yaw,
-            head_yaw: head_rotation.head_yaw,
+            head_yaw: rotation.yaw,
             data: 0,
             xa: 0,
             ya: 0,

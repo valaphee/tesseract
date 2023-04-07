@@ -3,7 +3,6 @@ use std::time::Duration;
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, math::DVec3, prelude::*};
 
 use tesseract_base::*;
-use tesseract_java_protocol::types::Biome;
 
 fn main() {
     // create and run app
@@ -71,6 +70,11 @@ fn register_blocks_and_items(mut commands: Commands) {
     ));
     commands.spawn((
         block::Base { collision: false },
+        item::Base,
+        tesseract_java::block::Name::new("minecraft:oak_sign[rotation=0,waterlogged=false]"),
+    ));
+    commands.spawn((
+        block::Base { collision: false },
         tesseract_physics::Fluid { volume: 7 },
         tesseract_java::block::Name::new("minecraft:water[level=0]"),
     ));
@@ -86,8 +90,8 @@ fn register_blocks_and_items(mut commands: Commands) {
 fn spawn_levels(mut commands: Commands) {
     commands.spawn(level::LevelBundle {
         base: level::Base::new("minecraft:overworld", "minecraft:overworld"),
-        age_and_time: default(),
-        chunks: default(),
+        age_and_time: Default::default(),
+        chunk_lut: Default::default(),
     });
 }
 
@@ -112,24 +116,14 @@ fn spawn_players(
                     type_: "minecraft:player".into(),
                 },
                 position: actor::Position(DVec3::new(0.0, 6.0, 0.0)),
-                rotation: default(),
-                head_rotation: default(),
-                interaction: default(),
-                inventory: actor::player::Inventory {
-                    content: vec![None; 46],
-                    selected_slot: 0,
-                },
+                rotation: Default::default(),
+                interaction: Default::default(),
             },))
             .set_parent(levels.single());
     }
 }
 
-fn spawn_chunks(
-    biome_registry: Res<tesseract_java::registry::DataRegistry<Biome>>,
-    mut commands: Commands,
-
-    chunks: Query<Entity, Added<level::chunk::Base>>,
-) {
+fn spawn_chunks(mut commands: Commands, chunks: Query<Entity, Added<level::chunk::Base>>) {
     if chunks.is_empty() {
         return;
     }
@@ -139,8 +133,7 @@ fn spawn_chunks(
     let dirt_id = 2;
     let grass_block_id = 3;
     for chunk in chunks.iter() {
-        let mut chunk_data =
-            level::chunk::Data::new(24, 4, air_id, biome_registry.id("minecraft:plains"));
+        let mut chunk_data = level::chunk::Data::new(24, 4, air_id, 0);
 
         for x in 0..16 {
             for z in 0..16 {

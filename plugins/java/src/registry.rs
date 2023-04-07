@@ -9,6 +9,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use tesseract_java_protocol::types::{Biome, DamageType, DimensionType, Registry, RegistryEntry};
 
+/// Needed for Minecraft: Java Edition persistence & replication
 #[derive(Default)]
 pub struct RegistryPlugin;
 
@@ -32,10 +33,10 @@ impl Plugin for RegistryPlugin {
 }
 
 #[derive(Resource)]
-pub struct RegistriesReport(HashMap<String, RegistryReport>);
+pub(crate) struct RegistriesReport(HashMap<String, RegistryReport>);
 
 impl RegistriesReport {
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+    fn new<P: AsRef<Path>>(path: P) -> Self {
         Self(
             serde_json::from_reader::<_, HashMap<String, RegistryReport>>(
                 File::open(path).unwrap(),
@@ -44,7 +45,7 @@ impl RegistriesReport {
         )
     }
 
-    pub fn id(&self, type_: &str, name: &str) -> u32 {
+    pub(crate) fn id(&self, type_: &str, name: &str) -> u32 {
         self.0
             .get(type_)
             .and_then(|registry| registry.entries.get(name).map(|entry| entry.protocol_id))
@@ -65,10 +66,10 @@ struct RegistryEntryReport {
 }
 
 #[derive(Resource, Debug)]
-pub struct BlocksReport(pub(crate) HashMap<String, BlockReport>);
+pub(crate) struct BlocksReport(pub(crate) HashMap<String, BlockReport>);
 
 impl BlocksReport {
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+    fn new<P: AsRef<Path>>(path: P) -> Self {
         Self(
             serde_json::from_reader::<_, HashMap<String, BlockReport>>(File::open(path).unwrap())
                 .unwrap(),
@@ -93,14 +94,14 @@ pub(crate) struct BlockStateReport {
 }
 
 #[derive(Resource)]
-pub struct DataRegistry<T> {
+pub(crate) struct DataRegistry<T> {
     registry: Registry<T>,
 
     id_by_name: HashMap<String, u32>,
 }
 
 impl<T: DeserializeOwned> DataRegistry<T> {
-    pub fn new<P: AsRef<Path>>(path: P, type_: &str) -> Self {
+    fn new<P: AsRef<Path>>(path: P, type_: &str) -> Self {
         let mut paths = std::fs::read_dir(path)
             .unwrap()
             .map(|path| path.unwrap())
@@ -132,11 +133,11 @@ impl<T: DeserializeOwned> DataRegistry<T> {
         }
     }
 
-    pub fn registry(&self) -> &Registry<T> {
+    pub(crate) fn registry(&self) -> &Registry<T> {
         &self.registry
     }
 
-    pub fn id(&self, name: &str) -> u32 {
+    pub(crate) fn id(&self, name: &str) -> u32 {
         *self.id_by_name.get(name).unwrap_or(&0)
     }
 }

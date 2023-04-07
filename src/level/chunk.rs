@@ -12,7 +12,7 @@ pub struct ChunkBundle {
     pub base: Base,
     pub update_queue: UpdateQueue,
 
-    pub replication: replication::Replication,
+    pub replication: replication::Replication, // TODO: see Replication
 }
 
 /// Chunk by position look-up table (part of Level)
@@ -22,7 +22,7 @@ pub struct LookupTable(pub HashMap<IVec2, Entity>);
 /// Required properties (part of Chunk)
 #[derive(Component)]
 pub struct Base {
-    position: IVec2
+    position: IVec2,
 }
 
 impl Base {

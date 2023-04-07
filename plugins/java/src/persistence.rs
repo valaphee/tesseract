@@ -9,26 +9,22 @@ use bevy::{math::DVec3, prelude::*};
 use flate2::read::GzDecoder;
 
 pub use tesseract_base::persistence::*;
-use tesseract_base::{actor, block, level};
+use tesseract_base::{actor, level};
 use tesseract_java_protocol::types::{Biome, BitStorage, PalettedContainer};
 
 use crate::{registry, replication};
 
-pub struct PersistencePlugin(pub HashMap<String, PersistencePluginLevel>);
-
-#[derive(Clone)]
-pub struct PersistencePluginLevel {
-    pub path: PathBuf,
-}
+/// Support for Minecraft: Java Edition persistence
+pub struct PersistencePlugin(pub HashMap<String, PathBuf>);
 
 impl Plugin for PersistencePlugin {
     fn build(&self, app: &mut App) {
         let levels = self.0.clone();
         let spawn_levels = move |mut commands: Commands| {
-            for (level_name, level) in levels.iter() {
+            for (level_name, level_path) in levels.iter() {
                 let savegame_level = {
                     let mut data = vec![];
-                    GzDecoder::new(File::open(level.path.join("level.dat")).unwrap())
+                    GzDecoder::new(File::open(level_path.join("level.dat")).unwrap())
                         .read_to_end(&mut data)
                         .unwrap();
                     tesseract_nbt::de::from_slice::<tesseract_java_savegame::level::Level>(
@@ -45,11 +41,11 @@ impl Plugin for PersistencePlugin {
                             age: savegame_level.time as u64,
                             time: savegame_level.day_time as u64,
                         },
-                        chunks: Default::default(),
+                        chunk_lut: Default::default(),
                     },
                     Persistence {
                         region_storage: tesseract_java_savegame::region::RegionStorage::new(
-                            level.path.join("region"),
+                            level_path.join("region"),
                         ),
                     },
                 ));
@@ -57,7 +53,7 @@ impl Plugin for PersistencePlugin {
         };
 
         app.add_systems(PreStartup, spawn_levels)
-            .add_systems(First, (load_players/*, load_chunks*/).before(UpdateFlush))
+            .add_systems(First, (load_players, load_chunks).before(UpdateFlush))
             .add_systems(
                 First,
                 apply_system_buffers
@@ -113,14 +109,7 @@ fn load_players(
                             pitch: savegame_player.entity.rotation[1],
                             yaw: savegame_player.entity.rotation[0],
                         },
-                        head_rotation: actor::HeadRotation {
-                            head_yaw: savegame_player.entity.rotation[0],
-                        },
                         interaction: Default::default(),
-                        inventory: actor::player::Inventory {
-                            content: vec![None; 46],
-                            selected_slot: 0,
-                        },
                     })
                     .set_parent(level);
             } else {
@@ -133,9 +122,11 @@ fn load_players(
     }
 }
 
-struct NameCache(HashMap<String, u32>);
+struct RenderCache {
+    blocks: HashMap<String, u32>,
+}
 
-impl FromWorld for NameCache {
+impl FromWorld for RenderCache {
     fn from_world(_world: &mut World) -> Self {
         todo!()
     }
@@ -143,7 +134,7 @@ impl FromWorld for NameCache {
 
 /// Loads savegame chunks for newly spawned chunks
 fn load_chunks(
-    name_cache: Local<NameCache>,
+    render_cache: Local<RenderCache>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
 
     mut commands: Commands,
@@ -168,12 +159,19 @@ fn load_chunks(
                                 .block_states
                                 .palette
                                 .iter()
-                                .map(|entry| name_cache.0[&entry.name])
+                                .map(|entry| render_cache.blocks[&entry.name])
                                 .collect(),
                             storage: BitStorage::from_data(16 * 16 * 16, data),
                         }
                     } else {
-                        PalettedContainer::Single(name_cache.0[&region_chunk_section.block_states.palette.first().unwrap().name])
+                        PalettedContainer::Single(
+                            render_cache.blocks[&region_chunk_section
+                                .block_states
+                                .palette
+                                .first()
+                                .unwrap()
+                                .name],
+                        )
                     },
                     biomes: if let Some(data) = region_chunk_section.biomes.data {
                         PalettedContainer::Indirect {
@@ -187,7 +185,9 @@ fn load_chunks(
                         }
                         .fix()
                     } else {
-                        PalettedContainer::Single(biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()), )
+                        PalettedContainer::Single(
+                            biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()),
+                        )
                     },
                     block_state_changes: Default::default(),
                 })

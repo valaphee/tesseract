@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::{actor, block, item, level};
+use tesseract_java_protocol::types::Direction;
+
+use crate::{actor, block, level};
 
 #[derive(Bundle)]
 pub struct PlayerBundle {
@@ -8,37 +10,29 @@ pub struct PlayerBundle {
     pub base: actor::Base,
     pub position: actor::Position,
     pub rotation: actor::Rotation,
-    pub head_rotation: actor::HeadRotation,
 
     // player
-    pub inventory: Inventory,
     pub interaction: Interaction,
 }
 
-#[derive(Component)]
-pub struct Inventory {
-    pub content: Vec<Option<Entity>>,
-    pub selected_slot: u8,
-}
-
+/// Current interaction (part of Player)
 #[derive(Component, Default)]
 pub enum Interaction {
     #[default]
     None,
-    BlockBreak(IVec3),
-    BlockPlace(IVec3),
+    BreakBlock(IVec3),
+    UseItemOn(IVec3, Direction),
 }
 
 pub fn update_interactions(
-    block_items: Query<(), (With<block::Base>, With<item::Base>)>,
-
+    blocks: Query<(), With<block::Base>>,
     levels: Query<&level::chunk::LookupTable>,
     mut chunks: Query<(&level::chunk::Base, &mut level::chunk::Data, &Parent)>,
-    mut players: Query<(&mut Interaction, &Inventory, &Parent), Changed<Interaction>>,
+    mut players: Query<(&mut Interaction, &Parent), Changed<Interaction>>,
 ) {
-    for (mut interaction, inventory, chunk) in players.iter_mut() {
+    for (mut interaction, chunk) in players.iter_mut() {
         match *interaction {
-            Interaction::BlockBreak(position) => {
+            Interaction::BreakBlock(position) => {
                 if let Ok((chunk_base, chunk_data, level)) = chunks.get_mut(chunk.get()) {
                     let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
                     // shortcut if position is in actor's chunk
@@ -52,11 +46,11 @@ pub fn update_interactions(
                         })
                     };
 
-                    // TODO: clean-up (just for testing)
                     if let Some(mut chunk_data) = chunk_data {
+                        let y_offset = chunk_data.y_offset as i32 * 16;
                         chunk_data.set(
                             position.x as u8,
-                            (position.y + 64) as u16,
+                            (position.y + y_offset) as u16,
                             position.z as u8,
                             0,
                         );
@@ -65,10 +59,11 @@ pub fn update_interactions(
 
                 *interaction = Interaction::None;
             }
-            Interaction::BlockPlace(position) => {
-                if let Some(item) = inventory.content[36 + inventory.selected_slot as usize] {
-                    if block_items.contains(item) {
+            Interaction::UseItemOn(position, direction) => {
+                /*if let Some(item_stack) = inventory.content[36 + inventory.selected_slot as usize] {
+                    if blocks.contains(item_stack.item) {
                         if let Ok((chunk_base, chunk_data, level)) = chunks.get_mut(chunk.get()) {
+                            let position = position + direction.vector();
                             let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
                             // shortcut if position is in actor's chunk
                             let chunk_data = if chunk_base.position() == chunk_position {
@@ -82,16 +77,18 @@ pub fn update_interactions(
                             };
 
                             if let Some(mut chunk_data) = chunk_data {
+                                let y_offset = chunk_data.y_offset as i32 * 16;
                                 chunk_data.set(
                                     position.x as u8,
-                                    (position.y + 64) as u16,
+                                    (position.y + y_offset) as u16,
                                     position.z as u8,
-                                    item.index(),
+                                    item_stack.item.index(),
                                 );
+
                             }
                         }
                     }
-                }
+                }*/
 
                 *interaction = Interaction::None;
             }

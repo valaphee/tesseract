@@ -14,6 +14,7 @@ use crate::{
     },
     Decode, Encode, Result,
 };
+use crate::types::EntityDataValue;
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub enum GamePacket<'a> {
@@ -487,7 +488,8 @@ pub enum GamePacket<'a> {
     SetEntityData {
         #[using(VarI32)]
         id: i32,
-        packed_items: EntityData,
+        #[using(EntityData)]
+        packed_items: HashMap<u8, EntityDataValue>,
     },
     SetEntityLink {
         source_id: i32,
@@ -503,7 +505,8 @@ pub enum GamePacket<'a> {
     SetEquipment {
         #[using(VarI32)]
         entity: i32,
-        slots: SetEquipmentPacketSlots,
+        #[using(SetEquipmentPacketSlots)]
+        slots: HashMap<EquipmentSlot, Option<ItemStack>>,
     },
     SetExperience {
         experience_progress: f32,
@@ -1215,7 +1218,6 @@ pub enum RecipePacket {
     },
 }
 
-#[derive(Clone, Debug)]
 pub struct SetEquipmentPacketSlots(HashMap<EquipmentSlot, Option<ItemStack>>);
 
 impl Encode for SetEquipmentPacketSlots {
