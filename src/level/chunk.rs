@@ -21,7 +21,19 @@ pub struct LookupTable(pub HashMap<IVec2, Entity>);
 
 /// Required properties (part of Chunk)
 #[derive(Component)]
-pub struct Base(pub IVec2);
+pub struct Base {
+    position: IVec2
+}
+
+impl Base {
+    pub fn new(position: IVec2) -> Self {
+        Self { position }
+    }
+
+    pub fn position(&self) -> IVec2 {
+        self.position
+    }
+}
 
 /// Keeps the hierarchy of actors in chunks consistent
 /// - if chunk has changed, place actor into new chunk
@@ -40,7 +52,7 @@ pub fn update_hierarchy(
         );
         let level = (if let Ok((chunk_base, level)) = chunks.get(level_or_chunk.get()) {
             // skip actors where the chunk hasn't changed
-            if chunk_base.0 == chunk_position {
+            if chunk_base.position == chunk_position {
                 continue;
             }
 
@@ -56,7 +68,7 @@ pub fn update_hierarchy(
             } else {
                 let chunk = commands
                     .spawn(ChunkBundle {
-                        base: Base(chunk_position),
+                        base: Base::new(chunk_position),
                         update_queue: Default::default(),
                         replication: Default::default(),
                     })
@@ -109,9 +121,9 @@ impl Data {
 
 pub struct DataSection {
     pub block_states: PalettedContainer<{ 16 * 16 * 16 }, 4, 32, 32>,
-    pub biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
-
     pub block_state_changes: BTreeSet<u16>,
+
+    pub biomes: PalettedContainer<{ 4 * 4 * 4 }, 3, 3, 6>,
 }
 
 impl Data {

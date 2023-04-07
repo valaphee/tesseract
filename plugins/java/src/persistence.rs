@@ -133,9 +133,17 @@ fn load_players(
     }
 }
 
-/*/// Loads savegame chunks for newly spawned chunks
+struct NameCache(HashMap<String, u32>);
+
+impl FromWorld for NameCache {
+    fn from_world(_world: &mut World) -> Self {
+        todo!()
+    }
+}
+
+/// Loads savegame chunks for newly spawned chunks
 fn load_chunks(
-    block_lut: Res<block::LookupTable>,
+    name_cache: Local<NameCache>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
 
     mut commands: Commands,
@@ -145,7 +153,7 @@ fn load_chunks(
 ) {
     for (chunk, chunk_base, level) in chunks.iter() {
         let region_storage = &mut levels.get_mut(level.get()).unwrap().region_storage;
-        if let Some(region_chunk_data) = region_storage.read(chunk_base.0) {
+        if let Some(region_chunk_data) = region_storage.read(chunk_base.position()) {
             let savegame_chunk = tesseract_nbt::de::from_slice::<
                 tesseract_java_savegame::chunk::Chunk,
             >(&mut region_chunk_data.as_slice())
@@ -155,28 +163,20 @@ fn load_chunks(
                 .into_iter()
                 .map(|region_chunk_section| level::chunk::DataSection {
                     block_states: if let Some(data) = region_chunk_section.block_states.data {
-                        PalettedContainer::Linear {
+                        PalettedContainer::Indirect {
                             palette: region_chunk_section
                                 .block_states
                                 .palette
                                 .iter()
-                                .map(|entry| block_lut.id(&entry.name()))
+                                .map(|entry| name_cache.0[&entry.name])
                                 .collect(),
                             storage: BitStorage::from_data(16 * 16 * 16, data),
                         }
-                        .fix()
                     } else {
-                        PalettedContainer::SingleValue(
-                            block_lut.id(&region_chunk_section
-                                .block_states
-                                .palette
-                                .first()
-                                .unwrap()
-                                .name()),
-                        )
+                        PalettedContainer::Single(name_cache.0[&region_chunk_section.block_states.palette.first().unwrap().name])
                     },
                     biomes: if let Some(data) = region_chunk_section.biomes.data {
-                        PalettedContainer::Linear {
+                        PalettedContainer::Indirect {
                             palette: region_chunk_section
                                 .biomes
                                 .palette
@@ -187,9 +187,7 @@ fn load_chunks(
                         }
                         .fix()
                     } else {
-                        PalettedContainer::SingleValue(
-                            biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()),
-                        )
+                        PalettedContainer::Single(biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()), )
                     },
                     block_state_changes: Default::default(),
                 })
@@ -201,4 +199,4 @@ fn load_chunks(
             });
         }
     }
-}*/
+}

@@ -4,11 +4,13 @@ use crate::{actor, block, item, level};
 
 #[derive(Bundle)]
 pub struct PlayerBundle {
+    // actor
     pub base: actor::Base,
     pub position: actor::Position,
     pub rotation: actor::Rotation,
     pub head_rotation: actor::HeadRotation,
 
+    // player
     pub inventory: Inventory,
     pub interaction: Interaction,
 }
@@ -35,13 +37,12 @@ pub fn update_interactions(
     mut players: Query<(&mut Interaction, &Inventory, &Parent), Changed<Interaction>>,
 ) {
     for (mut interaction, inventory, chunk) in players.iter_mut() {
-        #[allow(clippy::single_match)]
         match *interaction {
             Interaction::BlockBreak(position) => {
                 if let Ok((chunk_base, chunk_data, level)) = chunks.get_mut(chunk.get()) {
                     let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
                     // shortcut if position is in actor's chunk
-                    let chunk_data = if chunk_base.0 == chunk_position {
+                    let chunk_data = if chunk_base.position() == chunk_position {
                         Some(chunk_data)
                     } else {
                         levels.get(level.get()).ok().and_then(|chunk_lut| {
@@ -70,7 +71,7 @@ pub fn update_interactions(
                         if let Ok((chunk_base, chunk_data, level)) = chunks.get_mut(chunk.get()) {
                             let chunk_position = IVec2::new(position.x >> 4, position.z >> 4);
                             // shortcut if position is in actor's chunk
-                            let chunk_data = if chunk_base.0 == chunk_position {
+                            let chunk_data = if chunk_base.position() == chunk_position {
                                 Some(chunk_data)
                             } else {
                                 levels.get(level.get()).ok().and_then(|chunk_lut| {

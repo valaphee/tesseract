@@ -45,36 +45,40 @@ fn main() {
 fn register_blocks_and_items(mut commands: Commands) {
     commands.spawn((
         block::Base { collision: false },
-        tesseract_java::registry::RegistryName::new("minecraft:air"),
+        tesseract_java::block::Name::new("minecraft:air"),
     ));
     commands.spawn((
         block::Base { collision: true },
         item::Base,
-        tesseract_java::registry::RegistryName::new("minecraft:bedrock"),
+        tesseract_java::block::Name::new("minecraft:bedrock"),
     ));
     commands.spawn((
         block::Base { collision: true },
         item::Base,
-        tesseract_java::registry::RegistryName::new("minecraft:dirt"),
+        tesseract_java::block::Name::new("minecraft:dirt"),
     ));
     commands.spawn((
         block::Base { collision: true },
         item::Base,
-        tesseract_java::registry::RegistryName::new("minecraft:grass_block[snowy=false]"),
+        tesseract_java::block::Name::new("minecraft:grass_block"),
+        tesseract_java::block::Auto::Snowy,
+    ));
+    commands.spawn((
+        block::Base { collision: true },
+        item::Base,
+        tesseract_java::block::Name::new("minecraft:snow[layers=1]"),
+        tesseract_java::Tag(vec!["minecraft:snow".into()]),
     ));
     commands.spawn((
         block::Base { collision: false },
         tesseract_physics::Fluid { volume: 7 },
-        tesseract_java::registry::RegistryName::new("minecraft:water[level=0]"),
+        tesseract_java::block::Name::new("minecraft:water[level=0]"),
     ));
     commands.spawn_batch((0..7).map(|volume| {
         (
             block::Base { collision: false },
             tesseract_physics::Fluid { volume },
-            tesseract_java::registry::RegistryName::new(format!(
-                "minecraft:water[level={}]",
-                7 - volume
-            )),
+            tesseract_java::block::Name::new(format!("minecraft:water[level={}]", 7 - volume)),
         )
     }));
 }

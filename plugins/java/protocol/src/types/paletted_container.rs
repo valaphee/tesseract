@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 
 use crate::{
     types::{BitStorage, VarI32},
