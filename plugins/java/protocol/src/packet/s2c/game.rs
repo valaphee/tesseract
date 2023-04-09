@@ -8,13 +8,12 @@ use mojang_session_api::models::User;
 use crate::{
     types::{
         Advancement, Anchor, Angle, BossEventColor, BossEventOverlay, ChatSession, ChatTypeBound,
-        Component, Difficulty, EntityData, EquipmentSlot, GameType, Hand, ItemStack, Json,
-        MapDecoration, MapPatch, MerchantOffer, Nbt, Recipe, Registries, Sound, SoundSource,
-        TrailingBytes, VarI32, VarI64,
+        Component, Difficulty, EntityData, EntityDataValue, EquipmentSlot, GameType, Hand,
+        ItemStack, Json, MapDecoration, MapPatch, MerchantOffer, Nbt, Recipe, Registries, Sound,
+        SoundSource, TrailingBytes, VarI32, VarI64,
     },
     Decode, Encode, Result,
 };
-use crate::types::EntityDataValue;
 
 #[derive(Encode, Decode, Clone, Debug)]
 pub enum GamePacket<'a> {

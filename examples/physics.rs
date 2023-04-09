@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::{app::ScheduleRunnerSettings, log::LogPlugin, math::DVec3, prelude::*};
 
-use tesseract_base::*;
+use tesseract_base::{hierarchy::IndexedChildren, *};
 
 fn main() {
     // create and run app
@@ -24,11 +24,7 @@ fn main() {
     // gameplay
     .add_systems(
         Update,
-        (
-            level::update_time,
-            actor::player::update_interactions,
-            tesseract_physics::update_fluids,
-        ),
+        (level::update_time, tesseract_physics::update_fluids),
     )
     // gameplay (custom)
     .add_systems(PreStartup, register_blocks_and_items)
@@ -43,44 +39,32 @@ fn main() {
 
 fn register_blocks_and_items(mut commands: Commands) {
     commands.spawn((
-        block::Base { collision: false },
+        block::Base,
         tesseract_java::block::Name::new("minecraft:air"),
     ));
     commands.spawn((
-        block::Base { collision: true },
+        block::Base,
         item::Base,
         tesseract_java::block::Name::new("minecraft:bedrock"),
     ));
     commands.spawn((
-        block::Base { collision: true },
+        block::Base,
         item::Base,
         tesseract_java::block::Name::new("minecraft:dirt"),
     ));
     commands.spawn((
-        block::Base { collision: true },
+        block::Base,
         item::Base,
         tesseract_java::block::Name::new("minecraft:grass_block"),
-        tesseract_java::block::Auto::Snowy,
     ));
     commands.spawn((
-        block::Base { collision: true },
-        item::Base,
-        tesseract_java::block::Name::new("minecraft:snow[layers=1]"),
-        tesseract_java::Tag(vec!["minecraft:snow".into()]),
-    ));
-    commands.spawn((
-        block::Base { collision: false },
-        item::Base,
-        tesseract_java::block::Name::new("minecraft:oak_sign[rotation=0,waterlogged=false]"),
-    ));
-    commands.spawn((
-        block::Base { collision: false },
+        block::Base,
         tesseract_physics::Fluid { volume: 7 },
         tesseract_java::block::Name::new("minecraft:water[level=0]"),
     ));
     commands.spawn_batch((0..7).map(|volume| {
         (
-            block::Base { collision: false },
+            block::Base,
             tesseract_physics::Fluid { volume },
             tesseract_java::block::Name::new(format!("minecraft:water[level={}]", 7 - volume)),
         )
@@ -88,18 +72,22 @@ fn register_blocks_and_items(mut commands: Commands) {
 }
 
 fn spawn_levels(mut commands: Commands) {
-    commands.spawn(level::LevelBundle {
-        base: level::Base::new("minecraft:overworld", "minecraft:overworld"),
-        age_and_time: Default::default(),
-        chunk_lut: Default::default(),
-    });
+    commands.spawn((
+        level::LevelBundle {
+            base: level::Base::new("minecraft:overworld", "minecraft:overworld"),
+            age_and_time: Default::default(),
+        },
+        IndexedChildren::<IVec2>::default(),
+    ));
 }
 
 #[allow(clippy::type_complexity)]
 fn spawn_players(
     mut commands: Commands,
-    levels: Query<Entity, With<level::Base>>,
-    players: Query<
+
+    level_access: Query<Entity, With<level::Base>>,
+
+    for_players: Query<
         (Entity, &tesseract_java::replication::Connection),
         (
             Added<tesseract_java::replication::Connection>,
@@ -107,24 +95,23 @@ fn spawn_players(
         ),
     >,
 ) {
-    for (player, connection) in players.iter() {
+    for (player, connection) in for_players.iter() {
         commands
             .entity(player)
             .insert((actor::player::PlayerBundle {
                 base: actor::Base {
                     id: connection.user().id,
-                    type_: "minecraft:player".into(),
                 },
                 position: actor::Position(DVec3::new(0.0, 6.0, 0.0)),
                 rotation: Default::default(),
                 interaction: Default::default(),
             },))
-            .set_parent(levels.single());
+            .set_parent(level_access.single());
     }
 }
 
-fn spawn_chunks(mut commands: Commands, chunks: Query<Entity, Added<level::chunk::Base>>) {
-    if chunks.is_empty() {
+fn spawn_chunks(mut commands: Commands, for_chunks: Query<Entity, Added<level::chunk::Base>>) {
+    if for_chunks.is_empty() {
         return;
     }
 
@@ -132,7 +119,7 @@ fn spawn_chunks(mut commands: Commands, chunks: Query<Entity, Added<level::chunk
     let bedrock_id = 1;
     let dirt_id = 2;
     let grass_block_id = 3;
-    for chunk in chunks.iter() {
+    for chunk in for_chunks.iter() {
         let mut chunk_data = level::chunk::Data::new(24, 4, air_id, 0);
 
         for x in 0..16 {

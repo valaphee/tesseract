@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use bevy::{math::DVec3, prelude::*};
 use uuid::Uuid;
 
@@ -17,7 +15,6 @@ pub struct ActorBundle {
 #[derive(Component)]
 pub struct Base {
     pub id: Uuid,
-    pub type_: Cow<'static, str>, // TODO
 }
 
 /// Position of the actor in the level (part of Actor)

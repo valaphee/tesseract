@@ -9,7 +9,7 @@ use bevy::{math::DVec3, prelude::*};
 use flate2::read::GzDecoder;
 
 pub use tesseract_base::persistence::*;
-use tesseract_base::{actor, level};
+use tesseract_base::{actor, hierarchy::ParentWithIndex, level};
 use tesseract_java_protocol::types::{Biome, BitStorage, PalettedContainer};
 
 use crate::{registry, replication};
@@ -41,7 +41,6 @@ impl Plugin for PersistencePlugin {
                             age: savegame_level.time as u64,
                             time: savegame_level.day_time as u64,
                         },
-                        chunk_lut: Default::default(),
                     },
                     Persistence {
                         region_storage: tesseract_java_savegame::region::RegionStorage::new(
@@ -72,10 +71,10 @@ struct Persistence {
 fn load_players(
     mut commands: Commands,
 
-    levels: Query<(Entity, &level::Base)>,
-    players: Query<(Entity, &replication::Connection), Added<replication::Connection>>,
+    levels_access: Query<(Entity, &level::Base)>,
+    for_players: Query<(Entity, &replication::Connection), Added<replication::Connection>>,
 ) {
-    for (player, connection) in players.iter() {
+    for (player, connection) in for_players.iter() {
         let savegame_player_path =
             format!("levels/overworld/playerdata/{}.dat", connection.user().id);
         let savegame_player_path = Path::new(&savegame_player_path);
@@ -91,7 +90,7 @@ fn load_players(
                 .unwrap()
             };
 
-            if let Some((level, _)) = levels
+            if let Some((level, _)) = levels_access
                 .iter()
                 .find(|(_, level_base)| level_base.name() == savegame_player.level)
             {
@@ -100,7 +99,6 @@ fn load_players(
                     .insert(actor::player::PlayerBundle {
                         base: actor::Base {
                             id: connection.user().id,
-                            type_: "minecraft:player".into(),
                         },
                         position: actor::Position(DVec3::from_array(
                             savegame_player.entity.position,
@@ -134,17 +132,19 @@ impl FromWorld for RenderCache {
 
 /// Loads savegame chunks for newly spawned chunks
 fn load_chunks(
+    mut commands: Commands,
     render_cache: Local<RenderCache>,
     biome_registry: Res<registry::DataRegistry<Biome>>,
 
-    mut commands: Commands,
-
-    mut levels: Query<&mut Persistence>,
-    chunks: Query<(Entity, &level::chunk::Base, &Parent), Added<level::chunk::Base>>,
+    mut levels_access: Query<&mut Persistence>,
+    for_chunks: Query<(Entity, &ParentWithIndex<IVec2>), Added<level::chunk::Base>>,
 ) {
-    for (chunk, chunk_base, level) in chunks.iter() {
-        let region_storage = &mut levels.get_mut(level.get()).unwrap().region_storage;
-        if let Some(region_chunk_data) = region_storage.read(chunk_base.position()) {
+    for (chunk, indexed_chunk) in for_chunks.iter() {
+        let region_storage = &mut levels_access
+            .get_mut(indexed_chunk.parent)
+            .unwrap()
+            .region_storage;
+        if let Some(region_chunk_data) = region_storage.read(indexed_chunk.index) {
             let savegame_chunk = tesseract_nbt::de::from_slice::<
                 tesseract_java_savegame::chunk::Chunk,
             >(&mut region_chunk_data.as_slice())
@@ -152,10 +152,10 @@ fn load_chunks(
             let sections = savegame_chunk
                 .sections
                 .into_iter()
-                .map(|region_chunk_section| level::chunk::DataSection {
-                    block_states: if let Some(data) = region_chunk_section.block_states.data {
+                .map(|savegame_chunk_section| level::chunk::DataSection {
+                    block_states: if let Some(data) = savegame_chunk_section.block_states.data {
                         PalettedContainer::Indirect {
-                            palette: region_chunk_section
+                            palette: savegame_chunk_section
                                 .block_states
                                 .palette
                                 .iter()
@@ -165,7 +165,7 @@ fn load_chunks(
                         }
                     } else {
                         PalettedContainer::Single(
-                            render_cache.blocks[&region_chunk_section
+                            render_cache.blocks[&savegame_chunk_section
                                 .block_states
                                 .palette
                                 .first()
@@ -173,9 +173,9 @@ fn load_chunks(
                                 .name],
                         )
                     },
-                    biomes: if let Some(data) = region_chunk_section.biomes.data {
+                    biomes: if let Some(data) = savegame_chunk_section.biomes.data {
                         PalettedContainer::Indirect {
-                            palette: region_chunk_section
+                            palette: savegame_chunk_section
                                 .biomes
                                 .palette
                                 .iter()
@@ -186,7 +186,11 @@ fn load_chunks(
                         .fix()
                     } else {
                         PalettedContainer::Single(
-                            biome_registry.id(region_chunk_section.biomes.palette.first().unwrap()),
+                            biome_registry.id(savegame_chunk_section
+                                .biomes
+                                .palette
+                                .first()
+                                .unwrap()),
                         )
                     },
                     block_state_changes: Default::default(),

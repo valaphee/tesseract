@@ -25,12 +25,12 @@ impl FromWorld for FluidCache {
 pub fn update_fluids(
     fluid_cache: Local<FluidCache>,
 
-    blocks: Query<&block::Base>,
-    fluids: Query<(Entity, &Fluid)>,
+    blocks_access: Query<&block::Base>,
+    fluids_access: Query<(Entity, &Fluid)>,
 
-    mut chunks: Query<(&mut level::chunk::Data, &level::chunk::UpdateQueue)>,
+    mut for_chunks: Query<(&mut level::chunk::Data, &level::chunk::UpdateQueue)>,
 ) {
-    for (mut chunk_data, chunk_queued_updates) in chunks.iter_mut() {
+    for (mut chunk_data, chunk_queued_updates) in for_chunks.iter_mut() {
         if chunk_queued_updates.0.is_empty() {
             continue;
         }
@@ -43,13 +43,15 @@ pub fn update_fluids(
 
             let x = queued_update.x();
             let z = queued_update.z();
-            if let Ok((_, fluid_base)) = fluids.get(Entity::from_raw(chunk_data.get(x, y, z))) {
+            if let Ok((_, fluid_base)) =
+                fluids_access.get(Entity::from_raw(chunk_data.get(x, y, z)))
+            {
                 let value2volume = |value| {
-                    fluids.get(Entity::from_raw(value)).map_or_else(
+                    fluids_access.get(Entity::from_raw(value)).map_or_else(
                         |_| {
-                            if blocks
+                            if blocks_access
                                 .get(Entity::from_raw(value))
-                                .map_or(false, |replaceable| replaceable.collision)
+                                .map_or(false, |replaceable| true)
                             {
                                 u8::MAX
                             } else {

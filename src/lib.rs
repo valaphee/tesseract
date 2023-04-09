@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod block;
+pub mod hierarchy;
 pub mod item;
 pub mod level;
 

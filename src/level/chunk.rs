@@ -1,10 +1,14 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 use bevy::prelude::*;
 
 use tesseract_java_protocol::types::PalettedContainer;
 
-use crate::{actor, replication};
+use crate::{
+    actor,
+    hierarchy::{EntityCommandsExt, IndexedChildren, ParentWithIndex},
+    replication,
+};
 
 /// All required components to describe a chunk
 #[derive(Bundle)]
@@ -15,25 +19,9 @@ pub struct ChunkBundle {
     pub replication: replication::Replication, // TODO: see Replication
 }
 
-/// Chunk by position look-up table (part of Level)
-#[derive(Component, Default)]
-pub struct LookupTable(pub HashMap<IVec2, Entity>);
-
 /// Required properties (part of Chunk)
 #[derive(Component)]
-pub struct Base {
-    position: IVec2,
-}
-
-impl Base {
-    pub fn new(position: IVec2) -> Self {
-        Self { position }
-    }
-
-    pub fn position(&self) -> IVec2 {
-        self.position
-    }
-}
+pub struct Base;
 
 /// Keeps the hierarchy of actors in chunks consistent
 /// - if chunk has changed, place actor into new chunk
@@ -41,41 +29,41 @@ impl Base {
 pub fn update_hierarchy(
     mut commands: Commands,
 
-    mut levels: Query<&mut LookupTable>,
-    chunks: Query<(&Base, &Parent)>,
-    actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
+    level_access: Query<&IndexedChildren<IVec2>>,
+    chunk_access: Query<&ParentWithIndex<IVec2>>,
+    for_actors: Query<(Entity, &actor::Position, &Parent), Changed<actor::Position>>,
 ) {
-    for (actor, actor_position, level_or_chunk) in actors.iter() {
+    for (actor, actor_position, level_or_chunk) in for_actors.iter() {
         let chunk_position = IVec2::new(
             (actor_position.0.x as i32) >> 4,
             (actor_position.0.z as i32) >> 4,
         );
-        let level = (if let Ok((chunk_base, level)) = chunks.get(level_or_chunk.get()) {
+        let level = if let Ok(indexed_chunk) = chunk_access.get(level_or_chunk.get()) {
             // skip actors where the chunk hasn't changed
-            if chunk_base.position == chunk_position {
+            if indexed_chunk.index == chunk_position {
                 continue;
             }
 
-            level
+            indexed_chunk.parent
         } else {
-            level_or_chunk
-        })
-        .get();
+            level_or_chunk.get()
+        };
 
-        if let Ok(mut chunk_lut) = levels.get_mut(level) {
-            if let Some(&chunk) = chunk_lut.0.get(&chunk_position) {
+        if let Ok(indexed_chunks) = level_access.get(level) {
+            if let Some(&chunk) = indexed_chunks.0.get(&chunk_position) {
                 commands.entity(chunk).add_child(actor);
             } else {
                 let chunk = commands
                     .spawn(ChunkBundle {
-                        base: Base::new(chunk_position),
+                        base: Base,
                         update_queue: Default::default(),
                         replication: Default::default(),
                     })
-                    .set_parent(level)
                     .add_child(actor)
                     .id();
-                chunk_lut.0.insert(chunk_position, chunk);
+                commands
+                    .entity(level)
+                    .set_indexed_child(chunk_position, Some(chunk));
             }
         } else {
             warn!(
@@ -157,12 +145,35 @@ impl Data {
 //================================================================================ UPDATE QUEUE ====
 
 #[derive(Component, Default)]
-pub struct UpdateQueue(pub Vec<Update>);
+pub struct UpdateQueue(pub Vec<BlockPosition>);
+
+pub fn queue_updates(mut for_chunks: Query<(&Data, &mut UpdateQueue), Changed<Data>>) {
+    for (data, mut queued_updates) in for_chunks.iter_mut() {
+        queued_updates.0.clear();
+        for (section_y, section) in data.sections.iter().enumerate() {
+            queued_updates
+                .0
+                .extend(
+                    section
+                        .block_state_changes
+                        .iter()
+                        .map(|&block_state_change| {
+                            BlockPosition(
+                                block_state_change as u8,
+                                block_state_change >> 8 | (section_y as u16) << 4,
+                            )
+                        }),
+                );
+        }
+    }
+}
+
+//====================================================================================== HELPER ====
 
 #[derive(Eq, PartialEq, Hash)]
-pub struct Update(u8, u16);
+pub struct BlockPosition(u8, u16);
 
-impl Update {
+impl BlockPosition {
     pub fn x(&self) -> u8 {
         self.0 & 0xF
     }
@@ -173,26 +184,5 @@ impl Update {
 
     pub fn z(&self) -> u8 {
         self.0 >> 4 & 0xF
-    }
-}
-
-pub fn queue_updates(mut chunks: Query<(&Data, &mut UpdateQueue), Changed<Data>>) {
-    for (chunk_data, mut chunk_queued_updates) in chunks.iter_mut() {
-        chunk_queued_updates.0.clear();
-        for (section_y, section) in chunk_data.sections.iter().enumerate() {
-            chunk_queued_updates
-                .0
-                .extend(
-                    section
-                        .block_state_changes
-                        .iter()
-                        .map(|&block_state_change| {
-                            Update(
-                                block_state_change as u8,
-                                block_state_change >> 8 | (section_y as u16) << 4,
-                            )
-                        }),
-                );
-        }
     }
 }

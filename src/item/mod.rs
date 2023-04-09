@@ -4,9 +4,23 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct Base;
 
-/// Instance of an item (part of ItemInstance)
+//==================================================================================== INSTANCE ====
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum Slot {
+    Cursor,
+    Hotbar(u8),
+    Inventory(u8),
+    Feet,
+    Legs,
+    Torso,
+    Head,
+    Offhand,
+}
+
+/// Instance of an item (part of Item instance)
+#[derive(Component)]
 pub struct Instance {
     pub item: Entity,
-    pub slot: u8,
     pub count: u8,
 }

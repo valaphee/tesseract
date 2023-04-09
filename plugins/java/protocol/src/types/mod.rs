@@ -20,8 +20,6 @@ mod chat;
 mod entity_data;
 mod paletted_container;
 
-//=================================================================================== PRIMITIVE ====
-
 impl Encode for bool {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         if *self { 1u8 } else { 0u8 }.encode(output)
@@ -284,8 +282,6 @@ impl Decode<'_> for f64 {
     }
 }
 
-//======================================================================================= TUPLE ====
-
 macro_rules! tuple {
     ($($ty:ident)*) => {
         #[allow(non_snake_case)]
@@ -320,8 +316,6 @@ tuple!(A B C D E F G H I);
 tuple!(A B C D E F G H I J);
 tuple!(A B C D E F G H I J K);
 tuple!(A B C D E F G H I J K L);
-
-//=============================================================================== ARRAY / SLICE ====
 
 impl<T: Encode, const N: usize> Encode for [T; N] {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
@@ -375,8 +369,6 @@ impl<const N: usize> Decode<'_> for TrailingBytes<N> {
         Ok(TrailingBytes(value))
     }
 }
-
-//========================================================================================= STD ====
 
 impl<T: Encode> Encode for Option<T> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
@@ -475,8 +467,6 @@ impl Decode<'_> for String {
         Ok(from_utf8(bytes)?.to_string())
     }
 }
-
-//======================================================================================= OTHER ====
 
 impl Encode for Uuid {
     fn encode(&self, output: &mut impl Write) -> Result<()> {

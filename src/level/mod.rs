@@ -9,8 +9,6 @@ pub mod chunk;
 pub struct LevelBundle {
     pub base: Base,
     pub age_and_time: AgeAndTime,
-
-    pub chunk_lut: chunk::LookupTable,
 }
 
 /// Required properties (part of Level)
@@ -39,6 +37,8 @@ impl Base {
         &self.dimension_type
     }
 }
+
+//======================================================================================== TIME ====
 
 #[derive(Component, Default)]
 pub struct AgeAndTime {
